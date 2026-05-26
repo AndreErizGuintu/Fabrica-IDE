@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Mono&display=swap');
+@import "tailwindcss";
+
+:root {
+	--bg-deep: #0a0b12;
+	--panel: rgba(24, 27, 45, 0.9);
+	--panel-border: rgba(120, 130, 170, 0.25);
+	--accent: #a855f7;
+	--text-muted: #a7adc5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	background: radial-gradient(1200px 600px at 10% 5%, #1f1e3a 0%, transparent 60%),
+							radial-gradient(900px 500px at 80% 15%, #13193a 0%, transparent 65%),
+							linear-gradient(140deg, #0a0b12 0%, #0e101c 60%, #0b0c16 100%);
+	font-family: 'IBM Plex Sans', sans-serif;
+	color: #ffffff;
+}
+
+.app-glow::before {
+	content: '';
+	position: absolute;
+	width: 520px; height: 520px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(168,85,247,0.25), transparent 70%);
+	top: -180px; left: -120px;
+	z-index: 0;
+}
+
+.accent-indigo::before { content: ''; width: 10px; height: 10px; border-radius: 999px; background: #7c5cff; margin-right: 12px; display: inline-block; }
+.accent-cyan::before { content: ''; width: 10px; height: 10px; border-radius: 999px; background: #2dd4ff; margin-right: 12px; display: inline-block; }
+.accent-rose::before { content: ''; width: 10px; height: 10px; border-radius: 999px; background: #ff6b6b; margin-right: 12px; display: inline-block; }
+
+@keyframes progressAnim { from { width: 0%; } to { width: 100%; } }
+.animate-progress { animation: progressAnim 2.5s linear forwards; }
