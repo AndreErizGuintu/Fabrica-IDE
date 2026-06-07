@@ -4,6 +4,7 @@ import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
+import AIPanel from '../components/ai/AIPanel';
 import { Tab } from '../types/index';
 
 function getLanguage(filename: string): string {
@@ -41,6 +42,8 @@ function getLanguage(filename: string): string {
 export default function EditorLayout({ onBack }: { onBack: () => void }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [selectedCode, setSelectedCode] = useState('');
+  const [showAI, setShowAI] = useState(false);
 
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
@@ -170,6 +173,18 @@ export default function EditorLayout({ onBack }: { onBack: () => void }) {
           )}
           <button
             type="button"
+            onClick={() => setShowAI((prev) => !prev)}
+            className="text-sm px-3 py-1 rounded-lg"
+            style={{
+              background: showAI ? '#a855f7' : '#2d1b4e',
+              color: '#ffffff',
+              border: '1px solid #a855f7',
+            }}
+          >
+            ✨ AI
+          </button>
+          <button
+            type="button"
             className="px-4 py-1.5 rounded-full text-sm font-semibold text-white bg-green-500"
           >
             Run
@@ -240,13 +255,19 @@ export default function EditorLayout({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <>
-            <Editor
-              language={getLanguage(tabs[activeTabIndex].filename)}
-              filename={activeTab!.filename}
-              value={activeTab!.content}
-              onChange={handleEditorChange}
-            />
-            <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
+              <Editor
+                language={getLanguage(tabs[activeTabIndex].filename)}
+                filename={activeTab!.filename}
+                value={activeTab!.content}
+                onChange={handleEditorChange}
+                onSelectionChange={(s) => setSelectedCode(s)}
+              />
+              <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
+              {showAI && (
+                <div className="w-80 shrink-0 h-full min-h-0 overflow-hidden">
+                  <AIPanel selectedCode={selectedCode} />
+                </div>
+              )}
           </>
         )}
       </div>

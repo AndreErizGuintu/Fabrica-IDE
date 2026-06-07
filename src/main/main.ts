@@ -102,6 +102,18 @@ ipcMain.handle('fs:createFile', async (_event, filePath: string) => {
   }
 });
 
+ipcMain.handle('fs:createFolder', async (_event, folderPath: string) => {
+  try {
+    if (fs.existsSync(folderPath)) {
+      return { success: false, error: 'Folder already exists' };
+    }
+    fs.mkdirSync(folderPath, { recursive: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
@@ -206,3 +218,42 @@ app
     });
   })
   .catch(console.log);
+
+ipcMain.handle('ai:complete', async (event, prompt: string) => {
+  try {
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek-coder:6.7b',
+        prompt: prompt,
+        stream: true,
+      }),
+    });
+
+    let fullText = '';
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.response && typeof parsed.response === 'string') {
+            fullText += parsed.response;
+            event.sender.send('ai:token', parsed.response);
+          }
+          if (parsed.done === true) break;
+        } catch {}
+      }
+    }
+
+    return { success: true, result: fullText };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});

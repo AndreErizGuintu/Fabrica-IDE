@@ -7,7 +7,8 @@ interface SidebarProps {
   onFileOpen: (path: string, filename: string) => void;
 }
 
-function getFileIcon(filename: string): string {
+function getFileIcon(filename: string, isDirectory?: boolean): string {
+  if (isDirectory) return '📁';
   const ext = filename.slice(filename.lastIndexOf('.'));
   const icons: Record<string, string> = {
     '.html': '🌐',
@@ -21,7 +22,6 @@ function getFileIcon(filename: string): string {
     '.json': '📋',
     '.md': '📝',
   };
-
   return icons[ext] ?? '📄';
 }
 
@@ -31,14 +31,16 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
 
   const handleOpenFolder = async () => {
     const folderPath = await window.fileSystem.openFolder();
     if (!folderPath) return;
     const result = await window.fileSystem.readDir(folderPath);
     if (result.success && result.files) {
-      setFolderName(folderPath.split('\\').pop() ?? folderPath);
-      setFiles(result.files.filter((file) => !file.isDirectory));
+      setFolderName(folderPath);
+      setFiles(result.files);
     }
   };
 
@@ -52,18 +54,28 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
 
   const handleCreateFile = async () => {
     if (!newFileName.trim() || !folderName) return;
-    const folderPath = files[0]?.path.slice(0, files[0].path.lastIndexOf('\\')) ?? '';
-    if (!folderPath) return;
-    const filePath = `${folderPath}\\${newFileName.trim()}`;
+    const sep = folderName.includes('\\') ? '\\' : '/';
+    const filePath = `${folderName}${sep}${newFileName.trim()}`;
     const result = await window.fileSystem.createFile(filePath);
     if (result.success) {
       setNewFileName('');
       setIsCreatingFile(false);
-      const dir = await window.fileSystem.readDir(folderPath);
-      if (dir.success && dir.files) {
-        setFiles(dir.files.filter((f: FileEntry) => !f.isDirectory));
-      }
+      const dir = await window.fileSystem.readDir(folderName);
+      if (dir.success && dir.files) setFiles(dir.files);
     }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || !folderName) return;
+    const sep = folderName.includes('\\') ? '\\' : '/';
+    const folderPath = `${folderName}${sep}${newFolderName.trim()}`;
+    const result = await window.fileSystem.createFolder(folderPath);
+    if (result.success) {
+      const dir = await window.fileSystem.readDir(folderName);
+      if (dir.success && dir.files) setFiles(dir.files);
+    }
+    setIsCreatingFolder(false);
+    setNewFolderName('');
   };
 
   return (
@@ -84,26 +96,42 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
           >
             Open
           </button>
-          {folderName !== null && (
-            <button
-              type="button"
-              onClick={() => setIsCreatingFile(true)}
-              className="text-xs px-2 py-1 rounded"
-              style={{
-                background: '#2d1b4e',
-                color: '#a855f7',
-                border: '1px solid #a855f7',
-              }}
-            >
-              + New
-            </button>
-          )}
+         {folderName !== null && (
+  <>
+    <button
+      type="button"
+      onClick={() => setIsCreatingFile(true)}
+      className="w-6 h-6 flex items-center justify-center rounded text-sm"
+      style={{
+        background: '#2d1b4e',
+        color: '#a855f7',
+        border: '1px solid #a855f7',
+      }}
+      title="New File"
+    >
+      📄
+    </button>
+    <button
+      type="button"
+      onClick={() => setIsCreatingFolder(true)}
+      className="w-6 h-6 flex items-center justify-center rounded text-sm"
+      style={{
+        background: '#2d1b4e',
+        color: '#a855f7',
+        border: '1px solid #a855f7',
+      }}
+      title="New Folder"
+    >
+      📁
+    </button>
+  </>
+)}
         </div>
       </div>
 
       {folderName && (
         <div className="px-3 py-1 text-sm font-bold truncate" style={{ color: '#ffffff' }}>
-          📁 {folderName}
+          📁 {folderName?.split('\\').pop() ?? folderName}
         </div>
       )}
 
@@ -140,6 +168,39 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
         </div>
       )}
 
+      {isCreatingFolder && (
+        <div className="px-3 py-2 flex gap-1">
+          <input
+            autoFocus
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreateFolder();
+              if (e.key === 'Escape') {
+                setIsCreatingFolder(false);
+                setNewFolderName('');
+              }
+            }}
+            placeholder="folder-name"
+            className="flex-1 text-xs px-2 py-1 rounded outline-none"
+            style={{
+              background: '#1a0a2e',
+              color: '#ffffff',
+              border: '1px solid #a855f7',
+              fontFamily: 'Space Mono, monospace',
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleCreateFolder}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: '#a855f7', color: '#ffffff' }}
+          >
+            ✓
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {files.length === 0 && !folderName && (
           <div className="px-3 py-4 text-xs text-gray-500 text-center">
@@ -160,7 +221,7 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
               fontFamily: 'Space Mono, monospace',
             }}
           >
-            {getFileIcon(file.name)} {file.name}
+            {getFileIcon(file.name, file.isDirectory)} {file.name}
           </button>
         ))}
       </div>

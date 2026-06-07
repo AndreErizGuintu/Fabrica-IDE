@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example';
+export type Channels = 'ipc-example' | 'ai:token';
 
 const electronHandler = {
   ipcRenderer: {
@@ -34,6 +34,12 @@ contextBridge.exposeInMainWorld('fileSystem', {
     ipcRenderer.invoke('fs:writeFile', filePath, content),
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
+  createFolder: (folderPath: string) => ipcRenderer.invoke('fs:createFolder', folderPath),
 });
+
+contextBridge.exposeInMainWorld('ai', {
+  complete: (prompt: string) => ipcRenderer.invoke('ai:complete', prompt),
+});
+
 
 export type ElectronHandler = typeof electronHandler;
