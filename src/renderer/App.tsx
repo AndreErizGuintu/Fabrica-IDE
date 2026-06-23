@@ -18,6 +18,26 @@ function getLastPathSegment(targetPath: string): string {
   return targetPath.split(/[\\/]/).filter(Boolean).pop() ?? targetPath;
 }
 
+function useRecentProjects() {
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+
+  const load = async () => {
+    const result = await window.store.getRecentProjects();
+    if (result.success && result.projects) {
+      setRecentProjects(result.projects);
+    }
+  };
+
+  const add = async (project: RecentProject) => {
+    const result = await window.store.addRecentProject(project);
+    if (result.success && result.projects) {
+      setRecentProjects(result.projects);
+    }
+  };
+
+  return { recentProjects, load, add };
+}
+
 function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const timer = window.setTimeout(() => onDone(), 2500);
@@ -75,7 +95,6 @@ function MainMenu({
   onOpenTerminal: () => void;
   onOpenRecent: (project: RecentProject) => void;
 }) {
-  const accentClasses = ['accent-indigo', 'accent-cyan', 'accent-rose'];
   const [cloneNotice, setCloneNotice] = useState('');
 
   const quickActions = [
@@ -198,7 +217,10 @@ function MainMenu({
                   onClick={() => onOpenRecent(project)}
                 >
                   <div>
-                    <div className={`flex items-center text-sm font-semibold ${accentClasses[index]}`}>
+                    <div
+                      className="flex items-center text-sm font-semibold"
+                      style={{ color: ['#a855f7', '#06b6d4', '#f43f5e', '#f59e0b', '#22c55e'][index % 5] }}
+                    >
                       {project.name}
                     </div>
                     <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -482,15 +504,8 @@ function CreateProject({
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('splash');
-  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [editorFolder, setEditorFolder] = useState<string | undefined>(undefined);
-
-  const loadRecentProjects = async () => {
-    const result = await window.store.getRecentProjects();
-    if (result.success && result.projects) {
-      setRecentProjects(result.projects);
-    }
-  };
+  const { recentProjects, load: loadRecentProjects, add: addRecentProject } = useRecentProjects();
 
   useEffect(() => {
     void loadRecentProjects();
@@ -541,15 +556,15 @@ export default function App() {
           path: folderPath,
         };
 
-        const result = await window.store.addRecentProject(project);
-        if (result.success && result.projects) {
-          setRecentProjects(result.projects);
-        }
+        await addRecentProject(project);
 
         openEditor(folderPath);
       }}
       onOpenTerminal={async () => {
-        await window.fileSystem.openTerminal();
+        const fileSystemWithTerminal = window.fileSystem as typeof window.fileSystem & {
+          openTerminal: (cwd?: string) => Promise<{ success: boolean; error?: string }>;
+        };
+        await fileSystemWithTerminal.openTerminal();
       }}
       onOpenRecent={(project) => {
         openEditor(project.path);
