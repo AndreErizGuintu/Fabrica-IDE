@@ -6,12 +6,8 @@ interface AIPanelProps {
 
 const LANGUAGES = [
   'JavaScript',
-  'TypeScript',
-  'Python',
-  'Java',
+  'Dart',
   'C#',
-  'Go',
-  'Rust',
   'PHP',
 ];
 
@@ -82,13 +78,11 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     setLoading(true);
     setResponse('');
     const prompt = [
-      `Translate the following code into ${language}.`,
-      'Return only the translated code.',
-      'Do not include explanations, markdown, or code fences.',
-      'Preserve the original behavior and structure as closely as possible.',
-      '',
-      selectedCode,
-    ].join('\n');
+  'AutoComplete the Code base on what is highlighted',
+  'based example if the hint is login form auto complete a whole login form ',
+  '',
+  selectedCode,
+].join('\n');
 
     const removeListener = window.electron.ipcRenderer.on(
       'ai:token',

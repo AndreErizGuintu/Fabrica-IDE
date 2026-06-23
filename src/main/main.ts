@@ -9,12 +9,44 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import fs from 'fs';
+import { exec } from 'child_process';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+
+type RecentProject = { name: string; path: string };
+
+const getRecentProjectsPath = () =>
+  path.join(app.getPath('userData'), 'recent-projects.json');
+
+const readRecentProjects = (): RecentProject[] => {
+  try {
+    const filePath = getRecentProjectsPath();
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
+
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (project): project is RecentProject =>
+        project && typeof project.name === 'string' && typeof project.path === 'string',
+    );
+  } catch {
+    return [];
+  }
+};
+
+const writeRecentProjects = (projects: RecentProject[]) => {
+  fs.writeFileSync(getRecentProjectsPath(), JSON.stringify(projects, null, 2), 'utf-8');
+};
 
 class AppUpdater {
   constructor() {
@@ -108,6 +140,42 @@ ipcMain.handle('fs:createFolder', async (_event, folderPath: string) => {
       return { success: false, error: 'Folder already exists' };
     }
     fs.mkdirSync(folderPath, { recursive: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('store:getRecentProjects', async () => {
+  const projects = readRecentProjects();
+  return { success: true, projects };
+});
+
+ipcMain.handle('store:addRecentProject', async (_event, project: RecentProject) => {
+  try {
+    const projects = [
+      project,
+      ...readRecentProjects().filter((entry) => entry.path !== project.path),
+    ].slice(0, 5);
+    writeRecentProjects(projects);
+    return { success: true, projects };
+  } catch (err) {
+    return { success: false, error: String(err), projects: readRecentProjects() };
+  }
+});
+
+ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
+  try {
+    const workingDirectory = cwd || process.cwd();
+
+    if (process.platform === 'win32') {
+      exec('start powershell', { cwd: workingDirectory });
+    } else if (process.platform === 'darwin') {
+      exec('open -a Terminal', { cwd: workingDirectory });
+    } else {
+      exec('x-terminal-emulator', { cwd: workingDirectory });
+    }
+
     return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };

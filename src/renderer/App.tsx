@@ -3,75 +3,20 @@ import icon from '../../assets/icon.svg';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
 
-const recentProjects = [
-  {
-    name: 'my-awesome-app',
-    path: '/home/user/projects/my-awesome-app',
-  },
-  {
-    name: 'data-analysis-tool',
-    path: '/home/user/projects/data-analysis-tool',
-  },
-  {
-    name: 'game-engine-core',
-    path: '/home/user/projects/game-engine-core',
-  },
-];
-
-const quickActions = [
-  {
-    title: 'New File',
-    caption: 'Start a blank workspace',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm8 1.5V9h4.5L13 4.5z" />
-        <path d="M12 11v6m-3-3h6" stroke="currentColor" strokeWidth="1.6" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Open Folder',
-    caption: 'Browse local projects',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8.5a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 16.5V6z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Clone Repository',
-    caption: 'Pull from remote source',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 4a3 3 0 1 0 2.83 4H14a3 3 0 1 0 2.83 4H9.83A3 3 0 1 0 7 20a3 3 0 0 0 2.83-4H14a3 3 0 1 0-2.83-4H9.83A3 3 0 1 0 7 4z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Open Terminal',
-    caption: 'Jump into a shell',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm2.5 4.5 3 3-3 3"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M12 14h5"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-];
-
 type Screen = 'splash' | 'main' | 'create' | 'editor';
+
+type RecentProject = {
+  name: string;
+  path: string;
+};
+
+function getPathSeparator(targetPath: string): string {
+  return targetPath.includes('\\') ? '\\' : '/';
+}
+
+function getLastPathSegment(targetPath: string): string {
+  return targetPath.split(/[\\/]/).filter(Boolean).pop() ?? targetPath;
+}
 
 function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {
@@ -115,8 +60,80 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function MainMenu({ onCreate }: { onCreate: () => void }) {
+function MainMenu({
+  recentProjects,
+  onCreate,
+  onNewFile,
+  onOpenFolder,
+  onOpenTerminal,
+  onOpenRecent,
+}: {
+  recentProjects: RecentProject[];
+  onCreate: () => void;
+  onNewFile: () => void;
+  onOpenFolder: () => void;
+  onOpenTerminal: () => void;
+  onOpenRecent: (project: RecentProject) => void;
+}) {
   const accentClasses = ['accent-indigo', 'accent-cyan', 'accent-rose'];
+  const [cloneNotice, setCloneNotice] = useState('');
+
+  const quickActions = [
+    {
+      title: 'New File',
+      caption: 'Start a blank workspace',
+      icon: (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm8 1.5V9h4.5L13 4.5z" />
+          <path d="M12 11v6m-3-3h6" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      ),
+      onClick: onNewFile,
+    },
+    {
+      title: 'Open Folder',
+      caption: 'Browse local projects',
+      icon: (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8.5a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 16.5V6z" />
+        </svg>
+      ),
+      onClick: onOpenFolder,
+    },
+    {
+      title: 'Clone Repository',
+      caption: 'Pull from remote source',
+      icon: (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 4a3 3 0 1 0 2.83 4H14a3 3 0 1 0 2.83 4H9.83A3 3 0 1 0 7 20a3 3 0 0 0 2.83-4H14a3 3 0 1 0-2.83-4H9.83A3 3 0 1 0 7 4z" />
+        </svg>
+      ),
+      onClick: () => setCloneNotice('Git integration coming soon'),
+    },
+    {
+      title: 'Open Terminal',
+      caption: 'Jump into a shell',
+      icon: (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm2.5 4.5 3 3-3 3"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M12 14h5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      ),
+      onClick: onOpenTerminal,
+    },
+  ];
 
   return (
     <div className="app-glow min-h-screen px-14 py-7 relative overflow-hidden">
@@ -178,6 +195,7 @@ function MainMenu({ onCreate }: { onCreate: () => void }) {
                   type="button"
                   className="flex items-center justify-between w-full px-4 py-3 rounded-xl border mb-3"
                   style={{ background: '#161a2b', borderColor: 'var(--panel-border)' }}
+                  onClick={() => onOpenRecent(project)}
                 >
                   <div>
                     <div className={`flex items-center text-sm font-semibold ${accentClasses[index]}`}>
@@ -221,6 +239,7 @@ function MainMenu({ onCreate }: { onCreate: () => void }) {
                   type="button"
                   className="flex flex-col gap-2 p-4 rounded-xl border text-left"
                   style={{ background: '#161a2b', borderColor: 'var(--panel-border)' }}
+                  onClick={action.onClick}
                 >
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#262a3d' }}>
                     <div style={{ color: 'var(--text-muted)' }}>{action.icon}</div>
@@ -230,6 +249,11 @@ function MainMenu({ onCreate }: { onCreate: () => void }) {
                 </button>
               ))}
             </div>
+            {cloneNotice ? (
+              <div className="mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                {cloneNotice}
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -250,11 +274,52 @@ function MainMenu({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () => void }) {
+function CreateProject({
+  onCancel,
+  onNext,
+}: {
+  onCancel: () => void;
+  onNext: (folderPath: string) => void;
+}) {
   const [selectedType, setSelectedType] = useState('Web App');
+  const [projectName, setProjectName] = useState('');
+  const [projectLocation, setProjectLocation] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const types = ['Web App', 'Mobile App', 'Backend/API'];
-  const steps = ['Project Type', 'Template', 'Compiler Setup'];
+
+  const handleBrowse = async () => {
+    const folderPath = await window.fileSystem.openFolder();
+    if (folderPath) {
+      setProjectLocation(folderPath);
+      setErrorMessage('');
+    }
+  };
+
+  const handleCreateProject = async () => {
+    const trimmedName = projectName.trim();
+    const trimmedLocation = projectLocation.trim();
+
+    if (!trimmedName || !trimmedLocation) {
+      setErrorMessage('Project name and location are required.');
+      return;
+    }
+
+    const separator = getPathSeparator(trimmedLocation);
+    const normalizedLocation = trimmedLocation.endsWith(separator)
+      ? trimmedLocation.slice(0, -1)
+      : trimmedLocation;
+    const fullPath = `${normalizedLocation}${separator}${trimmedName}`;
+
+    const result = await window.fileSystem.createFolder(fullPath);
+    if (!result.success) {
+      setErrorMessage(result.error ?? 'Unable to create project folder.');
+      return;
+    }
+
+    await window.store.addRecentProject({ name: trimmedName, path: fullPath });
+    onNext(fullPath);
+  };
 
   return (
     <div className="min-h-screen w-full px-10 py-8">
@@ -303,26 +368,16 @@ function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () 
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          {steps.map((step, index) => (
-            <div key={step} className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                style={{
-                  backgroundColor: index === 0 ? '#a855f7' : '#2d1b4e',
-                  color: '#ffffff',
-                }}
-              >
-                {index + 1}
-              </div>
-              <div className="text-sm" style={{ color: '#ffffff' }}>
-                {step}
-              </div>
-              {index < steps.length - 1 ? (
-                <div className="w-12 h-px" style={{ backgroundColor: '#2d1b4e' }} />
-              ) : null}
-            </div>
-          ))}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+            style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
+          >
+            1
+          </div>
+          <div className="text-sm" style={{ color: '#ffffff' }}>
+            Project Details
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
@@ -363,6 +418,8 @@ function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () 
               }}
               placeholder="my-fabrica-project"
               type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
             />
           </div>
           <div>
@@ -380,15 +437,23 @@ function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () 
                 }}
                 placeholder="/home/user/projects"
                 type="text"
+                value={projectLocation}
+                onChange={(e) => setProjectLocation(e.target.value)}
               />
               <button
                 type="button"
                 className="px-4 py-3 rounded-xl text-sm font-bold"
                 style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
+                  onClick={handleBrowse}
               >
                 Browse
               </button>
             </div>
+              {errorMessage ? (
+                <div className="mt-2 text-sm" style={{ color: '#a855f7' }}>
+                  {errorMessage}
+                </div>
+              ) : null}
           </div>
         </div>
 
@@ -405,9 +470,9 @@ function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () 
             type="button"
             className="px-6 py-3 rounded-xl text-sm font-bold"
             style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
-            onClick={onNext}
+            onClick={handleCreateProject}
           >
-            Next: Choose Template →
+            Create Project →
           </button>
         </div>
       </main>
@@ -417,20 +482,78 @@ function CreateProject({ onCancel, onNext }: { onCancel: () => void; onNext: () 
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('splash');
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  const [editorFolder, setEditorFolder] = useState<string | undefined>(undefined);
+
+  const loadRecentProjects = async () => {
+    const result = await window.store.getRecentProjects();
+    if (result.success && result.projects) {
+      setRecentProjects(result.projects);
+    }
+  };
+
+  useEffect(() => {
+    void loadRecentProjects();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'main') {
+      void loadRecentProjects();
+    }
+  }, [screen]);
+
+  const openEditor = (folderPath?: string) => {
+    setEditorFolder(folderPath);
+    setScreen('editor');
+  };
 
   if (screen === 'splash') {
     return <SplashScreen onDone={() => setScreen('main')} />;
   }
 
   if (screen === 'create') {
-    return <CreateProject onCancel={() => setScreen('main')} onNext={() => setScreen('editor')} />;
+    return (
+      <CreateProject
+        onCancel={() => setScreen('main')}
+        onNext={(folderPath) => {
+          setEditorFolder(folderPath);
+          setScreen('editor');
+        }}
+      />
+    );
   }
 
   if (screen === 'editor') {
-    return <EditorLayout onBack={() => setScreen('main')} />;
+    return <EditorLayout onBack={() => setScreen('main')} initialFolder={editorFolder} />;
   }
 
   return (
-    <MainMenu onCreate={() => setScreen('create')} />
+    <MainMenu
+      recentProjects={recentProjects}
+      onCreate={() => setScreen('create')}
+      onNewFile={() => openEditor(undefined)}
+      onOpenFolder={async () => {
+        const folderPath = await window.fileSystem.openFolder();
+        if (!folderPath) return;
+
+        const project = {
+          name: getLastPathSegment(folderPath),
+          path: folderPath,
+        };
+
+        const result = await window.store.addRecentProject(project);
+        if (result.success && result.projects) {
+          setRecentProjects(result.projects);
+        }
+
+        openEditor(folderPath);
+      }}
+      onOpenTerminal={async () => {
+        await window.fileSystem.openTerminal();
+      }}
+      onOpenRecent={(project) => {
+        openEditor(project.path);
+      }}
+    />
   );
 }

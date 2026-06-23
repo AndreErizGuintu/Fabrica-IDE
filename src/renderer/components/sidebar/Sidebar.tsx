@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { FileEntry } from '../../types/index';
 import './sidebar.css';
 
 interface SidebarProps {
   onFileOpen: (path: string, filename: string) => void;
+  initialFolder?: string;
 }
 
 function getFileIcon(filename: string, isDirectory?: boolean): string {
@@ -25,7 +26,7 @@ function getFileIcon(filename: string, isDirectory?: boolean): string {
   return icons[ext] ?? '📄';
 }
 
-export default function Sidebar({ onFileOpen }: SidebarProps) {
+export default function Sidebar({ onFileOpen, initialFolder }: SidebarProps) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -34,14 +35,24 @@ export default function Sidebar({ onFileOpen }: SidebarProps) {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
-  const handleOpenFolder = async () => {
-    const folderPath = await window.fileSystem.openFolder();
-    if (!folderPath) return;
+  const loadFolder = async (folderPath: string) => {
     const result = await window.fileSystem.readDir(folderPath);
     if (result.success && result.files) {
       setFolderName(folderPath);
       setFiles(result.files);
     }
+  };
+
+  useEffect(() => {
+    if (initialFolder) {
+      void loadFolder(initialFolder);
+    }
+  }, [initialFolder]);
+
+  const handleOpenFolder = async () => {
+    const folderPath = await window.fileSystem.openFolder();
+    if (!folderPath) return;
+    await loadFolder(folderPath);
   };
 
   const handleFileClick = async (file: FileEntry) => {

@@ -39,7 +39,7 @@ function getLanguage(filename: string): string {
   }
 }
 
-export default function EditorLayout({ onBack }: { onBack: () => void }) {
+export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
@@ -237,7 +237,7 @@ export default function EditorLayout({ onBack }: { onBack: () => void }) {
         ))}
       </div>
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar onFileOpen={handleFileOpen} />
+        <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} />
         {tabs.length === 0 ? (
           <div
             className="flex-1 flex flex-col items-center justify-center gap-4"

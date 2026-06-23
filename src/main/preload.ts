@@ -35,6 +35,13 @@ contextBridge.exposeInMainWorld('fileSystem', {
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
   createFolder: (folderPath: string) => ipcRenderer.invoke('fs:createFolder', folderPath),
+  openTerminal: (cwd?: string) => ipcRenderer.invoke('shell:openTerminal', cwd),
+});
+
+contextBridge.exposeInMainWorld('store', {
+  getRecentProjects: () => ipcRenderer.invoke('store:getRecentProjects'),
+  addRecentProject: (project: { name: string; path: string }) =>
+    ipcRenderer.invoke('store:addRecentProject', project),
 });
 
 contextBridge.exposeInMainWorld('ai', {
