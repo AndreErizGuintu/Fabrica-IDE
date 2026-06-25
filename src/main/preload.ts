@@ -48,5 +48,17 @@ contextBridge.exposeInMainWorld('ai', {
   complete: (prompt: string) => ipcRenderer.invoke('ai:complete', prompt),
 });
 
+contextBridge.exposeInMainWorld('runner', {
+  run: (filePath: string) => ipcRenderer.invoke('code:run', filePath),
+  onOutput: (cb: (data: { type: 'stdout' | 'stderr'; text: string }) => void) =>
+    ipcRenderer.on('run:output', (_event, data) => cb(data)),
+  onDone: (cb: (data: { exitCode: number }) => void) =>
+    ipcRenderer.on('run:done', (_event, data) => cb(data)),
+  removeListeners: () => {
+    ipcRenderer.removeAllListeners('run:output');
+    ipcRenderer.removeAllListeners('run:done');
+  },
+});
+
 
 export type ElectronHandler = typeof electronHandler;

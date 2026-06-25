@@ -44,6 +44,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
   const [showAI, setShowAI] = useState(false);
+  const [runOutput, setRunOutput] = useState<Array<{ type: 'stdout' | 'stderr'; text: string }>>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [showOutput, setShowOutput] = useState(false);
 
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
@@ -92,6 +95,45 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         ),
       );
     }
+  };
+
+  const handleRun = async () => {
+    if (!activeTab?.path || isRunning) return;
+
+    if (activeTab.isDirty) {
+      await window.fileSystem.writeFile(activeTab.path, activeTab.content);
+      setTabs((prev) =>
+        prev.map((tab, i) => (i === activeTabIndex ? { ...tab, isDirty: false } : tab))
+      );
+    }
+
+    if (activeTab.filename.endsWith('.html')) {
+      setShowOutput(false);
+      return;
+    }
+
+    setRunOutput([]);
+    setShowOutput(true);
+    setIsRunning(true);
+
+    window.runner.removeListeners();
+
+    window.runner.onOutput((data) => {
+      setRunOutput((prev) => [...prev, data]);
+    });
+
+    window.runner.onDone(({ exitCode }) => {
+      setRunOutput((prev) => [
+        ...prev,
+        {
+          type: exitCode === 0 ? 'stdout' : 'stderr',
+          text: `\n─── Process exited with code ${exitCode} ───\n`,
+        },
+      ]);
+      setIsRunning(false);
+    });
+
+    await window.runner.run(activeTab.path);
   };
 
   const handleOpenFileDialog = async () => {
@@ -185,9 +227,15 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </button>
           <button
             type="button"
-            className="px-4 py-1.5 rounded-full text-sm font-semibold text-white bg-green-500"
+            onClick={handleRun}
+            disabled={!activeTab?.path || isRunning}
+            className="px-4 py-1.5 rounded-full text-sm font-semibold text-white"
+            style={{
+              background: isRunning ? '#16a34a' : (!activeTab?.path ? '#374151' : '#22c55e'),
+              cursor: !activeTab?.path || isRunning ? 'not-allowed' : 'pointer',
+            }}
           >
-            Run
+            {isRunning ? '◼ Running...' : '▶ Run'}
           </button>
           <button
             type="button"
@@ -236,39 +284,101 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </div>
         ))}
       </div>
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} />
-        {tabs.length === 0 ? (
-          <div
-            className="flex-1 flex flex-col items-center justify-center gap-4"
-            style={{ background: '#1a0a2e' }}
-          >
-            <div className="text-6xl">📂</div>
-            <div className="text-center" style={{ fontFamily: 'Space Mono, monospace' }}>
-              <div className="text-white font-bold mb-2">No file open</div>
-              <div className="text-gray-500 text-sm">
-                Open a folder from the sidebar
-                <br />
-                or click Open File to get started
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} />
+          {tabs.length === 0 ? (
+            <div
+              className="flex-1 flex flex-col items-center justify-center gap-4"
+              style={{ background: '#1a0a2e' }}
+            >
+              <div className="text-6xl">📂</div>
+              <div className="text-center" style={{ fontFamily: 'Space Mono, monospace' }}>
+                <div className="text-white font-bold mb-2">No file open</div>
+                <div className="text-gray-500 text-sm">
+                  Open a folder from the sidebar
+                  <br />
+                  or click Open File to get started
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <>
-              <Editor
-                language={getLanguage(tabs[activeTabIndex].filename)}
-                filename={activeTab!.filename}
-                value={activeTab!.content}
-                onChange={handleEditorChange}
-                onSelectionChange={(s) => setSelectedCode(s)}
-              />
-              <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
-              {showAI && (
-                <div className="w-80 shrink-0 h-full min-h-0 overflow-hidden">
-                  <AIPanel selectedCode={selectedCode} />
-                </div>
+          ) : (
+            <>
+                <Editor
+                  language={getLanguage(tabs[activeTabIndex].filename)}
+                  filename={activeTab!.filename}
+                  value={activeTab!.content}
+                  onChange={handleEditorChange}
+                  onSelectionChange={(s) => setSelectedCode(s)}
+                />
+                <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
+                {showAI && (
+                  <div className="w-80 shrink-0 h-full min-h-0 overflow-hidden">
+                    <AIPanel selectedCode={selectedCode} />
+                  </div>
+                )}
+            </>
+          )}
+        </div>
+
+        {showOutput && (
+          <div
+            className="flex flex-col shrink-0"
+            style={{
+              height: '200px',
+              background: '#0d0618',
+              borderTop: '1px solid #2d1b4e',
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-3 py-1 shrink-0"
+              style={{ background: '#1a0a2e', borderBottom: '1px solid #2d1b4e' }}
+            >
+              <span
+                className="text-xs font-bold tracking-widest"
+                style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
+              >
+                OUTPUT
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRunOutput([])}
+                  className="text-xs"
+                  style={{ color: '#a7adc5' }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowOutput(false)}
+                  className="text-xs"
+                  style={{ color: '#a7adc5' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div
+              className="flex-1 overflow-y-auto p-3 text-xs"
+              style={{ fontFamily: 'Space Mono, monospace' }}
+            >
+              {runOutput.length === 0 && isRunning && (
+                <span style={{ color: '#a7adc5' }}>Running...</span>
               )}
-          </>
+              {runOutput.map((line, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: line.type === 'stderr' ? '#f87171' : '#86efac',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {line.text}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

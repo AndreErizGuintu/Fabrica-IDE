@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import fs from 'fs';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
@@ -47,6 +47,22 @@ const readRecentProjects = (): RecentProject[] => {
 const writeRecentProjects = (projects: RecentProject[]) => {
   fs.writeFileSync(getRecentProjectsPath(), JSON.stringify(projects, null, 2), 'utf-8');
 };
+
+function getRunConfig(filePath: string):
+  | { cmd: string; args: string[] }
+  | { html: true }
+  | { error: string } {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'html': return { html: true };
+    case 'php': return { cmd: 'php', args: ['-f', filePath] };
+    case 'js': return { cmd: 'node', args: [filePath] };
+    case 'ts': return { error: 'TypeScript files cannot be run directly — rename to .js or compile first' };
+    case 'cs': return { error: '.NET SDK required — install from https://dot.net' };
+    case 'dart': return { error: 'Dart SDK required — install from https://dart.dev' };
+    default: return { error: `No runner configured for .${ext ?? 'unknown'} files` };
+  }
+}
 
 class AppUpdater {
   constructor() {
@@ -180,6 +196,51 @@ ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
   } catch (err) {
     return { success: false, error: String(err) };
   }
+});
+
+ipcMain.handle('code:run', async (event, filePath: string) => {
+  const config = getRunConfig(filePath);
+
+  if ('html' in config) {
+    return { success: true, html: true };
+  }
+
+  if ('error' in config) {
+    event.sender.send('run:output', { type: 'stderr', text: config.error + '\n' });
+    event.sender.send('run:done', { exitCode: 1 });
+    return { success: false, error: config.error };
+  }
+
+  return new Promise<{ success: boolean; exitCode?: number; error?: string }>((resolve) => {
+    const child = spawn(config.cmd, config.args, {
+      cwd: path.dirname(filePath),
+      shell: true,
+      env: { ...process.env, NODE_OPTIONS: '', FORCE_COLOR: '0', NO_COLOR: '1' },
+    });
+
+    child.stdout.on('data', (data: Buffer) => {
+      event.sender.send('run:output', { type: 'stdout', text: data.toString() });
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      event.sender.send('run:output', { type: 'stderr', text: data.toString() });
+    });
+
+    child.on('close', (code: number | null) => {
+      const exitCode = code ?? 1;
+      event.sender.send('run:done', { exitCode });
+      resolve({ success: exitCode === 0, exitCode });
+    });
+
+    child.on('error', (err: Error) => {
+      const msg = err.message.includes('ENOENT')
+        ? `Command not found: '${config.cmd}' — is it installed and on PATH?\n`
+        : `${err.message}\n`;
+      event.sender.send('run:output', { type: 'stderr', text: msg });
+      event.sender.send('run:done', { exitCode: 1 });
+      resolve({ success: false, error: err.message });
+    });
+  });
 });
 
 if (process.env.NODE_ENV === 'production') {
