@@ -180,6 +180,91 @@ ipcMain.handle('store:addRecentProject', async (_event, project: RecentProject) 
   }
 });
 
+// SDK detection
+ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
+  return new Promise<{ available: boolean; version?: string; error?: string }>((resolve) => {
+    const cmds: Record<string, string> = {
+      node: 'node --version',
+      php: 'php --version',
+      dotnet: 'dotnet --version',
+      dart: 'dart --version',
+    };
+    const cmd = cmds[runtime];
+    if (!cmd) {
+      resolve({ available: false, error: `Unknown runtime: ${runtime}` });
+      return;
+    }
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ available: false, error: error.message });
+      } else {
+        resolve({ available: true, version: (stdout || stderr).trim().split('\n')[0] });
+      }
+    });
+  });
+});
+
+// Run file
+ipcMain.handle('run:file', async (event, filePath: string) => {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+
+  let cmd: string;
+  let args: string[];
+
+  switch (ext) {
+    case 'js':
+    case 'ts':
+      cmd = 'node';
+      args = [filePath];
+      break;
+    case 'php':
+      cmd = 'php';
+      args = ['-f', filePath];
+      break;
+    case 'cs':
+      cmd = 'dotnet';
+      args = ['script', filePath];
+      break;
+    case 'dart':
+      cmd = 'dart';
+      args = ['run', filePath];
+      break;
+    default:
+      return { success: false, error: `Unsupported file type: .${ext}` };
+  }
+
+  return new Promise<{ success: boolean; error?: string }>((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd: path.dirname(filePath),
+      env: {
+        ...process.env,
+        FORCE_COLOR: '0',
+        NO_COLOR: '1',
+        NODE_OPTIONS: '',
+      },
+    });
+
+    child.stdout.on('data', (data: Buffer) => {
+      event.sender.send('run:stdout', data.toString());
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      event.sender.send('run:stderr', data.toString());
+    });
+
+    child.on('close', (code: number | null) => {
+      event.sender.send('run:done', code ?? -1);
+      resolve({ success: true });
+    });
+
+    child.on('error', (err: Error) => {
+      event.sender.send('run:stderr', `Error: ${err.message}\n`);
+      event.sender.send('run:done', -1);
+      resolve({ success: false, error: err.message });
+    });
+  });
+});
+
 ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
   try {
     const workingDirectory = cwd || process.cwd();

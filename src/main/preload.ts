@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token';
+export type Channels = 'ipc-example' | 'ai:token' | 'run:stdout' | 'run:stderr' | 'run:done';
 
 const electronHandler = {
   ipcRenderer: {
@@ -49,14 +49,22 @@ contextBridge.exposeInMainWorld('ai', {
 });
 
 contextBridge.exposeInMainWorld('runner', {
-  run: (filePath: string) => ipcRenderer.invoke('code:run', filePath),
-  onOutput: (cb: (data: { type: 'stdout' | 'stderr'; text: string }) => void) =>
-    ipcRenderer.on('run:output', (_event, data) => cb(data)),
-  onDone: (cb: (data: { exitCode: number }) => void) =>
-    ipcRenderer.on('run:done', (_event, data) => cb(data)),
-  removeListeners: () => {
-    ipcRenderer.removeAllListeners('run:output');
-    ipcRenderer.removeAllListeners('run:done');
+  runFile: (filePath: string) => ipcRenderer.invoke('run:file', filePath),
+  checkSDK: (runtime: string) => ipcRenderer.invoke('run:checkSDK', runtime),
+  onStdout: (cb: (data: string) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
+    ipcRenderer.on('run:stdout', handler);
+    return () => ipcRenderer.removeListener('run:stdout', handler);
+  },
+  onStderr: (cb: (data: string) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
+    ipcRenderer.on('run:stderr', handler);
+    return () => ipcRenderer.removeListener('run:stderr', handler);
+  },
+  onDone: (cb: (code: number) => void) => {
+    const handler = (_event: IpcRendererEvent, code: number) => cb(code);
+    ipcRenderer.once('run:done', handler);
+    return () => ipcRenderer.removeListener('run:done', handler);
   },
 });
 

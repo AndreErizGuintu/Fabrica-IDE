@@ -22,11 +22,15 @@ declare global {
     electron: ElectronHandler;
     fileSystem: FileSystemBridge;
     store: StoreBridge;
+    ai: {
+      complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+    };
     runner: {
-      run: (filePath: string) => Promise<{ success: boolean; html?: boolean; exitCode?: number; error?: string }>;
-      onOutput: (cb: (data: { type: 'stdout' | 'stderr'; text: string }) => void) => void;
-      onDone: (cb: (data: { exitCode: number }) => void) => void;
-      removeListeners: () => void;
+      runFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      checkSDK: (runtime: string) => Promise<{ available: boolean; version?: string; error?: string }>;
+      onStdout: (cb: (data: string) => void) => () => void;
+      onStderr: (cb: (data: string) => void) => () => void;
+      onDone: (cb: (code: number) => void) => () => void;
     };
   }
 }

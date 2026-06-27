@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
@@ -44,9 +44,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
   const [showAI, setShowAI] = useState(false);
-  const [runOutput, setRunOutput] = useState<Array<{ type: 'stdout' | 'stderr'; text: string }>>([]);
+  const [outputLines, setOutputLines] = useState<{ text: string; type: 'stdout' | 'stderr' | 'info' | 'error' }[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
+  const outputEndRef = useRef<HTMLDivElement>(null);
 
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
@@ -98,42 +99,58 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   };
 
   const handleRun = async () => {
-    if (!activeTab?.path || isRunning) return;
-
-    if (activeTab.isDirty) {
-      await window.fileSystem.writeFile(activeTab.path, activeTab.content);
-      setTabs((prev) =>
-        prev.map((tab, i) => (i === activeTabIndex ? { ...tab, isDirty: false } : tab))
-      );
-    }
-
-    if (activeTab.filename.endsWith('.html')) {
-      setShowOutput(false);
+    if (!activeTab?.path) {
+      setOutputLines([{ text: 'No file saved. Save the file before running.', type: 'error' }]);
+      setShowOutput(true);
       return;
     }
 
-    setRunOutput([]);
+    const ext = activeTab.filename.split('.').pop()?.toLowerCase();
+    const runtimeMap: Record<string, string> = {
+      js: 'node', ts: 'node',
+      php: 'php',
+      cs: 'dotnet',
+      dart: 'dart',
+    };
+    const runtime = ext ? runtimeMap[ext] : undefined;
+
+    if (!runtime) {
+      setOutputLines([{ text: `Cannot run .${ext ?? '?'} files directly.`, type: 'error' }]);
+      setShowOutput(true);
+      return;
+    }
+
+    const sdkCheck = await window.runner.checkSDK(runtime);
+    if (!sdkCheck.available) {
+      setOutputLines([{
+        text: `Runtime not found: ${runtime}\nInstall it and make sure it's on your PATH.\n${sdkCheck.error ?? ''}`,
+        type: 'error',
+      }]);
+      setShowOutput(true);
+      return;
+    }
+
+    setOutputLines([{ text: `▶ Running ${activeTab.filename} (${sdkCheck.version ?? runtime})...\n`, type: 'info' }]);
     setShowOutput(true);
     setIsRunning(true);
 
-    window.runner.removeListeners();
-
-    window.runner.onOutput((data) => {
-      setRunOutput((prev) => [...prev, data]);
+    const removeStdout = window.runner.onStdout((data) => {
+      setOutputLines((prev) => [...prev, { text: data, type: 'stdout' }]);
     });
-
-    window.runner.onDone(({ exitCode }) => {
-      setRunOutput((prev) => [
+    const removeStderr = window.runner.onStderr((data) => {
+      setOutputLines((prev) => [...prev, { text: data, type: 'stderr' }]);
+    });
+    window.runner.onDone((code) => {
+      setOutputLines((prev) => [
         ...prev,
-        {
-          type: exitCode === 0 ? 'stdout' : 'stderr',
-          text: `\n─── Process exited with code ${exitCode} ───\n`,
-        },
+        { text: `\n● Process exited with code ${code}`, type: code === 0 ? 'info' : 'error' },
       ]);
       setIsRunning(false);
+      removeStdout();
+      removeStderr();
     });
 
-    await window.runner.run(activeTab.path);
+    await window.runner.runFile(activeTab.path);
   };
 
   const handleOpenFileDialog = async () => {
@@ -166,6 +183,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab]);
+
+  useEffect(() => {
+    outputEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [outputLines]);
 
   return (
     <div
@@ -228,14 +249,15 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <button
             type="button"
             onClick={handleRun}
-            disabled={!activeTab?.path || isRunning}
+            disabled={isRunning || !activeTab}
             className="px-4 py-1.5 rounded-full text-sm font-semibold text-white"
             style={{
-              background: isRunning ? '#16a34a' : (!activeTab?.path ? '#374151' : '#22c55e'),
-              cursor: !activeTab?.path || isRunning ? 'not-allowed' : 'pointer',
+              background: isRunning ? '#4b5563' : '#22c55e',
+              cursor: isRunning || !activeTab ? 'not-allowed' : 'pointer',
+              opacity: !activeTab ? 0.5 : 1,
             }}
           >
-            {isRunning ? '◼ Running...' : '▶ Run'}
+            {isRunning ? '⏳ Running…' : '▶ Run'}
           </button>
           <button
             type="button"
@@ -325,17 +347,17 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <div
             className="flex flex-col shrink-0"
             style={{
-              height: '200px',
-              background: '#0d0618',
+              height: '220px',
+              background: '#0d0d1a',
               borderTop: '1px solid #2d1b4e',
             }}
           >
             <div
-              className="flex items-center justify-between px-3 py-1 shrink-0"
+              className="flex items-center justify-between px-4 py-1.5 shrink-0"
               style={{ background: '#1a0a2e', borderBottom: '1px solid #2d1b4e' }}
             >
               <span
-                className="text-xs font-bold tracking-widest"
+                className="text-xs font-semibold"
                 style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
               >
                 OUTPUT
@@ -343,9 +365,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setRunOutput([])}
+                  onClick={() => setOutputLines([])}
                   className="text-xs"
-                  style={{ color: '#a7adc5' }}
+                  style={{ color: '#6b7280' }}
                 >
                   Clear
                 </button>
@@ -353,30 +375,35 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   type="button"
                   onClick={() => setShowOutput(false)}
                   className="text-xs"
-                  style={{ color: '#a7adc5' }}
+                  style={{ color: '#6b7280' }}
                 >
                   ✕
                 </button>
               </div>
             </div>
             <div
-              className="flex-1 overflow-y-auto p-3 text-xs"
-              style={{ fontFamily: 'Space Mono, monospace' }}
+              className="flex-1 overflow-y-auto px-4 py-3"
+              style={{ fontFamily: 'Space Mono, monospace', fontSize: '12px', lineHeight: '1.6' }}
             >
-              {runOutput.length === 0 && isRunning && (
-                <span style={{ color: '#a7adc5' }}>Running...</span>
-              )}
-              {runOutput.map((line, i) => (
-                <div
+              {outputLines.map((line, i) => (
+                <pre
                   key={i}
                   style={{
-                    color: line.type === 'stderr' ? '#f87171' : '#86efac',
+                    margin: 0,
                     whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    color:
+                      line.type === 'stderr' || line.type === 'error'
+                        ? '#f87171'
+                        : line.type === 'info'
+                        ? '#a855f7'
+                        : '#d1fae5',
                   }}
                 >
                   {line.text}
-                </div>
+                </pre>
               ))}
+              <div ref={outputEndRef} />
             </div>
           </div>
         )}
