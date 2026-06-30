@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('fileSystem', {
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
   createFolder: (folderPath: string) => ipcRenderer.invoke('fs:createFolder', folderPath),
+  rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
+  deleteEntry: (targetPath: string) => ipcRenderer.invoke('fs:delete', targetPath),
   openTerminal: (cwd?: string) => ipcRenderer.invoke('shell:openTerminal', cwd),
 });
 

@@ -40,7 +40,9 @@ declare global {
       writeFile: (filePath: string, content: string) => Promise<FileWriteResult>;
       readDir: (dirPath: string) => Promise<DirReadResult>;
       createFile: (filePath: string) => Promise<FileWriteResult>;
-        createFolder: (folderPath: string) => Promise<FileWriteResult>;
+      createFolder: (folderPath: string) => Promise<FileWriteResult>;
+      rename: (oldPath: string, newPath: string) => Promise<FileWriteResult>;
+      deleteEntry: (targetPath: string) => Promise<FileWriteResult>;
     };
      ai: {
       complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;

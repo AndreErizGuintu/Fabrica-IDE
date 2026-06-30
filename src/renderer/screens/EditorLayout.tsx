@@ -214,6 +214,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
   };
 
+  useEffect(() => {
+    if (initialFolder) {
+      void refreshGitStatus();
+    }
+  }, [initialFolder]);
+
   const handleOpenFileDialog = async () => {
     const filePath = await window.fileSystem.openFile();
     if (!filePath) return;
@@ -387,7 +393,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       </div>
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex flex-1 overflow-hidden min-h-0">
-          <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} activeFilePath={activeTab?.path} />
+          <Sidebar
+            onFileOpen={handleFileOpen}
+            initialFolder={initialFolder}
+            activeFilePath={activeTab?.path}
+            gitStatusFiles={gitStatusFiles}
+          />
           {tabs.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-4"
@@ -524,68 +535,131 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       </div>
                     </div>
 
-                    {/* CHANGES section */}
-                    <div className="shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setGitChangesOpen((p) => !p)}
-                        className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
-                        style={{
-                          color: '#a7adc5',
-                          fontFamily: 'Space Mono, monospace',
-                          background: '#1a0a2e',
-                          borderTop: '1px solid #2d1b4e',
-                          borderBottom: gitChangesOpen ? '1px solid #2d1b4e' : 'none',
-                        }}
-                      >
-                        <span style={{ fontSize: '9px' }}>{gitChangesOpen ? '▼' : '▶'}</span>
-                        CHANGES
-                        {gitStatusFiles.length > 0 && (
-                          <span
-                            className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
-                            style={{ background: '#a855f7', color: '#fff', fontSize: '10px' }}
-                          >
-                            {gitStatusFiles.length}
-                          </span>
-                        )}
-                      </button>
+                    {/* STAGED CHANGES + CHANGES sections */}
+                    {(() => {
+                      const staged: { code: string; filename: string }[] = [];
+                      const unstaged: { code: string; filename: string }[] = [];
 
-                      {gitChangesOpen && (
-                        <div className="overflow-y-auto" style={{ maxHeight: '160px' }}>
-                          {gitStatusFiles.length === 0 ? (
-                            <div
-                              className="px-4 py-2 text-xs"
-                              style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
-                            >
-                              {initialFolder ? 'No changes — run git status' : 'No folder open'}
-                            </div>
-                          ) : (
-                            gitStatusFiles.map((line, i) => {
-                              const statusCode = line.slice(0, 2).trim();
-                              const filename = line.slice(3);
-                              const color =
-                                statusCode === 'M' || statusCode === 'MM'
-                                  ? '#fbbf24'
-                                  : statusCode === '??' || statusCode === 'A'
-                                  ? '#86efac'
-                                  : statusCode === 'D'
-                                  ? '#f87171'
-                                  : '#a7adc5';
-                              return (
-                                <div
-                                  key={i}
-                                  className="flex items-center gap-2 px-4 py-0.5 text-xs truncate"
-                                  style={{ fontFamily: 'Space Mono, monospace', color }}
-                                >
-                                  <span style={{ flexShrink: 0, fontSize: '10px' }}>{statusCode || '?'}</span>
-                                  <span className="truncate">{filename}</span>
-                                </div>
-                              );
-                            })
-                          )}
+                      gitStatusFiles.forEach((line) => {
+                        const stagedCode = line[0] ?? ' ';
+                        const unstagedCode = line[1] ?? ' ';
+                        const filename = line.slice(3);
+                        if (!filename) return;
+
+                        // Untracked files (??) show only in unstaged
+                        if (line.startsWith('??')) {
+                          unstaged.push({ code: '?', filename });
+                          return;
+                        }
+                        if (stagedCode !== ' ') {
+                          staged.push({ code: stagedCode, filename });
+                        }
+                        if (unstagedCode !== ' ') {
+                          unstaged.push({ code: unstagedCode, filename });
+                        }
+                      });
+
+                      const codeColor = (code: string) => {
+                        if (code === 'M') return '#fbbf24';
+                        if (code === 'A' || code === '?') return '#86efac';
+                        if (code === 'D') return '#f87171';
+                        if (code === 'R') return '#93c5fd';
+                        return '#a7adc5';
+                      };
+
+                      const renderRow = (item: { code: string; filename: string }, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 px-4 py-0.5 text-xs truncate"
+                          style={{ fontFamily: 'Space Mono, monospace', color: codeColor(item.code) }}
+                        >
+                          <span style={{ flexShrink: 0, fontSize: '10px' }}>{item.code}</span>
+                          <span className="truncate">{item.filename}</span>
                         </div>
-                      )}
-                    </div>
+                      );
+
+                      return (
+                        <>
+                          {/* STAGED CHANGES */}
+                          <div className="shrink-0">
+                            <div
+                              className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
+                              style={{
+                                color: '#a7adc5',
+                                fontFamily: 'Space Mono, monospace',
+                                background: '#1a0a2e',
+                                borderTop: '1px solid #2d1b4e',
+                                borderBottom: '1px solid #2d1b4e',
+                              }}
+                            >
+                              <span style={{ fontSize: '9px' }}>▼</span>
+                              STAGED CHANGES
+                              {staged.length > 0 && (
+                                <span
+                                  className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
+                                  style={{ background: '#22c55e', color: '#fff', fontSize: '10px' }}
+                                >
+                                  {staged.length}
+                                </span>
+                              )}
+                            </div>
+                            <div className="overflow-y-auto" style={{ maxHeight: '120px' }}>
+                              {staged.length === 0 ? (
+                                <div
+                                  className="px-4 py-2 text-xs"
+                                  style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
+                                >
+                                  Nothing staged
+                                </div>
+                              ) : (
+                                staged.map(renderRow)
+                              )}
+                            </div>
+                          </div>
+
+                          {/* CHANGES (unstaged) */}
+                          <div className="shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setGitChangesOpen((p) => !p)}
+                              className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
+                              style={{
+                                color: '#a7adc5',
+                                fontFamily: 'Space Mono, monospace',
+                                background: '#1a0a2e',
+                                borderTop: '1px solid #2d1b4e',
+                                borderBottom: gitChangesOpen ? '1px solid #2d1b4e' : 'none',
+                              }}
+                            >
+                              <span style={{ fontSize: '9px' }}>{gitChangesOpen ? '▼' : '▶'}</span>
+                              CHANGES
+                              {unstaged.length > 0 && (
+                                <span
+                                  className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
+                                  style={{ background: '#a855f7', color: '#fff', fontSize: '10px' }}
+                                >
+                                  {unstaged.length}
+                                </span>
+                              )}
+                            </button>
+                            {gitChangesOpen && (
+                              <div className="overflow-y-auto" style={{ maxHeight: '160px' }}>
+                                {unstaged.length === 0 ? (
+                                  <div
+                                    className="px-4 py-2 text-xs"
+                                    style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
+                                  >
+                                    {initialFolder ? 'No unstaged changes' : 'No folder open'}
+                                  </div>
+                                ) : (
+                                  unstaged.map(renderRow)
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {/* HISTORY section */}
                     <div className="shrink-0">

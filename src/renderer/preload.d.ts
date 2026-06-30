@@ -8,6 +8,8 @@ type FileSystemBridge = {
   readDir: (dirPath: string) => Promise<{ success: boolean; files?: Array<{ name: string; isDirectory: boolean; path: string }>; error?: string }>;
   createFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   createFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
+  rename: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
+  deleteEntry: (targetPath: string) => Promise<{ success: boolean; error?: string }>;
   openTerminal: (cwd?: string) => Promise<{ success: boolean; error?: string }>;
 };
 

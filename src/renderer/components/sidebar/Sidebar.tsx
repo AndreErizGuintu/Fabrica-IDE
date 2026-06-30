@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useEffect, useState } from 'react';
 
 import { FileEntry } from '../../types/index';
@@ -7,6 +8,7 @@ interface SidebarProps {
   onFileOpen: (path: string, filename: string) => void;
   initialFolder?: string;
   activeFilePath?: string;
+  gitStatusFiles?: string[];
 }
 
 interface TreeNode {
@@ -56,6 +58,32 @@ function getLanguageTag(filename: string): string {
   return map[ext] ?? ext.replace('.', '').toUpperCase();
 }
 
+type GitStatusMap = Record<string, string>;
+
+function buildGitStatusMap(statusLines: string[], folderRoot?: string): GitStatusMap {
+  const map: GitStatusMap = {};
+  if (!folderRoot) return map;
+  const sep = folderRoot.includes('\\') ? '\\' : '/';
+  for (const line of statusLines) {
+    const code = line.slice(0, 2).trim();
+    const relPath = line.slice(3).trim();
+    if (!relPath) continue;
+    const normalizedRel = relPath.replace(/\//g, sep);
+    const fullPath = `${folderRoot}${sep}${normalizedRel}`;
+    map[fullPath] = code;
+  }
+  return map;
+}
+
+function getStatusBadge(code: string | undefined): { letter: string; color: string } | null {
+  if (!code) return null;
+  if (code === '??' || code === 'A') return { letter: 'U', color: '#86efac' };
+  if (code.includes('M')) return { letter: 'M', color: '#fbbf24' };
+  if (code.includes('D')) return { letter: 'D', color: '#f87171' };
+  if (code.includes('R')) return { letter: 'R', color: '#93c5fd' };
+  return null;
+}
+
 async function loadChildren(dirPath: string): Promise<TreeNode[]> {
   const result = await window.fileSystem.readDir(dirPath);
   if (!result.success || !result.files) return [];
@@ -75,11 +103,33 @@ interface TreeNodeRowProps {
   onFileClick: (entry: FileEntry) => void;
   onToggle: (node: TreeNode, path: string[]) => void;
   nodePath: string[];
+  gitStatusMap: GitStatusMap;
+  onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  renamingPath: string | null;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameSubmit: (entry: FileEntry) => void;
+  onRenameCancel: () => void;
 }
 
-function TreeNodeRow({ node, depth, activeFilePath, onFileClick, onToggle, nodePath }: TreeNodeRowProps) {
+function TreeNodeRow({
+  node,
+  depth,
+  activeFilePath,
+  onFileClick,
+  onToggle,
+  nodePath,
+  gitStatusMap,
+  onContextMenu,
+  renamingPath,
+  renameValue,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
+}: TreeNodeRowProps) {
   const isActive = !node.entry.isDirectory && activeFilePath === node.entry.path;
   const indent = depth * 12;
+  const badge = !node.entry.isDirectory ? getStatusBadge(gitStatusMap[node.entry.path]) : null;
 
   return (
     <>
@@ -92,6 +142,7 @@ function TreeNodeRow({ node, depth, activeFilePath, onFileClick, onToggle, nodeP
             onFileClick(node.entry);
           }
         }}
+        onContextMenu={(e) => onContextMenu(e, node.entry)}
         className="w-full text-left py-0.5 flex items-center gap-1 truncate"
         style={{
           paddingLeft: `${indent + 8}px`,
@@ -110,7 +161,40 @@ function TreeNodeRow({ node, depth, activeFilePath, onFileClick, onToggle, nodeP
           </span>
         )}
         <span style={{ flexShrink: 0 }}>{getFileIcon(node.entry.name, node.entry.isDirectory)}</span>
-        <span className="truncate">{node.entry.name}</span>
+        {renamingPath === node.entry.path ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') onRenameSubmit(node.entry);
+              if (e.key === 'Escape') onRenameCancel();
+            }}
+            onBlur={() => onRenameSubmit(node.entry)}
+            className="text-xs px-1 rounded flex-1 min-w-0"
+            style={{
+              background: '#1a0a2e',
+              color: '#ffffff',
+              border: '1px solid #a855f7',
+              fontFamily: 'Space Mono, monospace',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <span className="truncate" style={{ color: badge ? badge.color : undefined }}>
+            {node.entry.name}
+          </span>
+        )}
+        {badge && (
+          <span
+            className="ml-auto shrink-0 text-xs font-bold"
+            style={{ color: badge.color, fontSize: '10px', paddingRight: '4px' }}
+          >
+            {badge.letter}
+          </span>
+        )}
         {node.isLoading && (
           <span style={{ color: '#6b7280', fontSize: '10px', marginLeft: '4px' }}>...</span>
         )}
@@ -127,6 +211,13 @@ function TreeNodeRow({ node, depth, activeFilePath, onFileClick, onToggle, nodeP
               onFileClick={onFileClick}
               onToggle={onToggle}
               nodePath={[...nodePath, child.entry.path]}
+              gitStatusMap={gitStatusMap}
+              onContextMenu={onContextMenu}
+              renamingPath={renamingPath}
+              renameValue={renameValue}
+              onRenameChange={onRenameChange}
+              onRenameSubmit={onRenameSubmit}
+              onRenameCancel={onRenameCancel}
             />
           ))}
           {node.children.length === 0 && (
@@ -150,13 +241,21 @@ function TreeNodeRow({ node, depth, activeFilePath, onFileClick, onToggle, nodeP
   );
 }
 
-export default function Sidebar({ onFileOpen, initialFolder, activeFilePath }: SidebarProps) {
+export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, gitStatusFiles }: SidebarProps) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    entry: FileEntry;
+  } | null>(null);
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const gitStatusMap = buildGitStatusMap(gitStatusFiles ?? [], folderName ?? undefined);
 
   const loadFolder = async (folderPath: string) => {
     setFolderName(folderPath);
@@ -169,6 +268,13 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath }: S
       void loadFolder(initialFolder);
     }
   }, [initialFolder]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [contextMenu]);
 
   const handleOpenFolder = async () => {
     const folderPath = await window.fileSystem.openFolder();
@@ -228,6 +334,46 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath }: S
     }
     setIsCreatingFolder(false);
     setNewFolderName('');
+  };
+
+  const findParentDir = (entryPath: string): string => {
+    const sep = entryPath.includes('\\') ? '\\' : '/';
+    const parts = entryPath.split(sep);
+    parts.pop();
+    return parts.join(sep);
+  };
+
+  const reloadAfterChange = async () => {
+    if (folderName) {
+      await loadFolder(folderName);
+    }
+  };
+
+  const handleRenameSubmit = async (entry: FileEntry) => {
+    if (!renameValue.trim() || renameValue.trim() === entry.name) {
+      setRenamingPath(null);
+      return;
+    }
+    const parentDir = findParentDir(entry.path);
+    const sep = entry.path.includes('\\') ? '\\' : '/';
+    const newPath = `${parentDir}${sep}${renameValue.trim()}`;
+    const result = await window.fileSystem.rename(entry.path, newPath);
+    setRenamingPath(null);
+    if (result.success) {
+      await reloadAfterChange();
+    }
+  };
+
+  const handleDelete = async (entry: FileEntry) => {
+    const confirmed = window.confirm(
+      `Delete "${entry.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    const result = await window.fileSystem.deleteEntry(entry.path);
+    setContextMenu(null);
+    if (result.success) {
+      await reloadAfterChange();
+    }
   };
 
   const activeFilename = activeFilePath
@@ -340,6 +486,17 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath }: S
             onFileClick={handleFileClick}
             onToggle={handleToggle}
             nodePath={[node.entry.path]}
+            gitStatusMap={gitStatusMap}
+            onContextMenu={(e, entry) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenu({ x: e.clientX, y: e.clientY, entry });
+            }}
+            renamingPath={renamingPath}
+            renameValue={renameValue}
+            onRenameChange={setRenameValue}
+            onRenameSubmit={handleRenameSubmit}
+            onRenameCancel={() => setRenamingPath(null)}
           />
         ))}
       </div>
@@ -352,6 +509,54 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath }: S
           {activeFilename ? getLanguageTag(activeFilename) : 'No file open'}
         </span>
       </div>
+
+      {contextMenu && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="fixed flex flex-col py-1 rounded shadow-lg z-50"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            background: '#1a0a2e',
+            border: '1px solid #3d2b5e',
+            minWidth: '140px',
+          }}
+        >
+          {!contextMenu.entry.isDirectory && (
+            <button
+              type="button"
+              onClick={() => {
+                void handleFileClick(contextMenu.entry);
+                setContextMenu(null);
+              }}
+              className="text-left text-xs px-3 py-1.5"
+              style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
+            >
+              Open
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setRenamingPath(contextMenu.entry.path);
+              setRenameValue(contextMenu.entry.name);
+              setContextMenu(null);
+            }}
+            className="text-left text-xs px-3 py-1.5"
+            style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
+          >
+            Rename
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDelete(contextMenu.entry)}
+            className="text-left text-xs px-3 py-1.5"
+            style={{ color: '#f87171', fontFamily: 'Space Mono, monospace' }}
+          >
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

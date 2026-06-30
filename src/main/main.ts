@@ -162,6 +162,32 @@ ipcMain.handle('fs:createFolder', async (_event, folderPath: string) => {
   }
 });
 
+ipcMain.handle('fs:rename', async (_event, oldPath: string, newPath: string) => {
+  try {
+    if (fs.existsSync(newPath)) {
+      return { success: false, error: 'A file or folder with that name already exists' };
+    }
+    fs.renameSync(oldPath, newPath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('fs:delete', async (_event, targetPath: string) => {
+  try {
+    const stat = fs.statSync(targetPath);
+    if (stat.isDirectory()) {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(targetPath);
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
 ipcMain.handle('store:getRecentProjects', async () => {
   const projects = readRecentProjects();
   return { success: true, projects };
