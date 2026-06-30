@@ -32,6 +32,14 @@ declare global {
       onStderr: (cb: (data: string) => void) => () => void;
       onDone: (cb: (code: number) => void) => () => void;
     };
+    git: {
+      init: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      status: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      add: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      commit: (cwd: string, message: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      clone: (url: string, targetDir: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      onProgress: (cb: (data: string) => void) => () => void;
+    };
   }
 }
 

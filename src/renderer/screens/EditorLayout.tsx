@@ -44,6 +44,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
   const [showAI, setShowAI] = useState(false);
+  const [showGit, setShowGit] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [gitLoading, setGitLoading] = useState(false);
   const [outputLines, setOutputLines] = useState<{ text: string; type: 'stdout' | 'stderr' | 'info' | 'error' }[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
@@ -153,6 +156,32 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     await window.runner.runFile(activeTab.path);
   };
 
+  const runGitCommand = async (
+    label: string,
+    fn: () => Promise<{ success: boolean; output: string; error?: string }>,
+  ) => {
+    if (!initialFolder) {
+      setOutputLines([{ text: 'No folder open. Open a folder first.', type: 'error' }]);
+      setShowOutput(true);
+      return;
+    }
+
+    setGitLoading(true);
+    setOutputLines([{ text: `⎇ git ${label}...\n`, type: 'info' }]);
+    setShowOutput(true);
+
+    try {
+      const result = await fn();
+      setOutputLines((prev) => [
+        ...prev,
+        { text: result.output || result.error || '(no output)', type: result.success ? 'stdout' : 'stderr' },
+        { text: result.success ? `\n✓ Done` : `\n✗ Failed`, type: result.success ? 'info' : 'error' },
+      ]);
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
   const handleOpenFileDialog = async () => {
     const filePath = await window.fileSystem.openFile();
     if (!filePath) return;
@@ -248,6 +277,18 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </button>
           <button
             type="button"
+            onClick={() => setShowGit((prev) => !prev)}
+            className="text-sm px-3 py-1 rounded-lg"
+            style={{
+              background: showGit ? '#a855f7' : '#2d1b4e',
+              color: '#ffffff',
+              border: '1px solid #a855f7',
+            }}
+          >
+            ⎇ Git
+          </button>
+          <button
+            type="button"
             onClick={handleRun}
             disabled={isRunning || !activeTab}
             className="px-4 py-1.5 rounded-full text-sm font-semibold text-white"
@@ -337,6 +378,88 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 {showAI && (
                   <div className="w-80 shrink-0 h-full min-h-0 overflow-hidden">
                     <AIPanel selectedCode={selectedCode} />
+                  </div>
+                )}
+                {showGit && (
+                  <div
+                    className="flex flex-col shrink-0 overflow-y-auto"
+                    style={{
+                      width: '220px',
+                      background: '#1a0a2e',
+                      borderLeft: '1px solid #2d1b4e',
+                    }}
+                  >
+                    <div
+                      className="px-3 py-2 text-xs font-bold tracking-widest shrink-0"
+                      style={{
+                        color: '#a855f7',
+                        fontFamily: 'Space Mono, monospace',
+                        borderBottom: '1px solid #2d1b4e',
+                      }}
+                    >
+                      ⎇ GIT
+                    </div>
+                    <div className="flex flex-col gap-2 p-3">
+                      <button
+                        type="button"
+                        disabled={gitLoading}
+                        onClick={() => runGitCommand('init', () => window.git.init(initialFolder!))}
+                        className="text-xs px-3 py-2 rounded font-semibold text-left"
+                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
+                      >
+                        git init
+                      </button>
+                      <button
+                        type="button"
+                        disabled={gitLoading}
+                        onClick={() => runGitCommand('status', () => window.git.status(initialFolder!))}
+                        className="text-xs px-3 py-2 rounded font-semibold text-left"
+                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
+                      >
+                        git status
+                      </button>
+                      <button
+                        type="button"
+                        disabled={gitLoading}
+                        onClick={() => runGitCommand('add', () => window.git.add(initialFolder!))}
+                        className="text-xs px-3 py-2 rounded font-semibold text-left"
+                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
+                      >
+                        git add .
+                      </button>
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="text"
+                          placeholder="Commit message..."
+                          value={commitMessage}
+                          onChange={(e) => setCommitMessage(e.target.value)}
+                          className="text-xs px-2 py-1.5 rounded w-full"
+                          style={{
+                            background: '#2d1b4e',
+                            color: '#ffffff',
+                            border: '1px solid #3d2b5e',
+                            fontFamily: 'Space Mono, monospace',
+                            outline: 'none',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={gitLoading || !commitMessage.trim()}
+                          onClick={() => {
+                            runGitCommand('commit', () => window.git.commit(initialFolder!, commitMessage));
+                            setCommitMessage('');
+                          }}
+                          className="text-xs px-3 py-2 rounded font-semibold"
+                          style={{
+                            background: gitLoading || !commitMessage.trim() ? '#2d1b4e' : '#a855f7',
+                            color: '#ffffff',
+                            cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          git commit
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
             </>

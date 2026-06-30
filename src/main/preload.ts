@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token' | 'run:stdout' | 'run:stderr' | 'run:done';
+export type Channels = 'ipc-example' | 'ai:token' | 'run:stdout' | 'run:stderr' | 'run:done' | 'git:progress';
 
 const electronHandler = {
   ipcRenderer: {
@@ -65,6 +65,19 @@ contextBridge.exposeInMainWorld('runner', {
     const handler = (_event: IpcRendererEvent, code: number) => cb(code);
     ipcRenderer.once('run:done', handler);
     return () => ipcRenderer.removeListener('run:done', handler);
+  },
+});
+
+contextBridge.exposeInMainWorld('git', {
+  init: (cwd: string) => ipcRenderer.invoke('git:init', cwd),
+  status: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+  add: (cwd: string) => ipcRenderer.invoke('git:add', cwd),
+  commit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
+  clone: (url: string, targetDir: string) => ipcRenderer.invoke('git:clone', url, targetDir),
+  onProgress: (cb: (data: string) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
+    ipcRenderer.on('git:progress', handler);
+    return () => ipcRenderer.removeListener('git:progress', handler);
   },
 });
 

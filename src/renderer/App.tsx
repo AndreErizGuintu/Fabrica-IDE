@@ -96,6 +96,9 @@ function MainMenu({
   onOpenRecent: (project: RecentProject) => void;
 }) {
   const [cloneNotice, setCloneNotice] = useState('');
+  const [cloneUrl, setCloneUrl] = useState('');
+  const [cloneLoading, setCloneLoading] = useState(false);
+  const [showCloneInput, setShowCloneInput] = useState(false);
 
   const quickActions = [
     {
@@ -127,7 +130,7 @@ function MainMenu({
           <path d="M7 4a3 3 0 1 0 2.83 4H14a3 3 0 1 0 2.83 4H9.83A3 3 0 1 0 7 20a3 3 0 0 0 2.83-4H14a3 3 0 1 0-2.83-4H9.83A3 3 0 1 0 7 4z" />
         </svg>
       ),
-      onClick: () => setCloneNotice('Git integration coming soon'),
+      onClick: () => setShowCloneInput((prev) => !prev),
     },
     {
       title: 'Open Terminal',
@@ -271,11 +274,59 @@ function MainMenu({
                 </button>
               ))}
             </div>
-            {cloneNotice ? (
-              <div className="mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                {cloneNotice}
+            {showCloneInput && (
+              <div className="flex flex-col gap-2 mt-2">
+                <input
+                  type="text"
+                  placeholder="https://github.com/user/repo.git"
+                  value={cloneUrl}
+                  onChange={(e) => setCloneUrl(e.target.value)}
+                  className="text-xs px-3 py-2 rounded w-full"
+                  style={{
+                    background: '#2d1b4e',
+                    color: '#ffffff',
+                    border: '1px solid #a855f7',
+                    fontFamily: 'Space Mono, monospace',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={cloneLoading || !cloneUrl.trim()}
+                  onClick={async () => {
+                    if (!cloneUrl.trim()) return;
+                    setCloneLoading(true);
+                    setCloneNotice('Cloning...');
+                    const targetDir = await window.fileSystem.openFolder();
+                    if (!targetDir) {
+                      setCloneLoading(false);
+                      setCloneNotice('');
+                      return;
+                    }
+                    const result = await window.git.clone(cloneUrl.trim(), targetDir);
+                    setCloneLoading(false);
+                    setCloneNotice(result.success ? '✓ Cloned successfully!' : `✗ ${result.error ?? 'Clone failed'} ${result.output ?? ''}`);
+                    if (result.success) {
+                      setCloneUrl('');
+                      setShowCloneInput(false);
+                    }
+                  }}
+                  className="text-xs px-3 py-2 rounded font-semibold"
+                  style={{
+                    background: cloneLoading || !cloneUrl.trim() ? '#2d1b4e' : '#a855f7',
+                    color: '#ffffff',
+                    cursor: cloneLoading || !cloneUrl.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {cloneLoading ? 'Cloning...' : 'Clone'}
+                </button>
+                {cloneNotice ? (
+                  <p className="text-xs" style={{ color: cloneNotice.startsWith('✓') ? '#86efac' : '#f87171' }}>
+                    {cloneNotice}
+                  </p>
+                ) : null}
               </div>
-            ) : null}
+            )}
           </div>
 
           <div

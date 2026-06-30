@@ -180,6 +180,64 @@ ipcMain.handle('store:addRecentProject', async (_event, project: RecentProject) 
   }
 });
 
+function runGit(args: string[], cwd: string): Promise<{ success: boolean; output: string; error?: string }> {
+  return new Promise((resolve) => {
+    exec(`git ${args.join(' ')}`, { cwd }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, output: stderr || stdout, error: error.message });
+      } else {
+        resolve({ success: true, output: stdout || stderr });
+      }
+    });
+  });
+}
+
+ipcMain.handle('git:init', async (_event, cwd: string) => {
+  return runGit(['init'], cwd);
+});
+
+ipcMain.handle('git:status', async (_event, cwd: string) => {
+  return runGit(['status'], cwd);
+});
+
+ipcMain.handle('git:add', async (_event, cwd: string) => {
+  return runGit(['add', '.'], cwd);
+});
+
+ipcMain.handle('git:commit', async (_event, cwd: string, message: string) => {
+  return runGit(['commit', '-m', `"${message}"`], cwd);
+});
+
+ipcMain.handle('git:clone', async (event, url: string, targetDir: string) => {
+  return new Promise<{ success: boolean; output: string; error?: string }>((resolve) => {
+    const child = spawn('git', ['clone', url, targetDir], {
+      env: { ...process.env },
+    });
+
+    let output = '';
+
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      output += text;
+      event.sender.send('git:progress', text);
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      const text = data.toString();
+      output += text;
+      event.sender.send('git:progress', text);
+    });
+
+    child.on('close', (code: number | null) => {
+      resolve({ success: code === 0, output });
+    });
+
+    child.on('error', (err: Error) => {
+      resolve({ success: false, output: '', error: err.message });
+    });
+  });
+});
+
 // SDK detection
 ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
   return new Promise<{ available: boolean; version?: string; error?: string }>((resolve) => {
