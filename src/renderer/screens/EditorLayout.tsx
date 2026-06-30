@@ -46,6 +46,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showAI, setShowAI] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
+  const [gitStatusFiles, setGitStatusFiles] = useState<string[]>([]);
+  const [gitLog, setGitLog] = useState<string[]>([]);
+  const [gitChangesOpen, setGitChangesOpen] = useState(true);
+  const [gitHistoryOpen, setGitHistoryOpen] = useState(true);
   const [gitLoading, setGitLoading] = useState(false);
   const [outputLines, setOutputLines] = useState<{ text: string; type: 'stdout' | 'stderr' | 'info' | 'error' }[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -182,6 +186,34 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
   };
 
+  const refreshGitStatus = async () => {
+    if (!initialFolder) return;
+    const [statusResult, logResult] = await Promise.all([
+      window.git.statusFiles(initialFolder),
+      window.git.log(initialFolder),
+    ]);
+    if (statusResult.success) {
+      setGitStatusFiles(
+        statusResult.output
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+    } else {
+      setGitStatusFiles([]);
+    }
+    if (logResult.success) {
+      setGitLog(
+        logResult.output
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+    } else {
+      setGitLog([]);
+    }
+  };
+
   const handleOpenFileDialog = async () => {
     const filePath = await window.fileSystem.openFile();
     if (!filePath) return;
@@ -216,6 +248,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   useEffect(() => {
     outputEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [outputLines]);
+
+  useEffect(() => {
+    if (showGit) {
+      void refreshGitStatus();
+    }
+  }, [showGit, initialFolder]);
 
   return (
     <div
@@ -349,7 +387,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       </div>
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex flex-1 overflow-hidden min-h-0">
-          <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} />
+          <Sidebar onFileOpen={handleFileOpen} initialFolder={initialFolder} activeFilePath={activeTab?.path} />
           {tabs.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-4"
@@ -384,81 +422,223 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   <div
                     className="flex flex-col shrink-0 overflow-y-auto"
                     style={{
-                      width: '220px',
+                      width: '240px',
                       background: '#1a0a2e',
                       borderLeft: '1px solid #2d1b4e',
                     }}
                   >
+                    {/* Panel header */}
                     <div
-                      className="px-3 py-2 text-xs font-bold tracking-widest shrink-0"
+                      className="px-3 py-2 text-xs font-bold tracking-widest shrink-0 flex items-center justify-between"
                       style={{
-                        color: '#a855f7',
+                        color: '#a7adc5',
                         fontFamily: 'Space Mono, monospace',
                         borderBottom: '1px solid #2d1b4e',
+                        textTransform: 'uppercase',
                       }}
                     >
-                      ⎇ GIT
+                      <span>Source Control</span>
+                      <button
+                        type="button"
+                        onClick={() => void refreshGitStatus()}
+                        style={{ color: '#6b7280', fontSize: '11px' }}
+                        title="Refresh"
+                      >
+                        ↻
+                      </button>
                     </div>
-                    <div className="flex flex-col gap-2 p-3">
-                      <button
-                        type="button"
-                        disabled={gitLoading}
-                        onClick={() => runGitCommand('init', () => window.git.init(initialFolder!))}
-                        className="text-xs px-3 py-2 rounded font-semibold text-left"
-                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
-                      >
-                        git init
-                      </button>
-                      <button
-                        type="button"
-                        disabled={gitLoading}
-                        onClick={() => runGitCommand('status', () => window.git.status(initialFolder!))}
-                        className="text-xs px-3 py-2 rounded font-semibold text-left"
-                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
-                      >
-                        git status
-                      </button>
-                      <button
-                        type="button"
-                        disabled={gitLoading}
-                        onClick={() => runGitCommand('add', () => window.git.add(initialFolder!))}
-                        className="text-xs px-3 py-2 rounded font-semibold text-left"
-                        style={{ background: '#2d1b4e', color: '#ffffff', opacity: gitLoading ? 0.5 : 1 }}
-                      >
-                        git add .
-                      </button>
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="text"
-                          placeholder="Commit message..."
-                          value={commitMessage}
-                          onChange={(e) => setCommitMessage(e.target.value)}
-                          className="text-xs px-2 py-1.5 rounded w-full"
-                          style={{
-                            background: '#2d1b4e',
-                            color: '#ffffff',
-                            border: '1px solid #3d2b5e',
-                            fontFamily: 'Space Mono, monospace',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          disabled={gitLoading || !commitMessage.trim()}
-                          onClick={() => {
-                            runGitCommand('commit', () => window.git.commit(initialFolder!, commitMessage));
+
+                    {/* Commit message input */}
+                    <div className="px-3 pt-3 pb-2 shrink-0 flex flex-col gap-2">
+                      <input
+                        type="text"
+                        placeholder="Message (Ctrl+Enter to commit)"
+                        value={commitMessage}
+                        onChange={(e) => setCommitMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && e.ctrlKey) {
+                            runGitCommand('commit', () =>
+                              window.git.commit(initialFolder!, commitMessage)
+                            );
                             setCommitMessage('');
-                          }}
-                          className="text-xs px-3 py-2 rounded font-semibold"
-                          style={{
-                            background: gitLoading || !commitMessage.trim() ? '#2d1b4e' : '#a855f7',
-                            color: '#ffffff',
-                            cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          git commit
-                        </button>
+                            setTimeout(() => void refreshGitStatus(), 800);
+                          }
+                        }}
+                        className="text-xs px-2 py-1.5 rounded w-full"
+                        style={{
+                          background: '#2d1b4e',
+                          color: '#ffffff',
+                          border: '1px solid #3d2b5e',
+                          fontFamily: 'Space Mono, monospace',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={gitLoading || !commitMessage.trim()}
+                        onClick={() => {
+                          runGitCommand('commit', () =>
+                            window.git.commit(initialFolder!, commitMessage)
+                          );
+                          setCommitMessage('');
+                          setTimeout(() => void refreshGitStatus(), 800);
+                        }}
+                        className="text-xs py-1.5 rounded font-semibold flex items-center justify-center gap-1"
+                        style={{
+                          background: gitLoading || !commitMessage.trim() ? '#2d1b4e' : '#a855f7',
+                          color: '#ffffff',
+                          cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
+                          border: 'none',
+                        }}
+                      >
+                        ✓ Commit
+                      </button>
+
+                      {/* Quick actions row */}
+                      <div className="flex gap-1">
+                        {[
+                          { label: 'init', fn: () => window.git.init(initialFolder!) },
+                          { label: 'add .', fn: () => window.git.add(initialFolder!) },
+                          { label: 'push', fn: () => window.git.push(initialFolder!) },
+                          { label: 'pull', fn: () => window.git.pull(initialFolder!) },
+                        ].map(({ label, fn }) => (
+                          <button
+                            key={label}
+                            type="button"
+                            disabled={gitLoading}
+                            onClick={() => {
+                              runGitCommand(label, fn);
+                              setTimeout(() => void refreshGitStatus(), 600);
+                            }}
+                            className="flex-1 text-xs py-1 rounded"
+                            style={{
+                              background: '#2d1b4e',
+                              color: '#a7adc5',
+                              border: '1px solid #3d2b5e',
+                              opacity: gitLoading ? 0.5 : 1,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
                       </div>
+                    </div>
+
+                    {/* CHANGES section */}
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setGitChangesOpen((p) => !p)}
+                        className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
+                        style={{
+                          color: '#a7adc5',
+                          fontFamily: 'Space Mono, monospace',
+                          background: '#1a0a2e',
+                          borderTop: '1px solid #2d1b4e',
+                          borderBottom: gitChangesOpen ? '1px solid #2d1b4e' : 'none',
+                        }}
+                      >
+                        <span style={{ fontSize: '9px' }}>{gitChangesOpen ? '▼' : '▶'}</span>
+                        CHANGES
+                        {gitStatusFiles.length > 0 && (
+                          <span
+                            className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
+                            style={{ background: '#a855f7', color: '#fff', fontSize: '10px' }}
+                          >
+                            {gitStatusFiles.length}
+                          </span>
+                        )}
+                      </button>
+
+                      {gitChangesOpen && (
+                        <div className="overflow-y-auto" style={{ maxHeight: '160px' }}>
+                          {gitStatusFiles.length === 0 ? (
+                            <div
+                              className="px-4 py-2 text-xs"
+                              style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
+                            >
+                              {initialFolder ? 'No changes — run git status' : 'No folder open'}
+                            </div>
+                          ) : (
+                            gitStatusFiles.map((line, i) => {
+                              const statusCode = line.slice(0, 2).trim();
+                              const filename = line.slice(3);
+                              const color =
+                                statusCode === 'M' || statusCode === 'MM'
+                                  ? '#fbbf24'
+                                  : statusCode === '??' || statusCode === 'A'
+                                  ? '#86efac'
+                                  : statusCode === 'D'
+                                  ? '#f87171'
+                                  : '#a7adc5';
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex items-center gap-2 px-4 py-0.5 text-xs truncate"
+                                  style={{ fontFamily: 'Space Mono, monospace', color }}
+                                >
+                                  <span style={{ flexShrink: 0, fontSize: '10px' }}>{statusCode || '?'}</span>
+                                  <span className="truncate">{filename}</span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* HISTORY section */}
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setGitHistoryOpen((p) => !p)}
+                        className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
+                        style={{
+                          color: '#a7adc5',
+                          fontFamily: 'Space Mono, monospace',
+                          background: '#1a0a2e',
+                          borderTop: '1px solid #2d1b4e',
+                          borderBottom: gitHistoryOpen ? '1px solid #2d1b4e' : 'none',
+                        }}
+                      >
+                        <span style={{ fontSize: '9px' }}>{gitHistoryOpen ? '▼' : '▶'}</span>
+                        HISTORY
+                      </button>
+
+                      {gitHistoryOpen && (
+                        <div className="overflow-y-auto" style={{ maxHeight: '180px' }}>
+                          {gitLog.length === 0 ? (
+                            <div
+                              className="px-4 py-2 text-xs"
+                              style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
+                            >
+                              No commits yet
+                            </div>
+                          ) : (
+                            gitLog.map((line, i) => {
+                              const sha = line.slice(0, 7);
+                              const message = line.slice(8);
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex items-start gap-2 px-4 py-1 text-xs"
+                                  style={{ fontFamily: 'Space Mono, monospace' }}
+                                >
+                                  <span
+                                    className="shrink-0 px-1 rounded"
+                                    style={{ background: '#2d1b4e', color: '#a855f7', fontSize: '10px' }}
+                                  >
+                                    {sha}
+                                  </span>
+                                  <span className="truncate" style={{ color: '#a7adc5' }}>
+                                    {message}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

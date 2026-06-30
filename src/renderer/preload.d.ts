@@ -37,6 +37,10 @@ declare global {
       status: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       add: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       commit: (cwd: string, message: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      push: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      pull: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      log: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      statusFiles: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       clone: (url: string, targetDir: string) => Promise<{ success: boolean; output: string; error?: string }>;
       onProgress: (cb: (data: string) => void) => () => void;
     };

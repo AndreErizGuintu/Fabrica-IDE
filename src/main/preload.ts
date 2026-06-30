@@ -73,6 +73,10 @@ contextBridge.exposeInMainWorld('git', {
   status: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
   add: (cwd: string) => ipcRenderer.invoke('git:add', cwd),
   commit: (cwd: string, message: string) => ipcRenderer.invoke('git:commit', cwd, message),
+  push: (cwd: string) => ipcRenderer.invoke('git:push', cwd),
+  pull: (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
+  log: (cwd: string) => ipcRenderer.invoke('git:log', cwd),
+  statusFiles: (cwd: string) => ipcRenderer.invoke('git:statusFiles', cwd),
   clone: (url: string, targetDir: string) => ipcRenderer.invoke('git:clone', url, targetDir),
   onProgress: (cb: (data: string) => void) => {
     const handler = (_event: IpcRendererEvent, data: string) => cb(data);

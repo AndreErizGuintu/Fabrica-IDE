@@ -208,6 +208,22 @@ ipcMain.handle('git:commit', async (_event, cwd: string, message: string) => {
   return runGit(['commit', '-m', `"${message}"`], cwd);
 });
 
+ipcMain.handle('git:push', async (_event, cwd: string) => {
+  return runGit(['push'], cwd);
+});
+
+ipcMain.handle('git:pull', async (_event, cwd: string) => {
+  return runGit(['pull'], cwd);
+});
+
+ipcMain.handle('git:log', async (_event, cwd: string) => {
+  return runGit(['log', '--oneline', '-10', '--no-color'], cwd);
+});
+
+ipcMain.handle('git:statusFiles', async (_event, cwd: string) => {
+  return runGit(['status', '--porcelain'], cwd);
+});
+
 ipcMain.handle('git:clone', async (event, url: string, targetDir: string) => {
   return new Promise<{ success: boolean; output: string; error?: string }>((resolve) => {
     const child = spawn('git', ['clone', url, targetDir], {
