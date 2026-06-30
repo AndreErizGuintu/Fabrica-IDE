@@ -39,6 +39,11 @@ release/build
 # OS / IDE
 .DS_Store
 .idea
+.vscode/settings.json
+
+# Workspace artifacts
+graphify-out/
+Project/
 
 # Generated style typings
 *.css.d.ts
