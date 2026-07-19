@@ -94,6 +94,8 @@ function MainMenu({
   const [cloneUrl, setCloneUrl] = useState('');
   const [cloneLoading, setCloneLoading] = useState(false);
   const [showCloneInput, setShowCloneInput] = useState(false);
+  const [llamaNotice, setLlamaNotice] = useState('');
+  const [llamaLoading, setLlamaLoading] = useState(false);
 
   const quickActions = [
   {
@@ -143,6 +145,28 @@ function MainMenu({
       </svg>
     ),
     onClick: onOpenTerminal,
+  },
+  {
+    title: 'Llama Test Ping',
+    caption: 'Run temporary local LLM ping',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M9.75 3a.75.75 0 00-.75.75V6h6V3.75a.75.75 0 00-.75-.75h-4.5zM7.5 6v3h9V6m-9 3H6a2 2 0 00-2 2v5.5A2.5 2.5 0 006.5 19h11a2.5 2.5 0 002.5-2.5V11a2 2 0 00-2-2h-1.5m-9 0h9M9 13h6m-6 3h4"
+        />
+      </svg>
+    ),
+    onClick: async () => {
+      setLlamaLoading(true);
+      setLlamaNotice('Running llama-test-ping...');
+      const result = await window.ai.llamaTestPing();
+      setLlamaLoading(false);
+      if (result.success) {
+        setLlamaNotice('llama-test-ping completed.');
+      } else {
+        setLlamaNotice(`llama-test-ping failed: ${result.error ?? 'Unknown error'}`);
+      }
+    },
   },
 ];
   
@@ -326,6 +350,11 @@ function MainMenu({
                 ) : null}
               </div>
             )}
+            {llamaNotice ? (
+              <p className="text-xs mt-2" style={{ color: llamaLoading ? '#a855f7' : '#86efac' }}>
+                {llamaNotice}
+              </p>
+            ) : null}
           </div>
 
           <div

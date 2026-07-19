@@ -15,6 +15,7 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
+import { generate } from './llm';
 import { resolveHtmlPath } from './util';
 
 type RecentProject = { name: string; path: string };
@@ -608,6 +609,15 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
     }
 
     return { success: true, result: fullText };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('llama-test-ping', async () => {
+  try {
+    const result = await generate('Write a JS function that adds two numbers');
+    return { success: true, result };
   } catch (err) {
     return { success: false, error: String(err) };
   }

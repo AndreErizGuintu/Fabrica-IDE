@@ -45,6 +45,7 @@ release/build
 graphify-out/
 Project/
 .vscode/
+resources/models/
 
 # Generated style typings
 *.css.d.ts
