@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-
 import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
@@ -10,32 +9,19 @@ import { Tab } from '../types/index';
 function getLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
   switch (ext) {
-    case 'html':
-      return 'html';
-    case 'css':
-      return 'css';
-    case 'js':
-      return 'javascript';
-    case 'ts':
-      return 'typescript';
-    case 'tsx':
-      return 'typescript';
-    case 'jsx':
-      return 'javascript';
-    case 'py':
-      return 'python';
-    case 'json':
-      return 'json';
-    case 'php':
-      return 'php';
-    case 'cs':
-      return 'csharp';
-    case 'java':
-      return 'java';
-    case 'dart':
-      return 'dart';
-    default:
-      return 'plaintext';
+    case 'html': return 'html';
+    case 'css': return 'css';
+    case 'js': return 'javascript';
+    case 'ts': return 'typescript';
+    case 'tsx': return 'typescript';
+    case 'jsx': return 'javascript';
+    case 'py': return 'python';
+    case 'json': return 'json';
+    case 'php': return 'php';
+    case 'cs': return 'csharp';
+    case 'java': return 'java';
+    case 'dart': return 'dart';
+    default: return 'plaintext';
   }
 }
 
@@ -56,6 +42,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showOutput, setShowOutput] = useState(false);
   const outputEndRef = useRef<HTMLDivElement>(null);
 
+  // Floating panel states - only one panel can float at a time
+  const [floatingPanel, setFloatingPanel] = useState<'preview' | 'ai' | null>(null);
+  const [floatPosition, setFloatPosition] = useState({ x: 100, y: 100 });
+  const [isDraggingFloat, setIsDraggingFloat] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const floatRef = useRef<HTMLDivElement>(null);
+
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
     ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
@@ -63,6 +56,50 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const previewHtml = activeTab?.filename.endsWith('.css')
     ? `<!DOCTYPE html><html><head><style>${activeTab.content}</style></head><body><div style="padding:20px"><h1>CSS Preview</h1><p>Your styles are applied to this page.</p><button>Button</button></div></body></html>`
     : activeTab?.content ?? '';
+
+  // Float drag handlers
+  const handleFloatMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.float-controls')) return;
+    e.preventDefault();
+    setIsDraggingFloat(true);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingFloat) {
+        const newX = Math.min(Math.max(e.clientX - dragOffset.x, 0), window.innerWidth - 420);
+        const newY = Math.min(Math.max(e.clientY - dragOffset.y, 0), window.innerHeight - 300);
+        setFloatPosition({ x: newX, y: newY });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingFloat(false);
+    };
+
+    if (isDraggingFloat) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingFloat, dragOffset]);
+
+  const toggleFloat = (panel: 'preview' | 'ai') => {
+    if (floatingPanel === panel) {
+      setFloatingPanel(null);
+    } else {
+      const x = Math.min(Math.max(100, 0), window.innerWidth - 420);
+      const y = Math.min(Math.max(100, 0), window.innerHeight - 300);
+      setFloatPosition({ x, y });
+      setFloatingPanel(panel);
+    }
+  };
 
   const openFileInTab = (filePath: string, filename: string, content: string) => {
     const existing = tabs.findIndex((tab) => tab.path === filePath);
@@ -262,160 +299,170 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   }, [showGit, initialFolder]);
 
   return (
-    <div
-      className="flex flex-col h-screen overflow-hidden"
-      style={{ backgroundColor: '#1a0a2e', color: '#ffffff' }}
-    >
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1e1e2e', color: '#d4d4d4' }}>
+      {/* Top Bar */}
       <div
-        className="flex items-center justify-between px-4 py-2"
-        style={{ backgroundColor: '#2d1b4e' }}
+        className="flex items-center justify-between px-4 py-1.5 shrink-0"
+        style={{ backgroundColor: '#2d2d3a', borderBottom: '1px solid #3d3d4a' }}
       >
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onBack}
-            className="text-sm px-2 py-1 rounded-lg"
-            style={{ background: '#1a0a2e', color: '#a855f7', border: '1px solid #a855f7' }}
-            aria-label="Back to menu"
+            className="text-sm px-2 py-1 rounded transition-colors hover:bg-white/10"
+            style={{ color: '#d4d4d4' }}
           >
             ← Menu
           </button>
-          <img src={icon} alt="Fabrica" className="w-6 h-6" />
+          <img src={icon} alt="Fabrica" className="w-5 h-5" />
           <span
-            className="text-sm font-semibold text-white"
-            style={{ fontFamily: 'Space Mono, monospace' }}
+            className="text-sm"
+            style={{ fontFamily: 'Segoe UI, sans-serif', color: '#d4d4d4' }}
           >
             {activeTab?.filename ?? 'No file open'}
           </span>
+          {activeTab?.isDirty && (
+            <span className="text-xs" style={{ color: '#4ec9b0' }}>●</span>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleOpenFileDialog}
-            className="text-sm px-3 py-1 rounded-lg"
-            style={{ background: '#2d1b4e', color: '#ffffff', border: '1px solid #a855f7' }}
+            className="text-sm px-3 py-1 rounded transition-colors hover:bg-white/10"
+            style={{ color: '#d4d4d4' }}
           >
             Open File
           </button>
-          {activeTab?.isDirty && (
-            <button
-              type="button"
-              onClick={handleSave}
-              className="text-sm px-3 py-1 rounded-lg"
-              style={{ background: '#2d1b4e', color: '#ffffff', border: '1px solid #a855f7' }}
-            >
-              Save
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowAI((prev) => !prev)}
-            className="text-sm px-3 py-1 rounded-lg"
+            className="text-sm px-3 py-1 rounded transition-colors hover:bg-white/10"
             style={{
-              background: showAI ? '#a855f7' : '#2d1b4e',
-              color: '#ffffff',
-              border: '1px solid #a855f7',
+              background: showAI ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
+              color: showAI ? '#a78bfa' : '#d4d4d4',
             }}
           >
-            ✨ AI
+            AI
           </button>
           <button
             type="button"
             onClick={() => setShowGit((prev) => !prev)}
-            className="text-sm px-3 py-1 rounded-lg"
+            className="text-sm px-3 py-1 rounded transition-colors hover:bg-white/10"
             style={{
-              background: showGit ? '#a855f7' : '#2d1b4e',
-              color: '#ffffff',
-              border: '1px solid #a855f7',
+              background: showGit ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
+              color: showGit ? '#a78bfa' : '#d4d4d4',
             }}
           >
-            ⎇ Git
+            Git
           </button>
           <button
             type="button"
             onClick={handleRun}
             disabled={isRunning || !activeTab}
-            className="px-4 py-1.5 rounded-full text-sm font-semibold text-white"
+            className="px-4 py-1 rounded text-sm font-medium transition-colors hover:bg-white/10"
             style={{
-              background: isRunning ? '#4b5563' : '#22c55e',
+              background: isRunning ? 'transparent' : 'rgba(78, 201, 176, 0.15)',
+              color: isRunning ? '#d4d4d4' : '#4ec9b0',
               cursor: isRunning || !activeTab ? 'not-allowed' : 'pointer',
-              opacity: !activeTab ? 0.5 : 1,
+              opacity: !activeTab ? 0.4 : 1,
             }}
           >
-            {isRunning ? '⏳ Running…' : '▶ Run'}
+            {isRunning ? 'Running…' : 'Run'}
           </button>
           <button
             type="button"
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: '#1a0a2e', color: '#ffffff' }}
+            className="w-7 h-7 rounded flex items-center justify-center transition-colors hover:bg-white/10"
+            style={{ color: '#6b7280' }}
             aria-label="Settings"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4">
-              <path
-                d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm8.5 3.5-.98-.38a7.4 7.4 0 0 0-.66-1.6l.58-.9a1 1 0 0 0-.15-1.24l-1.64-1.64a1 1 0 0 0-1.24-.15l-.9.58a7.4 7.4 0 0 0-1.6-.66L12.5 3.5a1 1 0 0 0-1 0l-1 .39a7.4 7.4 0 0 0-1.6.66l-.9-.58a1 1 0 0 0-1.24.15L4.12 5.76a1 1 0 0 0-.15 1.24l.58.9a7.4 7.4 0 0 0-.66 1.6l-.98.38a1 1 0 0 0-.61.92v2.28a1 1 0 0 0 .61.92l.98.38a7.4 7.4 0 0 0 .66 1.6l-.58.9a1 1 0 0 0 .15 1.24l1.64 1.64a1 1 0 0 0 1.24.15l.9-.58a7.4 7.4 0 0 0 1.6.66l1 .39a1 1 0 0 0 1 0l1-.39a7.4 7.4 0 0 0 1.6-.66l.9.58a1 1 0 0 0 1.24-.15l1.64-1.64a1 1 0 0 0 .15-1.24l-.58-.9a7.4 7.4 0 0 0 .66-1.6l.98-.38a1 1 0 0 0 .61-.92v-2.28a1 1 0 0 0-.61-.92z"
-                fill="currentColor"
-              />
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+              <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm8.5 3.5-.98-.38a7.4 7.4 0 0 0-.66-1.6l.58-.9a1 1 0 0 0-.15-1.24l-1.64-1.64a1 1 0 0 0-1.24-.15l-.9.58a7.4 7.4 0 0 0-1.6-.66L12.5 3.5a1 1 0 0 0-1 0l-1 .39a7.4 7.4 0 0 0-1.6.66l-.9-.58a1 1 0 0 0-1.24.15L4.12 5.76a1 1 0 0 0-.15 1.24l.58.9a7.4 7.4 0 0 0-.66 1.6l-.98.38a1 1 0 0 0-.61.92v2.28a1 1 0 0 0 .61.92l.98.38a7.4 7.4 0 0 0 .66 1.6l-.58.9a1 1 0 0 0 .15 1.24l1.64 1.64a1 1 0 0 0 1.24.15l.9-.58a7.4 7.4 0 0 0 1.6.66l1 .39a1 1 0 0 0 1 0l1-.39a7.4 7.4 0 0 0 1.6-.66l.9.58a1 1 0 0 0 1.24-.15l1.64-1.64a1 1 0 0 0 .15-1.24l-.58-.9a7.4 7.4 0 0 0 .66-1.6l.98-.38a1 1 0 0 0 .61-.92v-2.28a1 1 0 0 0-.61-.92z" />
             </svg>
           </button>
         </div>
       </div>
+
+      {/* Tabs Bar */}
       <div
-        className="flex overflow-x-auto"
-        style={{ background: '#1a0a2e', borderBottom: '1px solid #2d1b4e' }}
+        className="flex items-center overflow-x-auto shrink-0"
+        style={{ background: '#1e1e2e', borderBottom: '1px solid #2d2d3a' }}
       >
         {tabs.map((tab, index) => (
           <div
             key={index}
-            className="flex items-center gap-2 px-4 py-2 cursor-pointer text-sm shrink-0"
+            className="group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm shrink-0 transition-colors"
             style={{
-              background: index === activeTabIndex ? '#2d1b4e' : 'transparent',
-              color: index === activeTabIndex ? '#ffffff' : '#a7adc5',
-              borderBottom:
-                index === activeTabIndex ? '2px solid #a855f7' : '2px solid transparent',
-              fontFamily: 'Space Mono, monospace',
+              background: index === activeTabIndex ? '#1e1e2e' : 'transparent',
+              color: index === activeTabIndex ? '#ffffff' : '#6b7280',
+              borderBottom: index === activeTabIndex ? '2px solid #a78bfa' : '2px solid transparent',
+              fontFamily: 'Segoe UI, sans-serif',
             }}
             onClick={() => setActiveTabIndex(index)}
           >
-            {tab.filename}
-            {tab.isDirty && <span style={{ color: '#a855f7' }}>●</span>}
+            <span className="max-w-30 truncate">{tab.filename}</span>
+            {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a78bfa' }} />}
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 handleCloseTab(index);
               }}
-              className="ml-1 opacity-50 hover:opacity-100 text-xs"
+              className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity text-[10px]"
+              style={{ color: '#6b7280' }}
             >
               ✕
             </button>
           </div>
         ))}
+        {tabs.length === 0 && (
+          <div className="text-sm px-4 py-1.5" style={{ color: '#3f3f46', fontFamily: 'Segoe UI, sans-serif' }}>
+            No files open
+          </div>
+        )}
       </div>
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <div className="flex flex-1 overflow-hidden min-h-0">
-          <Sidebar
-            onFileOpen={handleFileOpen}
-            initialFolder={initialFolder}
-            activeFilePath={activeTab?.path}
-            gitStatusFiles={gitStatusFiles}
-          />
+
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          onFileOpen={handleFileOpen}
+          initialFolder={initialFolder}
+          activeFilePath={activeTab?.path}
+          gitStatusFiles={gitStatusFiles}
+        />
+
+        <div className="flex-1 flex flex-col overflow-hidden">
           {tabs.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-4"
-              style={{ background: '#1a0a2e' }}
+              style={{ background: '#1e1e2e' }}
             >
-              <div className="text-6xl">📂</div>
-              <div className="text-center" style={{ fontFamily: 'Space Mono, monospace' }}>
-                <div className="text-white font-bold mb-2">No file open</div>
-                <div className="text-gray-500 text-sm">
+              <div className="text-5xl opacity-20">📂</div>
+              <div className="text-center" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-white font-medium text-lg mb-1.5">No file open</div>
+                <div className="text-sm" style={{ color: '#52525b' }}>
                   Open a folder from the sidebar
                   <br />
                   or click Open File to get started
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleOpenFileDialog}
+                className="mt-2 text-sm px-5 py-2 rounded transition-colors hover:bg-white/10"
+                style={{
+                  background: 'rgba(167, 139, 250, 0.1)',
+                  color: '#a78bfa',
+                  border: '1px solid rgba(167, 139, 250, 0.2)',
+                }}
+              >
+                Open File →
+              </button>
             </div>
           ) : (
-            <>
+            <div className="flex-1 flex overflow-hidden">
+              {/* Editor */}
+              <div className="flex-1 flex flex-col min-w-0">
                 <Editor
                   language={getLanguage(tabs[activeTabIndex].filename)}
                   filename={activeTab!.filename}
@@ -423,346 +470,532 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   onChange={handleEditorChange}
                   onSelectionChange={(s) => setSelectedCode(s)}
                 />
-                <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
-                {showAI && (
-                  <div className="w-80 shrink-0 h-full min-h-0 overflow-hidden">
-                    <AIPanel selectedCode={selectedCode} />
-                  </div>
-                )}
-                {showGit && (
-                  <div
-                    className="flex flex-col shrink-0 overflow-y-auto"
-                    style={{
-                      width: '240px',
-                      background: '#1a0a2e',
-                      borderLeft: '1px solid #2d1b4e',
+              </div>
+
+              {/* Right Panel - Preview and AI (Preview always visible, AI hidden when floated) */}
+              <div className="flex flex-col shrink-0 border-l" style={{ borderColor: '#2d2d3a', width: '380px' }}>
+                {/* Preview Panel */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div 
+                    className="flex items-center justify-between px-3 py-1 shrink-0"
+                    style={{ 
+                      background: '#252535', 
+                      borderBottom: '1px solid #2d2d3a',
                     }}
                   >
-                    {/* Panel header */}
-                    <div
-                      className="px-3 py-2 text-xs font-bold tracking-widest shrink-0 flex items-center justify-between"
-                      style={{
-                        color: '#a7adc5',
-                        fontFamily: 'Space Mono, monospace',
-                        borderBottom: '1px solid #2d1b4e',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      <span>Source Control</span>
+                    <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                      🔍 Live Preview
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px]" style={{ color: '#3f3f46' }}>
+                        {isHtmlFile ? 'HTML' : 'Preview'}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => void refreshGitStatus()}
-                        style={{ color: '#6b7280', fontSize: '11px' }}
-                        title="Refresh"
+                        onClick={() => toggleFloat('preview')}
+                        className="text-[10px] hover:text-white transition-colors"
+                        style={{ 
+                          color: floatingPanel === 'preview' ? '#a78bfa' : '#52525b',
+                          opacity: floatingPanel === 'preview' ? 1 : 0.6,
+                        }}
+                        title={floatingPanel === 'preview' ? 'Dock Preview' : 'Float Preview'}
                       >
-                        ↻
+                        {floatingPanel === 'preview' ? '⬇' : '⬆'}
                       </button>
                     </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
+                  </div>
+                </div>
 
-                    {/* Commit message input */}
-                    <div className="px-3 pt-3 pb-2 shrink-0 flex flex-col gap-2">
-                      <input
-                        type="text"
-                        placeholder="Message (Ctrl+Enter to commit)"
-                        value={commitMessage}
-                        onChange={(e) => setCommitMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && e.ctrlKey) {
-                            runGitCommand('commit', () =>
-                              window.git.commit(initialFolder!, commitMessage)
-                            );
-                            setCommitMessage('');
-                            setTimeout(() => void refreshGitStatus(), 800);
-                          }
-                        }}
-                        className="text-xs px-2 py-1.5 rounded w-full"
-                        style={{
-                          background: '#2d1b4e',
-                          color: '#ffffff',
-                          border: '1px solid #3d2b5e',
-                          fontFamily: 'Space Mono, monospace',
-                          outline: 'none',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        disabled={gitLoading || !commitMessage.trim()}
-                        onClick={() => {
-                          runGitCommand('commit', () =>
-                            window.git.commit(initialFolder!, commitMessage)
-                          );
-                          setCommitMessage('');
-                          setTimeout(() => void refreshGitStatus(), 800);
-                        }}
-                        className="text-xs py-1.5 rounded font-semibold flex items-center justify-center gap-1"
-                        style={{
-                          background: gitLoading || !commitMessage.trim() ? '#2d1b4e' : '#a855f7',
-                          color: '#ffffff',
-                          cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
-                          border: 'none',
+                {/* Resize Handle - only show if AI is visible and not floating */}
+                {showAI && floatingPanel !== 'ai' && (
+                  <div 
+                    className="h-0.75 shrink-0 cursor-row-resize hover:bg-purple-500/30 transition-colors"
+                    style={{ 
+                      background: '#1e1e2e',
+                      borderTop: '1px solid #2d2d3a',
+                      borderBottom: '1px solid #2d2d3a',
+                    }}
+                  />
+                )}
+
+                {/* AI Panel - hidden when floating */}
+                {showAI && floatingPanel !== 'ai' && (
+                  <div 
+                    className="shrink-0 overflow-hidden"
+                    style={{ height: '250px' }}
+                  >
+                    <div className="h-full flex flex-col">
+                      <div 
+                        className="flex items-center justify-between px-3 py-1 shrink-0"
+                        style={{ 
+                          background: '#252535', 
+                          borderBottom: '1px solid #2d2d3a',
                         }}
                       >
-                        ✓ Commit
-                      </button>
-
-                      {/* Quick actions row */}
-                      <div className="flex gap-1">
-                        {[
-                          { label: 'init', fn: () => window.git.init(initialFolder!) },
-                          { label: 'add .', fn: () => window.git.add(initialFolder!) },
-                          { label: 'push', fn: () => window.git.push(initialFolder!) },
-                          { label: 'pull', fn: () => window.git.pull(initialFolder!) },
-                        ].map(({ label, fn }) => (
+                        <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                          ✨ AI Assistant
+                        </span>
+                        <div className="flex items-center gap-2">
                           <button
-                            key={label}
                             type="button"
-                            disabled={gitLoading}
-                            onClick={() => {
-                              runGitCommand(label, fn);
-                              setTimeout(() => void refreshGitStatus(), 600);
-                            }}
-                            className="flex-1 text-xs py-1 rounded"
-                            style={{
-                              background: '#2d1b4e',
-                              color: '#a7adc5',
-                              border: '1px solid #3d2b5e',
-                              opacity: gitLoading ? 0.5 : 1,
-                            }}
+                            onClick={() => toggleFloat('ai')}
+                            className="text-[10px] hover:text-white transition-colors"
+                            style={{ color: '#52525b' }}
+                            title="Float AI"
                           >
-                            {label}
+                            ⬆
                           </button>
-                        ))}
+                          <button
+                            type="button"
+                            onClick={() => setShowAI(false)}
+                            className="text-[10px] hover:text-white transition-colors"
+                            style={{ color: '#52525b' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                    </div>
-
-                    {/* STAGED CHANGES + CHANGES sections */}
-                    {(() => {
-                      const staged: { code: string; filename: string }[] = [];
-                      const unstaged: { code: string; filename: string }[] = [];
-
-                      gitStatusFiles.forEach((line) => {
-                        const stagedCode = line[0] ?? ' ';
-                        const unstagedCode = line[1] ?? ' ';
-                        const filename = line.slice(3);
-                        if (!filename) return;
-
-                        // Untracked files (??) show only in unstaged
-                        if (line.startsWith('??')) {
-                          unstaged.push({ code: '?', filename });
-                          return;
-                        }
-                        if (stagedCode !== ' ') {
-                          staged.push({ code: stagedCode, filename });
-                        }
-                        if (unstagedCode !== ' ') {
-                          unstaged.push({ code: unstagedCode, filename });
-                        }
-                      });
-
-                      const codeColor = (code: string) => {
-                        if (code === 'M') return '#fbbf24';
-                        if (code === 'A' || code === '?') return '#86efac';
-                        if (code === 'D') return '#f87171';
-                        if (code === 'R') return '#93c5fd';
-                        return '#a7adc5';
-                      };
-
-                      const renderRow = (item: { code: string; filename: string }, i: number) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-2 px-4 py-0.5 text-xs truncate"
-                          style={{ fontFamily: 'Space Mono, monospace', color: codeColor(item.code) }}
-                        >
-                          <span style={{ flexShrink: 0, fontSize: '10px' }}>{item.code}</span>
-                          <span className="truncate">{item.filename}</span>
-                        </div>
-                      );
-
-                      return (
-                        <>
-                          {/* STAGED CHANGES */}
-                          <div className="shrink-0">
-                            <div
-                              className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
-                              style={{
-                                color: '#a7adc5',
-                                fontFamily: 'Space Mono, monospace',
-                                background: '#1a0a2e',
-                                borderTop: '1px solid #2d1b4e',
-                                borderBottom: '1px solid #2d1b4e',
-                              }}
-                            >
-                              <span style={{ fontSize: '9px' }}>▼</span>
-                              STAGED CHANGES
-                              {staged.length > 0 && (
-                                <span
-                                  className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
-                                  style={{ background: '#22c55e', color: '#fff', fontSize: '10px' }}
-                                >
-                                  {staged.length}
-                                </span>
-                              )}
-                            </div>
-                            <div className="overflow-y-auto" style={{ maxHeight: '120px' }}>
-                              {staged.length === 0 ? (
-                                <div
-                                  className="px-4 py-2 text-xs"
-                                  style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
-                                >
-                                  Nothing staged
-                                </div>
-                              ) : (
-                                staged.map(renderRow)
-                              )}
-                            </div>
-                          </div>
-
-                          {/* CHANGES (unstaged) */}
-                          <div className="shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setGitChangesOpen((p) => !p)}
-                              className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
-                              style={{
-                                color: '#a7adc5',
-                                fontFamily: 'Space Mono, monospace',
-                                background: '#1a0a2e',
-                                borderTop: '1px solid #2d1b4e',
-                                borderBottom: gitChangesOpen ? '1px solid #2d1b4e' : 'none',
-                              }}
-                            >
-                              <span style={{ fontSize: '9px' }}>{gitChangesOpen ? '▼' : '▶'}</span>
-                              CHANGES
-                              {unstaged.length > 0 && (
-                                <span
-                                  className="ml-auto text-xs px-1.5 py-0.5 rounded-full"
-                                  style={{ background: '#a855f7', color: '#fff', fontSize: '10px' }}
-                                >
-                                  {unstaged.length}
-                                </span>
-                              )}
-                            </button>
-                            {gitChangesOpen && (
-                              <div className="overflow-y-auto" style={{ maxHeight: '160px' }}>
-                                {unstaged.length === 0 ? (
-                                  <div
-                                    className="px-4 py-2 text-xs"
-                                    style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
-                                  >
-                                    {initialFolder ? 'No unstaged changes' : 'No folder open'}
-                                  </div>
-                                ) : (
-                                  unstaged.map(renderRow)
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })()}
-
-                    {/* HISTORY section */}
-                    <div className="shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setGitHistoryOpen((p) => !p)}
-                        className="w-full flex items-center gap-1 px-3 py-1 text-xs font-bold"
-                        style={{
-                          color: '#a7adc5',
-                          fontFamily: 'Space Mono, monospace',
-                          background: '#1a0a2e',
-                          borderTop: '1px solid #2d1b4e',
-                          borderBottom: gitHistoryOpen ? '1px solid #2d1b4e' : 'none',
-                        }}
-                      >
-                        <span style={{ fontSize: '9px' }}>{gitHistoryOpen ? '▼' : '▶'}</span>
-                        HISTORY
-                      </button>
-
-                      {gitHistoryOpen && (
-                        <div className="overflow-y-auto" style={{ maxHeight: '180px' }}>
-                          {gitLog.length === 0 ? (
-                            <div
-                              className="px-4 py-2 text-xs"
-                              style={{ color: '#4b5563', fontFamily: 'Space Mono, monospace' }}
-                            >
-                              No commits yet
-                            </div>
-                          ) : (
-                            gitLog.map((line, i) => {
-                              const sha = line.slice(0, 7);
-                              const message = line.slice(8);
-                              return (
-                                <div
-                                  key={i}
-                                  className="flex items-start gap-2 px-4 py-1 text-xs"
-                                  style={{ fontFamily: 'Space Mono, monospace' }}
-                                >
-                                  <span
-                                    className="shrink-0 px-1 rounded"
-                                    style={{ background: '#2d1b4e', color: '#a855f7', fontSize: '10px' }}
-                                  >
-                                    {sha}
-                                  </span>
-                                  <span className="truncate" style={{ color: '#a7adc5' }}>
-                                    {message}
-                                  </span>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
+                      <div className="flex-1 overflow-hidden">
+                        <AIPanel selectedCode={selectedCode} />
+                      </div>
                     </div>
                   </div>
                 )}
-            </>
+              </div>
+            </div>
           )}
         </div>
 
-        {showOutput && (
+        {/* Git Panel */}
+        {showGit && (
           <div
-            className="flex flex-col shrink-0"
+            className="flex flex-col shrink-0 overflow-hidden border-l"
             style={{
-              height: '220px',
-              background: '#0d0d1a',
-              borderTop: '1px solid #2d1b4e',
+              width: '260px',
+              background: '#1e1e2e',
+              borderColor: '#2d2d3a',
             }}
           >
             <div
-              className="flex items-center justify-between px-4 py-1.5 shrink-0"
-              style={{ background: '#1a0a2e', borderBottom: '1px solid #2d1b4e' }}
+              className="px-3 py-2 text-xs font-medium tracking-wider shrink-0 flex items-center justify-between"
+              style={{
+                color: '#6b7280',
+                fontFamily: 'Segoe UI, sans-serif',
+                borderBottom: '1px solid #2d2d3a',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
             >
-              <span
-                className="text-xs font-semibold"
-                style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
+              <span>Source Control</span>
+              <button
+                type="button"
+                onClick={() => void refreshGitStatus()}
+                className="transition-colors hover:text-white"
+                style={{ color: '#52525b' }}
+                title="Refresh"
               >
-                OUTPUT
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setOutputLines([])}
-                  className="text-xs"
-                  style={{ color: '#6b7280' }}
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowOutput(false)}
-                  className="text-xs"
-                  style={{ color: '#6b7280' }}
-                >
-                  ✕
-                </button>
+                ↻
+              </button>
+            </div>
+
+            <div className="px-3 pt-2 pb-2 shrink-0 flex flex-col gap-1.5 border-b" style={{ borderColor: '#2d2d3a' }}>
+              <input
+                type="text"
+                placeholder="Message (Ctrl+Enter)"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    runGitCommand('commit', () =>
+                      window.git.commit(initialFolder!, commitMessage)
+                    );
+                    setCommitMessage('');
+                    setTimeout(() => void refreshGitStatus(), 800);
+                  }
+                }}
+                className="text-xs px-2 py-1.5 rounded w-full transition-colors focus:outline-none focus:ring-1 focus:ring-purple-500"
+                style={{
+                  background: '#252535',
+                  color: '#d4d4d4',
+                  border: '1px solid #2d2d3a',
+                  fontFamily: 'Segoe UI, sans-serif',
+                }}
+              />
+              <button
+                type="button"
+                disabled={gitLoading || !commitMessage.trim()}
+                onClick={() => {
+                  runGitCommand('commit', () =>
+                    window.git.commit(initialFolder!, commitMessage)
+                  );
+                  setCommitMessage('');
+                  setTimeout(() => void refreshGitStatus(), 800);
+                }}
+                className="text-xs py-1 rounded font-medium transition-colors"
+                style={{
+                  background: gitLoading || !commitMessage.trim() ? '#252535' : '#a78bfa',
+                  color: gitLoading || !commitMessage.trim() ? '#52525b' : '#ffffff',
+                  cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
+                  border: 'none',
+                }}
+              >
+                Commit
+              </button>
+
+              <div className="flex gap-1">
+                {[
+                  { label: 'init', fn: () => window.git.init(initialFolder!) },
+                  { label: 'add', fn: () => window.git.add(initialFolder!) },
+                  { label: 'push', fn: () => window.git.push(initialFolder!) },
+                  { label: 'pull', fn: () => window.git.pull(initialFolder!) },
+                ].map(({ label, fn }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={gitLoading}
+                    onClick={() => {
+                      runGitCommand(label, fn);
+                      setTimeout(() => void refreshGitStatus(), 600);
+                    }}
+                    className="flex-1 text-[10px] py-1 rounded transition-colors hover:bg-white/5"
+                    style={{
+                      background: '#252535',
+                      color: '#6b7280',
+                      border: '1px solid #2d2d3a',
+                      opacity: gitLoading ? 0.4 : 1,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
-            <div
-              className="flex-1 overflow-y-auto px-4 py-3"
-              style={{ fontFamily: 'Space Mono, monospace', fontSize: '12px', lineHeight: '1.6' }}
-            >
-              {outputLines.map((line, i) => (
+
+            {(() => {
+              const staged: { code: string; filename: string }[] = [];
+              const unstaged: { code: string; filename: string }[] = [];
+
+              gitStatusFiles.forEach((line) => {
+                const stagedCode = line[0] ?? ' ';
+                const unstagedCode = line[1] ?? ' ';
+                const filename = line.slice(3);
+                if (!filename) return;
+
+                if (line.startsWith('??')) {
+                  unstaged.push({ code: '?', filename });
+                  return;
+                }
+                if (stagedCode !== ' ') {
+                  staged.push({ code: stagedCode, filename });
+                }
+                if (unstagedCode !== ' ') {
+                  unstaged.push({ code: unstagedCode, filename });
+                }
+              });
+
+              const codeColor = (code: string) => {
+                if (code === 'M') return '#fbbf24';
+                if (code === 'A' || code === '?') return '#4ade80';
+                if (code === 'D') return '#f87171';
+                if (code === 'R') return '#60a5fa';
+                return '#6b7280';
+              };
+
+              const renderRow = (item: { code: string; filename: string }, i: number) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-3 py-0.5 text-xs truncate transition-colors hover:bg-white/5"
+                  style={{ fontFamily: 'Segoe UI, sans-serif', color: codeColor(item.code) }}
+                >
+                  <span className="shrink-0 text-[10px] font-medium w-4">{item.code}</span>
+                  <span className="truncate">{item.filename}</span>
+                </div>
+              );
+
+              return (
+                <div className="flex-1 overflow-y-auto">
+                  <div className="shrink-0">
+                    <div
+                      className="w-full flex items-center gap-1 px-3 py-1 text-[10px] font-medium"
+                      style={{
+                        color: '#52525b',
+                        fontFamily: 'Segoe UI, sans-serif',
+                        background: '#1a1a28',
+                        borderTop: '1px solid #2d2d3a',
+                        borderBottom: '1px solid #2d2d3a',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      <span className="text-[8px]">▼</span>
+                      Staged
+                      {staged.length > 0 && (
+                        <span
+                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: '#4ade80', color: '#1e1e2e' }}
+                        >
+                          {staged.length}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      {staged.length === 0 ? (
+                        <div className="px-3 py-1.5 text-xs" style={{ color: '#3f3f46', fontFamily: 'Segoe UI, sans-serif' }}>
+                          Nothing staged
+                        </div>
+                      ) : (
+                        staged.map(renderRow)
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setGitChangesOpen((p) => !p)}
+                      className="w-full flex items-center gap-1 px-3 py-1 text-[10px] font-medium transition-colors hover:bg-white/5"
+                      style={{
+                        color: '#52525b',
+                        fontFamily: 'Segoe UI, sans-serif',
+                        background: '#1a1a28',
+                        borderTop: '1px solid #2d2d3a',
+                        borderBottom: gitChangesOpen ? '1px solid #2d2d3a' : 'none',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      <span className="text-[8px]">{gitChangesOpen ? '▼' : '▶'}</span>
+                      Changes
+                      {unstaged.length > 0 && (
+                        <span
+                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: '#a78bfa', color: '#1e1e2e' }}
+                        >
+                          {unstaged.length}
+                        </span>
+                      )}
+                    </button>
+                    {gitChangesOpen && (
+                      <div>
+                        {unstaged.length === 0 ? (
+                          <div className="px-3 py-1.5 text-xs" style={{ color: '#3f3f46', fontFamily: 'Segoe UI, sans-serif' }}>
+                            {initialFolder ? 'No changes' : 'No folder open'}
+                          </div>
+                        ) : (
+                          unstaged.map(renderRow)
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setGitHistoryOpen((p) => !p)}
+                      className="w-full flex items-center gap-1 px-3 py-1 text-[10px] font-medium transition-colors hover:bg-white/5"
+                      style={{
+                        color: '#52525b',
+                        fontFamily: 'Segoe UI, sans-serif',
+                        background: '#1a1a28',
+                        borderTop: '1px solid #2d2d3a',
+                        borderBottom: gitHistoryOpen ? '1px solid #2d2d3a' : 'none',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      <span className="text-[8px]">{gitHistoryOpen ? '▼' : '▶'}</span>
+                      History
+                    </button>
+                    {gitHistoryOpen && (
+                      <div>
+                        {gitLog.length === 0 ? (
+                          <div className="px-3 py-1.5 text-xs" style={{ color: '#3f3f46', fontFamily: 'Segoe UI, sans-serif' }}>
+                            No commits
+                          </div>
+                        ) : (
+                          gitLog.map((line, i) => {
+                            const sha = line.slice(0, 7);
+                            const message = line.slice(8);
+                            return (
+                              <div
+                                key={i}
+                                className="flex items-start gap-2 px-3 py-0.5 text-xs hover:bg-white/5"
+                                style={{ fontFamily: 'Segoe UI, sans-serif' }}
+                              >
+                                <span
+                                  className="shrink-0 px-1.5 py-0.5 rounded"
+                                  style={{ background: '#252535', color: '#a78bfa', fontSize: '9px' }}
+                                >
+                                  {sha}
+                                </span>
+                                <span className="truncate" style={{ color: '#6b7280' }}>
+                                  {message}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* Floating Panel - only one at a time */}
+      {floatingPanel && (
+        <div
+          ref={floatRef}
+          className="fixed rounded-lg shadow-2xl border"
+          style={{
+            width: '420px',
+            height: floatingPanel === 'preview' ? '300px' : '350px',
+            left: floatPosition.x,
+            top: floatPosition.y,
+            backgroundColor: '#1e1e2e',
+            borderColor: '#2d2d3a',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(167, 139, 250, 0.15)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            userSelect: 'none',
+          }}
+        >
+          {floatingPanel === 'preview' ? (
+            <>
+              <div 
+                className="flex items-center justify-between px-3 py-1 shrink-0 cursor-move select-none"
+                style={{ 
+                  background: '#252535', 
+                  borderBottom: '1px solid #2d2d3a',
+                }}
+                onMouseDown={handleFloatMouseDown}
+              >
+                <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                  🔍 Live Preview
+                </span>
+                <div className="flex items-center gap-2 float-controls">
+                  <span className="text-[10px]" style={{ color: '#3f3f46' }}>
+                    {isHtmlFile ? 'HTML' : 'Preview'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFloatingPanel(null)}
+                    className="text-[10px] hover:text-white transition-colors"
+                    style={{ color: '#52525b' }}
+                    title="Dock Preview"
+                  >
+                    ⬇
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div 
+                className="flex items-center justify-between px-3 py-1 shrink-0 cursor-move select-none"
+                style={{ 
+                  background: '#252535', 
+                  borderBottom: '1px solid #2d2d3a',
+                }}
+                onMouseDown={handleFloatMouseDown}
+              >
+                <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                  ✨ AI Assistant
+                </span>
+                <div className="flex items-center gap-2 float-controls">
+                  <button
+                    type="button"
+                    onClick={() => setFloatingPanel(null)}
+                    className="text-[10px] hover:text-white transition-colors"
+                    style={{ color: '#52525b' }}
+                    title="Dock AI"
+                  >
+                    ⬇
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAI(false)}
+                    className="text-[10px] hover:text-white transition-colors"
+                    style={{ color: '#52525b' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <AIPanel selectedCode={selectedCode} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Output Panel */}
+      {showOutput && (
+        <div
+          className="flex flex-col shrink-0"
+          style={{
+            height: '150px',
+            background: '#1e1e2e',
+            borderTop: '1px solid #2d2d3a',
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-3 py-1 shrink-0"
+            style={{ background: '#252535', borderBottom: '1px solid #2d2d3a' }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[10px] font-medium"
+                style={{ 
+                  color: '#6b7280', 
+                  fontFamily: 'Segoe UI, sans-serif',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                Terminal
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ade80' }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOutputLines([])}
+                className="text-[10px] transition-colors hover:text-white"
+                style={{ color: '#52525b' }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowOutput(false)}
+                className="text-[10px] transition-colors hover:text-white"
+                style={{ color: '#52525b' }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+          <div
+            className="flex-1 overflow-y-auto px-3 py-2"
+            style={{ fontFamily: 'Consolas, monospace', fontSize: '12px', lineHeight: '1.6' }}
+          >
+            {outputLines.length === 0 ? (
+              <div style={{ color: '#3f3f46' }}>No output to display</div>
+            ) : (
+              outputLines.map((line, i) => (
                 <pre
                   key={i}
                   style={{
@@ -773,18 +1006,18 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       line.type === 'stderr' || line.type === 'error'
                         ? '#f87171'
                         : line.type === 'info'
-                        ? '#a855f7'
-                        : '#d1fae5',
+                        ? '#a78bfa'
+                        : '#4ade80',
                   }}
                 >
                   {line.text}
                 </pre>
-              ))}
-              <div ref={outputEndRef} />
-            </div>
+              ))
+            )}
+            <div ref={outputEndRef} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

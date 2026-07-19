@@ -17,7 +17,7 @@ function renderResponseContent(response: string) {
     content: string;
     language?: string;
   }> = [];
-  const fencePattern = /```(\w+)?\n([\s\S]*?)```/g;
+  const fencePattern = /```(\w+)?\n ([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 

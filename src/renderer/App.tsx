@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import icon from '../../assets/icon.svg';
+import logo from '../assets/log.png';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
 
@@ -47,16 +47,11 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4">
       <div className="w-full max-w-xl text-center flex flex-col items-center gap-6">
-        <svg
-          viewBox="0 0 100 100"
-          aria-hidden="true"
-          className="w-20 h-20"
-        >
-          <polygon
-            points="50,4 93,27 93,73 50,96 7,73 7,27"
-            style={{ fill: '#2d1b4e' }}
-          />
-        </svg>
+        <img 
+          src={logo} 
+          alt="Fabrica IDE Logo" 
+          className="w-24 h-24 object-contain"
+        />
         <div
           className="text-3xl font-bold"
           style={{ fontFamily: 'Syne, sans-serif', color: '#ffffff' }}
@@ -101,82 +96,86 @@ function MainMenu({
   const [showCloneInput, setShowCloneInput] = useState(false);
 
   const quickActions = [
-    {
-      title: 'New File',
-      caption: 'Start a blank workspace',
-      icon: (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm8 1.5V9h4.5L13 4.5z" />
-          <path d="M12 11v6m-3-3h6" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-      ),
-      onClick: onNewFile,
-    },
-    {
-      title: 'Open Folder',
-      caption: 'Browse local projects',
-      icon: (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8.5a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 16.5V6z" />
-        </svg>
-      ),
-      onClick: onOpenFolder,
-    },
-    {
-      title: 'Clone Repository',
-      caption: 'Pull from remote source',
-      icon: (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 4a3 3 0 1 0 2.83 4H14a3 3 0 1 0 2.83 4H9.83A3 3 0 1 0 7 20a3 3 0 0 0 2.83-4H14a3 3 0 1 0-2.83-4H9.83A3 3 0 1 0 7 4z" />
-        </svg>
-      ),
-      onClick: () => setShowCloneInput((prev) => !prev),
-    },
-    {
-      title: 'Open Terminal',
-      caption: 'Jump into a shell',
-      icon: (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm2.5 4.5 3 3-3 3"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M12 14h5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
-      ),
-      onClick: onOpenTerminal,
-    },
-  ];
+  {
+    title: 'New File',
+    caption: 'Start a blank workspace',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
+        />
+      </svg>
+    ),
+    onClick: onNewFile,
+  },
+  {
+    title: 'Open Folder',
+    caption: 'Browse local projects',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" 
+        />
+      </svg>
+    ),
+    onClick: onOpenFolder,
+  },
+  {
+    title: 'Clone Repository',
+    caption: 'Pull from remote source',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" 
+        />
+      </svg>
+    ),
+    onClick: () => setShowCloneInput((prev) => !prev),
+  },
+  {
+    title: 'Open Terminal',
+    caption: 'Jump into a shell',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+        />
+      </svg>
+    ),
+    onClick: onOpenTerminal,
+  },
+];
+  
 
   return (
     <div className="app-glow min-h-screen px-14 py-7 relative overflow-hidden">
       <header className="flex items-center justify-between mb-12 relative z-10">
         <div className="flex items-center gap-3 text-xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-          <img src={icon} alt="Fabrica" className="w-8 h-8" />
+          <img src={logo} alt="Fabrica" className="w-8 h-8 object-contain" />
           <span>Fabrica</span>
         </div>
         <nav className="flex items-center gap-6" aria-label="Primary">
-          <button type="button" className="text-sm text-gray-400">
+          <button 
+            type="button" 
+            className="text-sm text-gray-400 hover:text-white transition-colors duration-200"
+          >
             Docs
           </button>
-          <button type="button" className="text-sm text-gray-400">
+          <button 
+            type="button" 
+            className="text-sm text-gray-400 hover:text-white transition-colors duration-200"
+          >
             Community
           </button>
           <span className="h-5 w-px" style={{ backgroundColor: 'var(--panel-border)' }} />
           <button
             type="button"
-            className="text-sm px-4 py-2 rounded-full border"
-            style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+            className="text-sm px-4 py-2 rounded-full border flex items-center gap-2 transition-all duration-200 hover:bg-purple-600 hover:text-white hover:border-purple-600 hover:scale-105"
+            style={{ color: '#ffffff', borderColor: '#a855f7' }}
           >
+            <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
             Connect GitHub
           </button>
         </nav>
@@ -215,7 +214,7 @@ function MainMenu({
                 <button
                   key={project.name}
                   type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 rounded-xl border mb-3"
+                  className="flex items-center justify-between w-full px-4 py-3 rounded-xl border mb-3 transition-all duration-200 hover:border-purple-500 hover:bg-purple-900/20 hover:scale-[1.02]"
                   style={{ background: '#161a2b', borderColor: 'var(--panel-border)' }}
                   onClick={() => onOpenRecent(project)}
                 >
@@ -230,7 +229,7 @@ function MainMenu({
                       {project.path}
                     </div>
                   </div>
-                  <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+                  <span className="text-sm font-semibold transition-colors duration-200 group-hover:text-purple-400" style={{ color: 'var(--accent)' }}>
                     Open →
                   </span>
                 </button>
@@ -238,7 +237,7 @@ function MainMenu({
             </div>
             <button
               type="button"
-              className="w-full py-3 rounded-xl font-semibold text-white"
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/30"
               style={{
                 background: 'linear-gradient(120deg, #a855f7 0%, #7c3aed 100%)',
               }}
@@ -262,15 +261,15 @@ function MainMenu({
                 <button
                   key={action.title}
                   type="button"
-                  className="flex flex-col gap-2 p-4 rounded-xl border text-left"
+                  className="flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 hover:border-purple-500 hover:bg-purple-900/20 hover:scale-[1.03] hover:shadow-lg hover:shadow-purple-500/10"
                   style={{ background: '#161a2b', borderColor: 'var(--panel-border)' }}
                   onClick={action.onClick}
                 >
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#262a3d' }}>
-                    <div style={{ color: 'var(--text-muted)' }}>{action.icon}</div>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors duration-200 group-hover:bg-purple-600" style={{ backgroundColor: '#262a3d' }}>
+                    <div className="transition-colors duration-200 group-hover:text-purple-400" style={{ color: 'var(--text-muted)' }}>{action.icon}</div>
                   </div>
-                  <div className="text-sm font-semibold">{action.title}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{action.caption}</div>
+                  <div className="text-sm font-semibold transition-colors duration-200 group-hover:text-purple-400">{action.title}</div>
+                  <div className="text-xs transition-colors duration-200 group-hover:text-gray-300" style={{ color: 'var(--text-muted)' }}>{action.caption}</div>
                 </button>
               ))}
             </div>
@@ -281,7 +280,7 @@ function MainMenu({
                   placeholder="https://github.com/user/repo.git"
                   value={cloneUrl}
                   onChange={(e) => setCloneUrl(e.target.value)}
-                  className="text-xs px-3 py-2 rounded w-full"
+                  className="text-xs px-3 py-2 rounded w-full transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   style={{
                     background: '#2d1b4e',
                     color: '#ffffff',
@@ -311,7 +310,7 @@ function MainMenu({
                       setShowCloneInput(false);
                     }
                   }}
-                  className="text-xs px-3 py-2 rounded font-semibold"
+                  className="text-xs px-3 py-2 rounded font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/30"
                   style={{
                     background: cloneLoading || !cloneUrl.trim() ? '#2d1b4e' : '#a855f7',
                     color: '#ffffff',
@@ -398,7 +397,7 @@ function CreateProject({
     <div className="min-h-screen w-full px-10 py-8">
       <header className="w-full flex items-center justify-between mb-10">
         <div className="flex items-center gap-3">
-          <img src={icon} alt="Fabrica" className="w-8 h-8" />
+          <img src={logo} alt="Fabrica" className="w-8 h-8 object-contain" />
           <span
             className="text-xl font-bold"
             style={{ fontFamily: 'Syne, sans-serif', color: '#ffffff' }}
@@ -407,10 +406,16 @@ function CreateProject({
           </span>
         </div>
         <nav className="flex items-center gap-6" aria-label="Primary">
-          <button type="button" className="text-sm text-gray-400">
+          <button 
+            type="button" 
+            className="text-sm text-gray-400 hover:text-white transition-colors duration-200"
+          >
             Docs
           </button>
-          <button type="button" className="text-sm text-gray-400">
+          <button 
+            type="button" 
+            className="text-sm text-gray-400 hover:text-white transition-colors duration-200"
+          >
             Community
           </button>
           <span
@@ -419,9 +424,12 @@ function CreateProject({
           />
           <button
             type="button"
-            className="text-sm px-4 py-2 rounded-full border"
+            className="text-sm px-4 py-2 rounded-full border flex items-center gap-2 transition-all duration-200 hover:bg-purple-600 hover:text-white hover:border-purple-600 hover:scale-105"
             style={{ color: '#ffffff', borderColor: '#a855f7' }}
           >
+            <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
             Connect GitHub
           </button>
         </nav>
@@ -459,7 +467,7 @@ function CreateProject({
               key={type}
               type="button"
               onClick={() => setSelectedType(type)}
-              className="rounded-xl p-4 border text-left"
+              className="rounded-xl p-4 border text-left transition-all duration-200 hover:border-purple-500 hover:bg-purple-900/20 hover:scale-[1.02]"
               style={{
                 backgroundColor: '#2d1b4e',
                 borderColor: selectedType === type ? '#a855f7' : 'transparent',
@@ -482,12 +490,13 @@ function CreateProject({
               Project Name
             </label>
             <input
-              className="w-full px-4 py-3 rounded-xl border mt-2 text-sm placeholder:text-gray-400"
+              className="w-full px-4 py-3 rounded-xl border mt-2 text-sm placeholder:text-gray-400 transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               style={{
                 backgroundColor: '#2d1b4e',
                 borderColor: '#1a0a2e',
                 color: '#ffffff',
                 fontFamily: 'Space Mono, monospace',
+                outline: 'none',
               }}
               placeholder="my-fabrica-project"
               type="text"
@@ -501,12 +510,13 @@ function CreateProject({
             </label>
             <div className="flex items-center gap-3 mt-2">
               <input
-                className="flex-1 px-4 py-3 rounded-xl border text-sm placeholder:text-gray-400"
+                className="flex-1 px-4 py-3 rounded-xl border text-sm placeholder:text-gray-400 transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 style={{
                   backgroundColor: '#2d1b4e',
                   borderColor: '#1a0a2e',
                   color: '#ffffff',
                   fontFamily: 'Space Mono, monospace',
+                  outline: 'none',
                 }}
                 placeholder="/home/user/projects"
                 type="text"
@@ -515,9 +525,9 @@ function CreateProject({
               />
               <button
                 type="button"
-                className="px-4 py-3 rounded-xl text-sm font-bold"
+                className="px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.05] hover:shadow-lg hover:shadow-purple-500/30"
                 style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
-                  onClick={handleBrowse}
+                onClick={handleBrowse}
               >
                 Browse
               </button>
@@ -533,7 +543,7 @@ function CreateProject({
         <div className="flex items-center justify-between mt-2">
           <button
             type="button"
-            className="px-4 py-3 rounded-xl text-sm"
+            className="px-4 py-3 rounded-xl text-sm transition-all duration-200 hover:text-purple-400 hover:scale-[1.02]"
             style={{ color: '#ffffff' }}
             onClick={onCancel}
           >
@@ -541,7 +551,7 @@ function CreateProject({
           </button>
           <button
             type="button"
-            className="px-6 py-3 rounded-xl text-sm font-bold"
+            className="px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:scale-[1.05] hover:shadow-lg hover:shadow-purple-500/30"
             style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
             onClick={handleCreateProject}
           >
