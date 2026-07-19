@@ -72,17 +72,19 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [language, setLanguage] = useState('JavaScript');
+  const [prompt, setPrompt] = useState('');
 
   const handleTranslate = async () => {
-    if (!selectedCode.trim()) return;
+    if (!prompt.trim() && !selectedCode.trim()) return;
     setLoading(true);
     setResponse('');
-    const prompt = [
-  'AutoComplete the Code base on what is highlighted',
-  'based example if the hint is login form auto complete a whole login form ',
-  '',
-  selectedCode,
-].join('\n');
+    const requestPrompt = [
+      `Language: ${language}`,
+      prompt.trim() ? `Prompt: ${prompt.trim()}` : 'Prompt: Complete the selected code.',
+      selectedCode.trim() ? `Selected code:\n${selectedCode.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     const removeListener = window.electron.ipcRenderer.on(
       'ai:token',
@@ -91,7 +93,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
       }
     );
 
-    await window.ai.complete(prompt);
+    await window.ai.complete(requestPrompt);
 
     if (removeListener) removeListener();
     setLoading(false);
@@ -104,6 +106,20 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
       </div>
 
       <div className="px-3 py-2 flex flex-col gap-2 flex-1 overflow-hidden">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Ask the AI to complete, explain, refactor, or generate code..."
+          className="text-xs p-2 rounded resize-none outline-none"
+          style={{
+            background: '#2d1b4e',
+            color: '#ffffff',
+            fontFamily: 'IBM Plex Sans, sans-serif',
+            minHeight: '92px',
+            border: '1px solid #4c1d95',
+          }}
+        />
+
         <div
           className="text-xs p-2 rounded overflow-y-auto"
           style={{
@@ -136,12 +152,12 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
           <button
             type="button"
             onClick={handleTranslate}
-            disabled={loading || !selectedCode.trim()}
+            disabled={loading || (!prompt.trim() && !selectedCode.trim())}
             className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
             style={{
-              background: loading || !selectedCode.trim() ? '#2d1b4e' : '#a855f7',
+              background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
               color: '#ffffff',
-              cursor: loading || !selectedCode.trim() ? 'not-allowed' : 'pointer',
+              cursor: loading || (!prompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
             }}
           >
             {loading ? (

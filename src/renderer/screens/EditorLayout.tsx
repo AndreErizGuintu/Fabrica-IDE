@@ -25,6 +25,10 @@ function getLanguage(filename: string): string {
   }
 }
 
+// How far (px) the pointer must travel before a mousedown on the docked
+// preview panel counts as a drag-to-detach instead of a click.
+const DETACH_THRESHOLD = 6;
+
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -48,6 +52,34 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [isDraggingFloat, setIsDraggingFloat] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const floatRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
+
+  // Window resize state - for making the floating window bigger/smaller
+  const [floatSize, setFloatSize] = useState({ width: 420, height: 350 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+
+  // Fullscreen state for the currently floating panel
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Size/position to restore to after leaving fullscreen
+  const preFullscreenRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // Drag-to-detach state: tracks a mousedown on a *docked* panel
+  // that hasn't yet crossed the threshold to become a real float-drag.
+  const [armedDetachPanel, setArmedDetachPanel] = useState<'preview' | 'ai' | null>(null);
+  const detachStartRef = useRef({ x: 0, y: 0 });
+
+  // Height of the docked AI panel (resizable by dragging the divider above it).
+  const [aiPanelHeight, setAiPanelHeight] = useState(250);
+  const [isResizingAIHeight, setIsResizingAIHeight] = useState(false);
+  const resizeAIStartRef = useRef({ y: 0, height: 250, containerHeight: 600 });
+  const rightPanelContentRef = useRef<HTMLDivElement>(null);
+
+  // Whether the whole right panel (preview + AI) is slid out of view so
+  // students can focus on just the editor. Toggled by the handle button.
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const RIGHT_PANEL_WIDTH = 380;
 
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
@@ -57,29 +89,159 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     ? `<!DOCTYPE html><html><head><style>${activeTab.content}</style></head><body><div style="padding:20px"><h1>CSS Preview</h1><p>Your styles are applied to this page.</p><button>Button</button></div></body></html>`
     : activeTab?.content ?? '';
 
-  // Float drag handlers
+  // Check if floating window overlaps with sidebar for auto-dock
+  const checkDockPosition = (x: number, y: number) => {
+    if (!sidebarRef.current) return false;
+    const sidebarRect = sidebarRef.current.getBoundingClientRect();
+    return x < sidebarRect.right + 50 && x > sidebarRect.left - 50;
+  };
+
+  const zoomIn = () => {
+    setPreviewZoom((prev) => Math.min(prev + 0.1, 2));
+  };
+
+  const zoomOut = () => {
+    setPreviewZoom((prev) => Math.max(prev - 0.1, 0.5));
+  };
+
+  const resetZoom = () => {
+    setPreviewZoom(1);
+  };
+
+  const dockPanel = () => {
+    setFloatingPanel(null);
+    setIsFullscreen(false);
+    preFullscreenRef.current = null;
+    setPreviewZoom(1);
+  };
+
+  // Dimensions a given panel uses while floating (AI is fixed-size, Preview is resizable).
+  const getFloatDims = (panel: 'preview' | 'ai' | null) => {
+    if (panel === 'ai') return { width: 420, height: 350 };
+    return { width: floatSize.width, height: floatSize.height };
+  };
+
+  // Begin dragging a mousedown on a docked panel (preview or AI). If the
+  // pointer moves far enough before mouseup, this converts into a real
+  // float-drag (handled in the mousemove effect below). There is no
+  // explicit button for this - it only happens by dragging.
+  const handleDetachMouseDown = (panel: 'preview' | 'ai') => (e: React.MouseEvent) => {
+    if (floatingPanel === panel) return;
+    if ((e.target as HTMLElement).closest('.float-controls')) return;
+    detachStartRef.current = { x: e.clientX, y: e.clientY };
+    setArmedDetachPanel(panel);
+  };
+
+  // Float drag handlers (used once a panel is already floating)
   const handleFloatMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.float-controls')) return;
+    if (isFullscreen) return;
     e.preventDefault();
     setIsDraggingFloat(true);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
+  // Drag the divider between the docked Preview and AI panel to resize
+  // the AI panel's height (expand/collapse it up or down).
+  const handleAIResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeAIStartRef.current = {
+      y: e.clientY,
+      height: aiPanelHeight,
+      containerHeight: rightPanelContentRef.current?.clientHeight ?? 600,
+    };
+    setIsResizingAIHeight(true);
+  };
+
+  // Resize handler
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isFullscreen) return;
+    setIsResizing(true);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: floatSize.width,
+      height: floatSize.height,
+    });
+  };
+
+  const toggleFullscreen = () => {
+    if (!floatingPanel) return;
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (next) {
+        preFullscreenRef.current = { x: floatPosition.x, y: floatPosition.y, width: floatSize.width, height: floatSize.height };
+      } else if (preFullscreenRef.current) {
+        setFloatPosition({ x: preFullscreenRef.current.x, y: preFullscreenRef.current.y });
+        setFloatSize({ width: preFullscreenRef.current.width, height: preFullscreenRef.current.height });
+        preFullscreenRef.current = null;
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      // Drag-to-detach: pointer moved far enough from a docked-panel
+      // mousedown to convert it into a floating drag.
+      if (armedDetachPanel && !isDraggingFloat) {
+        const dx = e.clientX - detachStartRef.current.x;
+        const dy = e.clientY - detachStartRef.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > DETACH_THRESHOLD) {
+          const dims = getFloatDims(armedDetachPanel);
+          const offset = { x: 24, y: 12 };
+          const newX = Math.min(Math.max(e.clientX - offset.x, 0), window.innerWidth - dims.width);
+          const newY = Math.min(Math.max(e.clientY - offset.y, 0), window.innerHeight - dims.height);
+          setFloatPosition({ x: newX, y: newY });
+          setFloatingPanel(armedDetachPanel);
+          if (armedDetachPanel === 'preview') setPreviewZoom(1);
+          setDragOffset(offset);
+          setIsDraggingFloat(true);
+          setArmedDetachPanel(null);
+        }
+      }
+
       if (isDraggingFloat) {
-        const newX = Math.min(Math.max(e.clientX - dragOffset.x, 0), window.innerWidth - 420);
-        const newY = Math.min(Math.max(e.clientY - dragOffset.y, 0), window.innerHeight - 300);
+        const dims = getFloatDims(floatingPanel);
+        const newX = Math.min(Math.max(e.clientX - dragOffset.x, 0), window.innerWidth - dims.width);
+        const newY = Math.min(Math.max(e.clientY - dragOffset.y, 0), window.innerHeight - dims.height);
         setFloatPosition({ x: newX, y: newY });
+
+        if (checkDockPosition(newX, newY) && floatingPanel) {
+          dockPanel();
+          setIsDraggingFloat(false);
+        }
+      }
+
+      // Handle resizing
+      if (isResizing) {
+        const newWidth = Math.max(300, resizeStart.width + (e.clientX - resizeStart.x));
+        const newHeight = Math.max(250, resizeStart.height + (e.clientY - resizeStart.y));
+        setFloatSize({ width: newWidth, height: newHeight });
+      }
+
+      // Handle dragging the docked AI panel's top divider - moving up
+      // grows the AI panel, moving down shrinks it back toward the preview.
+      if (isResizingAIHeight) {
+        const { y, height, containerHeight } = resizeAIStartRef.current;
+        const dy = e.clientY - y;
+        const maxHeight = Math.max(120, containerHeight - 120);
+        const newHeight = Math.min(Math.max(height - dy, 120), maxHeight);
+        setAiPanelHeight(newHeight);
       }
     };
 
     const handleMouseUp = () => {
       setIsDraggingFloat(false);
+      setIsResizing(false);
+      setArmedDetachPanel(null);
+      setIsResizingAIHeight(false);
     };
 
-    if (isDraggingFloat) {
+    if (isDraggingFloat || isResizing || armedDetachPanel || isResizingAIHeight) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
@@ -88,18 +250,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingFloat, dragOffset]);
-
-  const toggleFloat = (panel: 'preview' | 'ai') => {
-    if (floatingPanel === panel) {
-      setFloatingPanel(null);
-    } else {
-      const x = Math.min(Math.max(100, 0), window.innerWidth - 420);
-      const y = Math.min(Math.max(100, 0), window.innerHeight - 300);
-      setFloatPosition({ x, y });
-      setFloatingPanel(panel);
-    }
-  };
+  }, [isDraggingFloat, dragOffset, isResizing, resizeStart, floatSize, floatingPanel, armedDetachPanel, isResizingAIHeight]);
 
   const openFileInTab = (filePath: string, filename: string, content: string) => {
     const existing = tabs.findIndex((tab) => tab.path === filePath);
@@ -289,6 +440,52 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   }, [activeTab]);
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (floatingPanel !== 'preview') return;
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === '=' || event.key === '+') {
+          event.preventDefault();
+          zoomIn();
+        } else if (event.key === '-') {
+          event.preventDefault();
+          zoomOut();
+        } else if (event.key === '0') {
+          event.preventDefault();
+          resetZoom();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [floatingPanel]);
+
+  // Fullscreen toggling / exit for whichever panel is currently floating.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!floatingPanel) return;
+      if (event.key === 'F11') {
+        event.preventDefault();
+        toggleFullscreen();
+      } else if (event.key === 'Escape' && isFullscreen) {
+        event.preventDefault();
+        toggleFullscreen();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [floatingPanel, isFullscreen, floatPosition, floatSize]);
+
+  // Leaving float mode entirely always clears fullscreen.
+  useEffect(() => {
+    if (!floatingPanel) {
+      setIsFullscreen(false);
+      preFullscreenRef.current = null;
+    }
+  }, [floatingPanel]);
+
+  useEffect(() => {
     outputEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [outputLines]);
 
@@ -297,6 +494,21 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       void refreshGitStatus();
     }
   }, [showGit, initialFolder]);
+
+  const floatStyle = isFullscreen
+    ? {
+        width: '100vw',
+        height: '100vh',
+        left: 0,
+        top: 0,
+        borderRadius: 0,
+      }
+    : {
+        width: `${floatSize.width}px`,
+        height: `${floatSize.height}px`,
+        left: floatPosition.x,
+        top: floatPosition.y,
+      };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1e1e2e', color: '#d4d4d4' }}>
@@ -424,12 +636,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          onFileOpen={handleFileOpen}
-          initialFolder={initialFolder}
-          activeFilePath={activeTab?.path}
-          gitStatusFiles={gitStatusFiles}
-        />
+        <div ref={sidebarRef} className="flex">
+          <Sidebar
+            onFileOpen={handleFileOpen}
+            initialFolder={initialFolder}
+            activeFilePath={activeTab?.path}
+            gitStatusFiles={gitStatusFiles}
+          />
+        </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
           {tabs.length === 0 ? (
@@ -472,98 +686,109 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 />
               </div>
 
-              {/* Right Panel - Preview and AI (Preview always visible, AI hidden when floated) */}
-              <div className="flex flex-col shrink-0 border-l" style={{ borderColor: '#2d2d3a', width: '380px' }}>
-                {/* Preview Panel */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <div 
-                    className="flex items-center justify-between px-3 py-1 shrink-0"
-                    style={{ 
-                      background: '#252535', 
-                      borderBottom: '1px solid #2d2d3a',
-                    }}
-                  >
-                    <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                      🔍 Live Preview
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px]" style={{ color: '#3f3f46' }}>
-                        {isHtmlFile ? 'HTML' : 'Preview'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleFloat('preview')}
-                        className="text-[10px] hover:text-white transition-colors"
-                        style={{ 
-                          color: floatingPanel === 'preview' ? '#a78bfa' : '#52525b',
-                          opacity: floatingPanel === 'preview' ? 1 : 0.6,
-                        }}
-                        title={floatingPanel === 'preview' ? 'Dock Preview' : 'Float Preview'}
-                      >
-                        {floatingPanel === 'preview' ? '⬇' : '⬆'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
-                  </div>
-                </div>
+              {/* Right Panel - Preview and AI, collapsible so students can focus on just the editor */}
+              <div className="flex shrink-0 relative">
+                <button
+                  type="button"
+                  onClick={() => setRightPanelCollapsed((prev) => !prev)}
+                  className="w-4 flex items-center justify-center shrink-0 transition-colors hover:bg-white/10"
+                  style={{
+                    background: '#1e1e2e',
+                    borderLeft: '1px solid #2d2d3a',
+                    borderRight: rightPanelCollapsed ? 'none' : '1px solid #2d2d3a',
+                    color: '#6b7280',
+                  }}
+                  title={rightPanelCollapsed ? 'Show preview & AI panel' : 'Hide preview & AI panel'}
+                >
+                  <span className="text-[10px]">{rightPanelCollapsed ? '◀' : '▶'}</span>
+                </button>
 
-                {/* Resize Handle - only show if AI is visible and not floating */}
-                {showAI && floatingPanel !== 'ai' && (
-                  <div 
-                    className="h-0.75 shrink-0 cursor-row-resize hover:bg-purple-500/30 transition-colors"
-                    style={{ 
-                      background: '#1e1e2e',
-                      borderTop: '1px solid #2d2d3a',
-                      borderBottom: '1px solid #2d2d3a',
-                    }}
-                  />
-                )}
-
-                {/* AI Panel - hidden when floating */}
-                {showAI && floatingPanel !== 'ai' && (
-                  <div 
-                    className="shrink-0 overflow-hidden"
-                    style={{ height: '250px' }}
-                  >
-                    <div className="h-full flex flex-col">
-                      <div 
-                        className="flex items-center justify-between px-3 py-1 shrink-0"
-                        style={{ 
-                          background: '#252535', 
-                          borderBottom: '1px solid #2d2d3a',
-                        }}
+                <div
+                  className="flex flex-col overflow-hidden transition-all duration-200 ease-out"
+                  style={{
+                    width: rightPanelCollapsed ? 0 : `${RIGHT_PANEL_WIDTH}px`,
+                  }}
+                >
+                  <div ref={rightPanelContentRef} className="flex flex-col h-full" style={{ width: `${RIGHT_PANEL_WIDTH}px` }}>
+                    {floatingPanel !== 'preview' && (
+                      <div
+                        className="flex-1 flex flex-col min-h-0"
+                        onMouseDown={handleDetachMouseDown('preview')}
+                        style={{ cursor: armedDetachPanel === 'preview' ? 'grabbing' : 'grab' }}
+                        title="Drag to detach the preview"
                       >
-                        <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                          ✨ AI Assistant
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleFloat('ai')}
-                            className="text-[10px] hover:text-white transition-colors"
-                            style={{ color: '#52525b' }}
-                            title="Float AI"
-                          >
-                            ⬆
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowAI(false)}
-                            className="text-[10px] hover:text-white transition-colors"
-                            style={{ color: '#52525b' }}
-                          >
-                            ✕
-                          </button>
+                        <div
+                          className="flex items-center justify-between px-3 py-1 shrink-0"
+                          style={{
+                            background: '#252535',
+                            borderBottom: '1px solid #2d2d3a',
+                          }}
+                        >
+                          <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                            🔍 Live Preview
+                          </span>
+                          <span className="text-[10px]" style={{ color: '#3f3f46' }}>
+                            {isHtmlFile ? 'HTML' : 'Preview'}
+                          </span>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <Preview html={previewHtml} isHtmlFile={isHtmlFile} zoom={1} />
                         </div>
                       </div>
-                      <div className="flex-1 overflow-hidden">
-                        <AIPanel selectedCode={selectedCode} />
-                      </div>
-                    </div>
+                    )}
+
+                    {showAI && floatingPanel !== 'ai' && (
+                      <>
+                        {floatingPanel !== 'preview' && (
+                          <div
+                            onMouseDown={handleAIResizeMouseDown}
+                            className="h-1.5 shrink-0 cursor-row-resize hover:bg-purple-500/30 transition-colors"
+                            style={{
+                              background: isResizingAIHeight ? 'rgba(167, 139, 250, 0.3)' : '#1e1e2e',
+                              borderTop: '1px solid #2d2d3a',
+                              borderBottom: '1px solid #2d2d3a',
+                            }}
+                            title="Drag to resize"
+                          />
+                        )}
+                        <div className="shrink-0 overflow-hidden" style={{ height: `${aiPanelHeight}px` }}>
+                          <div
+                            className="h-full flex flex-col"
+                            onMouseDown={handleDetachMouseDown('ai')}
+                            style={{ cursor: armedDetachPanel === 'ai' ? 'grabbing' : 'grab' }}
+                            title="Drag to detach the AI assistant"
+                          >
+                            <div
+                              className="flex items-center justify-between px-3 py-1 shrink-0"
+                              style={{
+                                background: '#252535',
+                                borderBottom: '1px solid #2d2d3a',
+                              }}
+                            >
+                              <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+                                ✨ AI Assistant
+                              </span>
+                              <div className="flex items-center gap-2 float-controls">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAI(false)}
+                                  className="text-[10px] hover:text-white transition-colors"
+                                  style={{ color: '#52525b' }}
+                                  title="Close AI"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <AIPanel selectedCode={selectedCode} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}
@@ -848,16 +1073,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         )}
       </div>
 
-      {/* Floating Panel - only one at a time */}
-      {floatingPanel && (
+      {floatingPanel === 'preview' && (
         <div
           ref={floatRef}
-          className="fixed rounded-lg shadow-2xl border"
+          className="fixed shadow-2xl border"
           style={{
-            width: '420px',
-            height: floatingPanel === 'preview' ? '300px' : '350px',
-            left: floatPosition.x,
-            top: floatPosition.y,
+            ...floatStyle,
+            borderRadius: isFullscreen ? 0 : '0.5rem',
             backgroundColor: '#1e1e2e',
             borderColor: '#2d2d3a',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(167, 139, 250, 0.15)',
@@ -868,76 +1090,85 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             userSelect: 'none',
           }}
         >
-          {floatingPanel === 'preview' ? (
-            <>
-              <div 
-                className="flex items-center justify-between px-3 py-1 shrink-0 cursor-move select-none"
-                style={{ 
-                  background: '#252535', 
-                  borderBottom: '1px solid #2d2d3a',
-                }}
-                onMouseDown={handleFloatMouseDown}
-              >
-                <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                  🔍 Live Preview
-                </span>
-                <div className="flex items-center gap-2 float-controls">
-                  <span className="text-[10px]" style={{ color: '#3f3f46' }}>
-                    {isHtmlFile ? 'HTML' : 'Preview'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFloatingPanel(null)}
-                    className="text-[10px] hover:text-white transition-colors"
-                    style={{ color: '#52525b' }}
-                    title="Dock Preview"
-                  >
-                    ⬇
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <Preview html={previewHtml} isHtmlFile={isHtmlFile} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div 
-                className="flex items-center justify-between px-3 py-1 shrink-0 cursor-move select-none"
-                style={{ 
-                  background: '#252535', 
-                  borderBottom: '1px solid #2d2d3a',
-                }}
-                onMouseDown={handleFloatMouseDown}
-              >
-                <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                  ✨ AI Assistant
-                </span>
-                <div className="flex items-center gap-2 float-controls">
-                  <button
-                    type="button"
-                    onClick={() => setFloatingPanel(null)}
-                    className="text-[10px] hover:text-white transition-colors"
-                    style={{ color: '#52525b' }}
-                    title="Dock AI"
-                  >
-                    ⬇
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAI(false)}
-                    className="text-[10px] hover:text-white transition-colors"
-                    style={{ color: '#52525b' }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <AIPanel selectedCode={selectedCode} />
-              </div>
-            </>
+          <div
+            className="flex items-center justify-between px-3 py-1 shrink-0 select-none"
+            style={{
+              background: '#252535',
+              borderBottom: '1px solid #2d2d3a',
+              cursor: isFullscreen ? 'default' : 'move',
+            }}
+            onMouseDown={handleFloatMouseDown}
+            onDoubleClick={toggleFullscreen}
+            title="Drag to move • double-click to toggle fullscreen"
+          >
+            <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+              🔍 Live Preview
+            </span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom Out">➖</button>
+              <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom In">➕</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Reset Zoom">⟲</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <Preview html={previewHtml} isHtmlFile={isHtmlFile} zoom={previewZoom} />
+          </div>
+          {!isFullscreen && (
+            <div
+              className="absolute bottom-0 right-0 w-4 h-4"
+              style={{
+                background: 'transparent',
+                borderRight: '2px solid #3d3d4a',
+                borderBottom: '2px solid #3d3d4a',
+                borderRadius: '0 0 4px 0',
+                cursor: 'se-resize',
+              }}
+              onMouseDown={handleResizeStart}
+            />
           )}
+        </div>
+      )}
+
+      {floatingPanel === 'ai' && (
+        <div
+          ref={floatRef}
+          className="fixed shadow-2xl border"
+          style={{
+            ...(isFullscreen
+              ? { width: '100vw', height: '100vh', left: 0, top: 0, borderRadius: 0 }
+              : { width: '420px', height: '350px', left: floatPosition.x, top: floatPosition.y, borderRadius: '0.5rem' }),
+            backgroundColor: '#1e1e2e',
+            borderColor: '#2d2d3a',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(167, 139, 250, 0.15)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            userSelect: 'none',
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-3 py-1 shrink-0 select-none"
+            style={{
+              background: '#252535',
+              borderBottom: '1px solid #2d2d3a',
+              cursor: isFullscreen ? 'default' : 'move',
+            }}
+            onMouseDown={handleFloatMouseDown}
+            onDoubleClick={toggleFullscreen}
+            title="Drag to move • double-click to toggle fullscreen"
+          >
+            <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
+              ✨ AI Assistant
+            </span>
+            <div className="flex items-center gap-2 float-controls">
+              <button type="button" onClick={() => { dockPanel(); setShowAI(false); }} className="text-[10px] hover:text-white transition-colors" style={{ color: '#52525b' }} title="Close AI">✕</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <AIPanel selectedCode={selectedCode} />
+          </div>
         </div>
       )}
 

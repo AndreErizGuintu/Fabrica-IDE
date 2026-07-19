@@ -3,9 +3,10 @@ import { useEffect, useRef } from 'react'
 interface PreviewProps {
   html: string
   isHtmlFile: boolean
+  zoom?: number
 }
 
-export default function Preview({ html, isHtmlFile }: PreviewProps) {
+export default function Preview({ html, isHtmlFile, zoom = 1 }: PreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export default function Preview({ html, isHtmlFile }: PreviewProps) {
   }, [html, isHtmlFile])
 
   return (
-    <div className="flex flex-col h-full w-96"
+    <div className="flex flex-col h-full w-full"
       style={{ background: '#1a0a2e', borderLeft: '1px solid #2d1b4e' }}>
 
       {/* Header */}
@@ -34,13 +35,21 @@ export default function Preview({ html, isHtmlFile }: PreviewProps) {
 
       {/* Preview area */}
       {isHtmlFile ? (
-        <iframe
-          ref={iframeRef}
-          className="flex-1 w-full border-none"
-          style={{ background: '#ffffff' }}
-          sandbox="allow-scripts"
-          title="Live Preview"
-        />
+        <div className="flex-1 overflow-auto">
+          <iframe
+            ref={iframeRef}
+            className="w-full h-full border-none block"
+            style={{
+              background: '#ffffff',
+              transform: zoom === 1 ? undefined : `scale(${zoom})`,
+              transformOrigin: 'top left',
+              width: zoom === 1 ? '100%' : `${100 / zoom}%`,
+              height: zoom === 1 ? '100%' : `${100 / zoom}%`,
+            }}
+            sandbox="allow-scripts"
+            title="Live Preview"
+          />
+        </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div>
