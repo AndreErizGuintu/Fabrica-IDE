@@ -37,14 +37,15 @@ const getBundledRuntimeDir = (runtime: RuntimeName) =>
 
 const getBundledRuntimeBinary = (runtime: RuntimeName) => {
   const binaryName = process.platform === 'win32' ? `${runtime}.exe` : runtime;
-  const bundledPath = path.join(getBundledRuntimeDir(runtime), binaryName);
+  const subDir = runtime === 'dart' ? 'bin' : '';
+  const bundledPath = path.join(getBundledRuntimeDir(runtime), subDir, binaryName);
 
   if (fs.existsSync(bundledPath)) {
     return bundledPath;
   }
 
   console.warn(`Bundled ${runtime} runtime not found at ${bundledPath}; falling back to PATH lookup.`);
-  return runtime;
+  return binaryName;
 };
 
 const getBundledRuntimePathEntries = () =>
@@ -98,7 +99,7 @@ function getRunConfig(filePath: string):
     case 'php': return { cmd: getBundledRuntimeBinary('php'), args: ['-f', filePath] };
     case 'js': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
     case 'ts': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
-    case 'cs': return { cmd: getBundledRuntimeBinary('dotnet'), args: ['script', filePath] };
+    case 'cs': return { cmd: getBundledRuntimeBinary('dotnet'), args: ['run', filePath] };
     case 'dart': return { cmd: getBundledRuntimeBinary('dart'), args: ['run', filePath] };
     default: return { error: `No runner configured for .${ext ?? 'unknown'} files` };
   }
@@ -346,35 +347,18 @@ ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
 
 // Run file
 ipcMain.handle('run:file', async (event, filePath: string) => {
-  const ext = filePath.split('.').pop()?.toLowerCase();
+  const config = getRunConfig(filePath);
 
-  let cmd: string;
-  let args: string[];
+  if ('html' in config) {
+    return { success: true, html: true };
+  }
 
-  switch (ext) {
-    case 'js':
-    case 'ts':
-      cmd = getBundledRuntimeBinary('node');
-      args = [filePath];
-      break;
-    case 'php':
-      cmd = getBundledRuntimeBinary('php');
-      args = ['-f', filePath];
-      break;
-    case 'cs':
-      cmd = getBundledRuntimeBinary('dotnet');
-      args = ['script', filePath];
-      break;
-    case 'dart':
-      cmd = getBundledRuntimeBinary('dart');
-      args = ['run', filePath];
-      break;
-    default:
-      return { success: false, error: `Unsupported file type: .${ext}` };
+  if ('error' in config) {
+    return { success: false, error: config.error };
   }
 
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
-    const child = spawn(cmd, args, {
+    const child = spawn(config.cmd, config.args, {
       cwd: path.dirname(filePath),
       shell: false,
       env: {
@@ -614,11 +598,34 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
   }
 });
 
+ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selectedCode: string; language: string }) => {
+  try {
+    const systemPrompt = `You are a helpful coding assistant. Translate the user request into ${payload.language} code or explanation. Preserve the intent and provide a concise, accurate result. If code is provided, return code only when appropriate, otherwise explain briefly.`;
+    const userPrompt = [
+      `Language: ${payload.language}`,
+      payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : 'Prompt: Complete the selected code.',
+      payload.selectedCode.trim() ? `Selected code:\n${payload.selectedCode.trim()}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    let fullText = '';
+    const result = await generate(userPrompt, systemPrompt, (chunk: string) => {
+      fullText += chunk;
+      event.sender.send('ai:token', chunk);
+    });
+
+    return { success: true, result: fullText || result };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
 ipcMain.handle('llama-test-ping', async () => {
   try {
     const result = await generate('Write a JS function that adds two numbers');
+    console.log('[llama-test] response:', result);
     return { success: true, result };
   } catch (err) {
+    console.error('[llama-test] error:', err);
     return { success: false, error: String(err) };
   }
 });

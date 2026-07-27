@@ -3,7 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 
 const MODEL_FILE = 'deepseek-coder-6.7b-instruct.Q4_K_M.gguf';
-export const GPU_LAYERS: number = parseInt(process.env.GPU_LAYERS || '0', 10);
+export const GPU_LAYERS: number = parseInt(process.env.GPU_LAYERS || '0', 13);
 
 type LlamaRuntime = {
   llama: unknown;
@@ -12,7 +12,13 @@ type LlamaRuntime = {
     getSequence: () => unknown;
   };
   session: {
-    prompt: (prompt: string) => Promise<string>;
+    prompt: (
+      prompt: string,
+      options?: {
+        systemPrompt?: string;
+        onTextChunk?: (text: string) => void;
+      },
+    ) => Promise<string>;
   };
 };
 
@@ -61,8 +67,15 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
   return runtimePromise;
 };
 
-export const generate = async (prompt: string): Promise<string> => {
+export const generate = async (
+  prompt: string,
+  systemPrompt?: string,
+  onTextChunk?: (text: string) => void,
+): Promise<string> => {
   const { session } = await initLlama();
-  const completion = await session.prompt(prompt);
+  const completion = await session.prompt(prompt, {
+    systemPrompt,
+    onTextChunk,
+  });
   return completion;
 };
