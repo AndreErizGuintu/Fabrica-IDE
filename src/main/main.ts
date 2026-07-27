@@ -9,18 +9,58 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import fs from 'fs';
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
+import { generate } from './llm';
 import { resolveHtmlPath } from './util';
 
 type RecentProject = { name: string; path: string };
+type RuntimeName = 'node' | 'php' | 'dotnet' | 'dart';
 
 const getRecentProjectsPath = () =>
   path.join(app.getPath('userData'), 'recent-projects.json');
+
+const getBundledRuntimeRoot = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'runtimes');
+  }
+
+  return path.join(app.getAppPath(), 'resources', 'runtimes');
+};
+
+const getBundledRuntimeDir = (runtime: RuntimeName) =>
+  path.join(getBundledRuntimeRoot(), runtime);
+
+const getBundledRuntimeBinary = (runtime: RuntimeName) => {
+  const binaryName = process.platform === 'win32' ? `${runtime}.exe` : runtime;
+  const bundledPath = path.join(getBundledRuntimeDir(runtime), binaryName);
+
+  if (fs.existsSync(bundledPath)) {
+    return bundledPath;
+  }
+
+  console.warn(`Bundled ${runtime} runtime not found at ${bundledPath}; falling back to PATH lookup.`);
+  return runtime;
+};
+
+const getBundledRuntimePathEntries = () =>
+  (['node', 'php', 'dotnet', 'dart'] as RuntimeName[]).map(getBundledRuntimeDir);
+
+const prependBundledRuntimePaths = (env: NodeJS.ProcessEnv = process.env) => {
+  const pathEntries = getBundledRuntimePathEntries();
+  const existingPath = env.PATH ?? env.Path ?? '';
+  const nextPath = [...pathEntries, existingPath].filter(Boolean).join(path.delimiter);
+
+  return {
+    ...env,
+    PATH: nextPath,
+    Path: nextPath,
+  };
+};
 
 const readRecentProjects = (): RecentProject[] => {
   try {
@@ -55,11 +95,11 @@ function getRunConfig(filePath: string):
   const ext = filePath.split('.').pop()?.toLowerCase();
   switch (ext) {
     case 'html': return { html: true };
-    case 'php': return { cmd: 'php', args: ['-f', filePath] };
-    case 'js': return { cmd: 'node', args: [filePath] };
-    case 'ts': return { error: 'TypeScript files cannot be run directly — rename to .js or compile first' };
-    case 'cs': return { error: '.NET SDK required — install from https://dot.net' };
-    case 'dart': return { error: 'Dart SDK required — install from https://dart.dev' };
+    case 'php': return { cmd: getBundledRuntimeBinary('php'), args: ['-f', filePath] };
+    case 'js': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
+    case 'ts': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
+    case 'cs': return { cmd: getBundledRuntimeBinary('dotnet'), args: ['script', filePath] };
+    case 'dart': return { cmd: getBundledRuntimeBinary('dart'), args: ['run', filePath] };
     default: return { error: `No runner configured for .${ext ?? 'unknown'} files` };
   }
 }
@@ -283,18 +323,18 @@ ipcMain.handle('git:clone', async (event, url: string, targetDir: string) => {
 // SDK detection
 ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
   return new Promise<{ available: boolean; version?: string; error?: string }>((resolve) => {
-    const cmds: Record<string, string> = {
-      node: 'node --version',
-      php: 'php --version',
-      dotnet: 'dotnet --version',
-      dart: 'dart --version',
+    const cmds: Record<string, { cmd: string; args: string[] }> = {
+      node: { cmd: getBundledRuntimeBinary('node'), args: ['--version'] },
+      php: { cmd: getBundledRuntimeBinary('php'), args: ['--version'] },
+      dotnet: { cmd: getBundledRuntimeBinary('dotnet'), args: ['--version'] },
+      dart: { cmd: getBundledRuntimeBinary('dart'), args: ['--version'] },
     };
     const cmd = cmds[runtime];
     if (!cmd) {
       resolve({ available: false, error: `Unknown runtime: ${runtime}` });
       return;
     }
-    exec(cmd, (error, stdout, stderr) => {
+    execFile(cmd.cmd, cmd.args, (error, stdout, stderr) => {
       if (error) {
         resolve({ available: false, error: error.message });
       } else {
@@ -314,19 +354,19 @@ ipcMain.handle('run:file', async (event, filePath: string) => {
   switch (ext) {
     case 'js':
     case 'ts':
-      cmd = 'node';
+      cmd = getBundledRuntimeBinary('node');
       args = [filePath];
       break;
     case 'php':
-      cmd = 'php';
+      cmd = getBundledRuntimeBinary('php');
       args = ['-f', filePath];
       break;
     case 'cs':
-      cmd = 'dotnet';
+      cmd = getBundledRuntimeBinary('dotnet');
       args = ['script', filePath];
       break;
     case 'dart':
-      cmd = 'dart';
+      cmd = getBundledRuntimeBinary('dart');
       args = ['run', filePath];
       break;
     default:
@@ -336,6 +376,7 @@ ipcMain.handle('run:file', async (event, filePath: string) => {
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
     const child = spawn(cmd, args, {
       cwd: path.dirname(filePath),
+      shell: false,
       env: {
         ...process.env,
         FORCE_COLOR: '0',
@@ -368,13 +409,14 @@ ipcMain.handle('run:file', async (event, filePath: string) => {
 ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
   try {
     const workingDirectory = cwd || process.cwd();
+    const terminalEnv = prependBundledRuntimePaths();
 
     if (process.platform === 'win32') {
-      exec('start powershell', { cwd: workingDirectory });
+      exec('start powershell', { cwd: workingDirectory, env: terminalEnv });
     } else if (process.platform === 'darwin') {
-      exec('open -a Terminal', { cwd: workingDirectory });
+      exec('open -a Terminal', { cwd: workingDirectory, env: terminalEnv });
     } else {
-      exec('x-terminal-emulator', { cwd: workingDirectory });
+      exec('x-terminal-emulator', { cwd: workingDirectory, env: terminalEnv });
     }
 
     return { success: true };
@@ -399,7 +441,7 @@ ipcMain.handle('code:run', async (event, filePath: string) => {
   return new Promise<{ success: boolean; exitCode?: number; error?: string }>((resolve) => {
     const child = spawn(config.cmd, config.args, {
       cwd: path.dirname(filePath),
-      shell: true,
+      shell: false,
       env: { ...process.env, NODE_OPTIONS: '', FORCE_COLOR: '0', NO_COLOR: '1' },
     });
 
@@ -567,6 +609,15 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
     }
 
     return { success: true, result: fullText };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('llama-test-ping', async () => {
+  try {
+    const result = await generate('Write a JS function that adds two numbers');
+    return { success: true, result };
   } catch (err) {
     return { success: false, error: String(err) };
   }

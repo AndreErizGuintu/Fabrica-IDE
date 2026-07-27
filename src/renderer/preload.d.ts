@@ -26,6 +26,7 @@ declare global {
     store: StoreBridge;
     ai: {
       complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+      llamaTestPing: () => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     runner: {
       runFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;

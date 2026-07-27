@@ -44,6 +44,8 @@ release/build
 # Workspace artifacts
 graphify-out/
 Project/
+.vscode/
+resources/models/
 
 # Generated style typings
 *.css.d.ts
@@ -52,3 +54,5 @@ Project/
 
 
 AGENTS.md
+.github/copilot-instructions.md
+.vscode/settings.json
