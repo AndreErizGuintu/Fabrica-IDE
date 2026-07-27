@@ -107,11 +107,8 @@
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",
-<<<<<<< HEAD
-    "process": "^0.11.10",
-=======
     "node-llama-cpp": "^3.19.0",
->>>>>>> ded8c4b50f96e1a87ccf590ed6e6e9a6c0cfa6b7
+    "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-rnd": "^10.5.3",
