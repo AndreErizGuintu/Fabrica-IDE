@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Rnd } from 'react-rnd';
 import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import AIPanel from '../components/ai/AIPanel';
 import { Tab } from '../types/index';
+
+type FloatingPanel = 'preview' | 'ai';
 
 function getLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -25,8 +28,6 @@ function getLanguage(filename: string): string {
   }
 }
 
-// How far (px) the pointer must travel before a mousedown on the docked
-// preview panel counts as a drag-to-detach instead of a click.
 const DETACH_THRESHOLD = 6;
 
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
@@ -46,38 +47,30 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showOutput, setShowOutput] = useState(false);
   const outputEndRef = useRef<HTMLDivElement>(null);
 
-  // Floating panel states - only one panel can float at a time
-  const [floatingPanel, setFloatingPanel] = useState<'preview' | 'ai' | null>(null);
-  const [floatPosition, setFloatPosition] = useState({ x: 100, y: 100 });
-  const [isDraggingFloat, setIsDraggingFloat] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const floatRef = useRef<HTMLDivElement>(null);
+  // Floating panel states
+  const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
+  const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
+    preview: { x: 100, y: 100 },
+    ai: { x: 140, y: 120 },
+  });
+  const [floatSize, setFloatSize] = useState<Record<FloatingPanel, { width: number; height: number }>>({
+    preview: { width: 420, height: 350 },
+    ai: { width: 420, height: 350 },
+  });
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
 
-  // Window resize state - for making the floating window bigger/smaller
-  const [floatSize, setFloatSize] = useState({ width: 420, height: 350 });
-  const [isResizing, setIsResizing] = useState(false);
-  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
-
-  // Fullscreen state for the currently floating panel
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Size/position to restore to after leaving fullscreen
   const preFullscreenRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
-  // Drag-to-detach state: tracks a mousedown on a *docked* panel
-  // that hasn't yet crossed the threshold to become a real float-drag.
-  const [armedDetachPanel, setArmedDetachPanel] = useState<'preview' | 'ai' | null>(null);
+  const [armedDetachPanel, setArmedDetachPanel] = useState<FloatingPanel | null>(null);
   const detachStartRef = useRef({ x: 0, y: 0 });
 
-  // Height of the docked AI panel (resizable by dragging the divider above it).
   const [aiPanelHeight, setAiPanelHeight] = useState(250);
   const [isResizingAIHeight, setIsResizingAIHeight] = useState(false);
   const resizeAIStartRef = useRef({ y: 0, height: 250, containerHeight: 600 });
   const rightPanelContentRef = useRef<HTMLDivElement>(null);
 
-  // Whether the whole right panel (preview + AI) is slid out of view so
-  // students can focus on just the editor. Toggled by the handle button.
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const RIGHT_PANEL_WIDTH = 380;
 
@@ -85,66 +78,108 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const isHtmlFile = activeTab
     ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
     : false;
-  const previewHtml = activeTab?.filename.endsWith('.css')
-    ? `<!DOCTYPE html><html><head><style>${activeTab.content}</style></head><body><div style="padding:20px"><h1>CSS Preview</h1><p>Your styles are applied to this page.</p><button>Button</button></div></body></html>`
-    : activeTab?.content ?? '';
 
-  // Check if floating window overlaps with sidebar for auto-dock
-  const checkDockPosition = (x: number, y: number) => {
-    if (!sidebarRef.current) return false;
+  // FIXED: Proper preview HTML generation without duplication
+  const previewHtml = useMemo(() => {
+    if (!activeTab) return '';
+    if (activeTab.filename.endsWith('.css')) {
+      return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .preview-container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        ${activeTab.content}
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <h1>CSS Preview</h1>
+        <p style="color: #666; margin: 16px 0;">Your styles are applied to this page.</p>
+        <button style="padding: 10px 24px; border: none; border-radius: 6px; background: #6c5ce7; color: white; cursor: pointer; font-size: 16px;">Button</button>
+        <div style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <p style="color: #333;">This is a sample card to preview your CSS styles.</p>
+            <p style="color: #666; font-size: 14px; margin-top: 8px;">Try styling: backgrounds, colors, fonts, borders, spacing, etc.</p>
+        </div>
+    </div>
+</body>
+</html>`;
+    }
+    return activeTab.content;
+  }, [activeTab]);
+
+  // Check docking position - works for both left and right
+  const checkDockPosition = useCallback((x: number, y: number, width: number, height: number) => {
+    if (!sidebarRef.current) return null;
+    
     const sidebarRect = sidebarRef.current.getBoundingClientRect();
-    return x < sidebarRect.right + 50 && x > sidebarRect.left - 50;
-  };
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    // If window is near the left side (sidebar area)
+    if (x < sidebarRect.right + 30 && x > sidebarRect.left - 30) {
+      return 'sidebar';
+    }
+    
+    // If window is near the right side (where the right panel is)
+    const rightPanelX = sidebarRect.right + 50;
+    if (x > rightPanelX - 50 && x < rightPanelX + 50) {
+      return 'right-panel';
+    }
+    
+    // If window is in the right half of the screen
+    if (x > windowWidth / 2) {
+      return 'right-panel';
+    }
+    
+    return null;
+  }, []);
 
-  const zoomIn = () => {
+  const zoomIn = useCallback(() => {
     setPreviewZoom((prev) => Math.min(prev + 0.1, 2));
-  };
+  }, []);
 
-  const zoomOut = () => {
+  const zoomOut = useCallback(() => {
     setPreviewZoom((prev) => Math.max(prev - 0.1, 0.5));
-  };
+  }, []);
 
-  const resetZoom = () => {
+  const resetZoom = useCallback(() => {
     setPreviewZoom(1);
-  };
+  }, []);
 
-  const dockPanel = () => {
+  const dockPanel = useCallback(() => {
     setFloatingPanel(null);
     setIsFullscreen(false);
     preFullscreenRef.current = null;
     setPreviewZoom(1);
-  };
+  }, []);
 
-  // Dimensions a given panel uses while floating (AI is fixed-size, Preview is resizable).
-  const getFloatDims = (panel: 'preview' | 'ai' | null) => {
-    if (panel === 'ai') return { width: 420, height: 350 };
-    return { width: floatSize.width, height: floatSize.height };
-  };
-
-  // Begin dragging a mousedown on a docked panel (preview or AI). If the
-  // pointer moves far enough before mouseup, this converts into a real
-  // float-drag (handled in the mousemove effect below). There is no
-  // explicit button for this - it only happens by dragging.
-  const handleDetachMouseDown = (panel: 'preview' | 'ai') => (e: React.MouseEvent) => {
+  const handleDetachMouseDown = useCallback((panel: FloatingPanel) => (e: React.MouseEvent) => {
     if (floatingPanel === panel) return;
     if ((e.target as HTMLElement).closest('.float-controls')) return;
     detachStartRef.current = { x: e.clientX, y: e.clientY };
     setArmedDetachPanel(panel);
-  };
+  }, [floatingPanel]);
 
-  // Float drag handlers (used once a panel is already floating)
-  const handleFloatMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.float-controls')) return;
-    if (isFullscreen) return;
-    e.preventDefault();
-    setIsDraggingFloat(true);
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  // Drag the divider between the docked Preview and AI panel to resize
-  // the AI panel's height (expand/collapse it up or down).
-  const handleAIResizeMouseDown = (e: React.MouseEvent) => {
+  const handleAIResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     resizeAIStartRef.current = {
       y: e.clientY,
@@ -152,79 +187,116 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       containerHeight: rightPanelContentRef.current?.clientHeight ?? 600,
     };
     setIsResizingAIHeight(true);
-  };
+  }, [aiPanelHeight]);
 
-  // Resize handler
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isFullscreen) return;
-    setIsResizing(true);
-    setResizeStart({
-      x: e.clientX,
-      y: e.clientY,
-      width: floatSize.width,
-      height: floatSize.height,
-    });
-  };
-
-  const toggleFullscreen = () => {
+  // FIXED: Simplified toggleFullscreen to avoid concurrent rendering issues
+  const toggleFullscreen = useCallback(() => {
     if (!floatingPanel) return;
-    setIsFullscreen((prev) => {
-      const next = !prev;
-      if (next) {
-        preFullscreenRef.current = { x: floatPosition.x, y: floatPosition.y, width: floatSize.width, height: floatSize.height };
+    const panel = floatingPanel;
+    
+    // Use a single state update with a function to avoid batching issues
+    setIsFullscreen((prevIsFullscreen) => {
+      const nextIsFullscreen = !prevIsFullscreen;
+      
+      if (nextIsFullscreen) {
+        // Save current state before going fullscreen
+        preFullscreenRef.current = {
+          x: floatPosition[panel]?.x ?? 100,
+          y: floatPosition[panel]?.y ?? 100,
+          width: floatSize[panel]?.width ?? 420,
+          height: floatSize[panel]?.height ?? 350,
+        };
+        
+        // Set fullscreen position immediately
+        setTimeout(() => {
+          setFloatPosition((prev) => ({
+            ...prev,
+            [panel]: { x: 0, y: 0 },
+          }));
+          setFloatSize((prev) => ({
+            ...prev,
+            [panel]: { width: window.innerWidth, height: window.innerHeight },
+          }));
+        }, 0);
       } else if (preFullscreenRef.current) {
-        setFloatPosition({ x: preFullscreenRef.current.x, y: preFullscreenRef.current.y });
-        setFloatSize({ width: preFullscreenRef.current.width, height: preFullscreenRef.current.height });
-        preFullscreenRef.current = null;
+        // Restore saved state
+        const saved = preFullscreenRef.current;
+        setTimeout(() => {
+          setFloatPosition((prev) => ({
+            ...prev,
+            [panel]: { x: saved.x, y: saved.y },
+          }));
+          setFloatSize((prev) => ({
+            ...prev,
+            [panel]: { width: saved.width, height: saved.height },
+          }));
+          preFullscreenRef.current = null;
+        }, 0);
       }
-      return next;
+      
+      return nextIsFullscreen;
     });
-  };
+  }, [floatingPanel, floatPosition, floatSize]);
+
+  const handleFloatDragStop = useCallback((_event: any, data: any) => {
+    if (!floatingPanel || isFullscreen) return;
+    const panel = floatingPanel;
+    
+    const panelSize = floatSize[panel];
+    if (!panelSize) return;
+    
+    const dockTarget = checkDockPosition(
+      data.x, 
+      data.y, 
+      panelSize.width, 
+      panelSize.height
+    );
+    
+    if (dockTarget) {
+      setFloatingPanel(null);
+      setIsFullscreen(false);
+      preFullscreenRef.current = null;
+      if (panel === 'preview') setPreviewZoom(1);
+    } else {
+      setFloatPosition((prev) => ({ ...prev, [panel]: { x: data.x, y: data.y } }));
+    }
+  }, [floatingPanel, isFullscreen, floatSize, checkDockPosition]);
+
+  const handleFloatResizeStop = useCallback((_event: any, _direction: any, ref: any, _delta: any, position: any) => {
+    if (!floatingPanel || isFullscreen) return;
+    const panel = floatingPanel;
+    setFloatSize((prev) => ({
+      ...prev,
+      [panel]: { width: ref.offsetWidth, height: ref.offsetHeight },
+    }));
+    setFloatPosition((prev) => ({
+      ...prev,
+      [panel]: { x: position.x, y: position.y },
+    }));
+  }, [floatingPanel, isFullscreen]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      // Drag-to-detach: pointer moved far enough from a docked-panel
-      // mousedown to convert it into a floating drag.
-      if (armedDetachPanel && !isDraggingFloat) {
+      if (armedDetachPanel) {
         const dx = e.clientX - detachStartRef.current.x;
         const dy = e.clientY - detachStartRef.current.y;
         if (Math.sqrt(dx * dx + dy * dy) > DETACH_THRESHOLD) {
-          const dims = getFloatDims(armedDetachPanel);
+          const panel = armedDetachPanel;
+          const dims = floatSize[panel];
+          if (!dims) return;
           const offset = { x: 24, y: 12 };
           const newX = Math.min(Math.max(e.clientX - offset.x, 0), window.innerWidth - dims.width);
           const newY = Math.min(Math.max(e.clientY - offset.y, 0), window.innerHeight - dims.height);
-          setFloatPosition({ x: newX, y: newY });
-          setFloatingPanel(armedDetachPanel);
-          if (armedDetachPanel === 'preview') setPreviewZoom(1);
-          setDragOffset(offset);
-          setIsDraggingFloat(true);
+          setFloatPosition((prev) => ({
+            ...prev,
+            [panel]: { x: newX, y: newY },
+          }));
+          setFloatingPanel(panel);
+          if (panel === 'preview') setPreviewZoom(1);
           setArmedDetachPanel(null);
         }
       }
 
-      if (isDraggingFloat) {
-        const dims = getFloatDims(floatingPanel);
-        const newX = Math.min(Math.max(e.clientX - dragOffset.x, 0), window.innerWidth - dims.width);
-        const newY = Math.min(Math.max(e.clientY - dragOffset.y, 0), window.innerHeight - dims.height);
-        setFloatPosition({ x: newX, y: newY });
-
-        if (checkDockPosition(newX, newY) && floatingPanel) {
-          dockPanel();
-          setIsDraggingFloat(false);
-        }
-      }
-
-      // Handle resizing
-      if (isResizing) {
-        const newWidth = Math.max(300, resizeStart.width + (e.clientX - resizeStart.x));
-        const newHeight = Math.max(250, resizeStart.height + (e.clientY - resizeStart.y));
-        setFloatSize({ width: newWidth, height: newHeight });
-      }
-
-      // Handle dragging the docked AI panel's top divider - moving up
-      // grows the AI panel, moving down shrinks it back toward the preview.
       if (isResizingAIHeight) {
         const { y, height, containerHeight } = resizeAIStartRef.current;
         const dy = e.clientY - y;
@@ -235,13 +307,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     };
 
     const handleMouseUp = () => {
-      setIsDraggingFloat(false);
-      setIsResizing(false);
       setArmedDetachPanel(null);
       setIsResizingAIHeight(false);
     };
 
-    if (isDraggingFloat || isResizing || armedDetachPanel || isResizingAIHeight) {
+    if (armedDetachPanel || isResizingAIHeight) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
@@ -250,27 +320,30 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingFloat, dragOffset, isResizing, resizeStart, floatSize, floatingPanel, armedDetachPanel, isResizingAIHeight]);
+  }, [armedDetachPanel, floatSize, isResizingAIHeight]);
 
-  const openFileInTab = (filePath: string, filename: string, content: string) => {
-    const existing = tabs.findIndex((tab) => tab.path === filePath);
-    if (existing !== -1) {
-      setActiveTabIndex(existing);
-      return;
-    }
-    const newTab: Tab = { filename, path: filePath, content, isDirty: false };
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabIndex(tabs.length);
-  };
+  const openFileInTab = useCallback((filePath: string, filename: string, content: string) => {
+    setTabs((prev) => {
+      const existing = prev.findIndex((tab) => tab.path === filePath);
+      if (existing !== -1) {
+        setActiveTabIndex(existing);
+        return prev;
+      }
+      const newTab: Tab = { filename, path: filePath, content, isDirty: false };
+      const newTabs = [...prev, newTab];
+      setActiveTabIndex(newTabs.length - 1);
+      return newTabs;
+    });
+  }, []);
 
-  const handleFileOpen = async (filePath: string, filename: string) => {
+  const handleFileOpen = useCallback(async (filePath: string, filename: string) => {
     const result = await window.fileSystem.readFile(filePath);
     if (result.success && result.content !== undefined) {
       openFileInTab(filePath, filename, result.content);
     }
-  };
+  }, [openFileInTab]);
 
-  const handleEditorChange = (value: string | undefined) => {
+  const handleEditorChange = useCallback((value: string | undefined) => {
     if (!activeTab) return;
     setTabs((prev) =>
       prev.map((tab, index) =>
@@ -279,9 +352,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           : tab,
       ),
     );
-  };
+  }, [activeTab, activeTabIndex]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!activeTab || !activeTab.path) return;
     const result = await window.fileSystem.writeFile(activeTab.path, activeTab.content);
     if (result.success) {
@@ -291,9 +364,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         ),
       );
     }
-  };
+  }, [activeTab, activeTabIndex]);
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
     if (!activeTab?.path) {
       setOutputLines([{ text: 'No file saved. Save the file before running.', type: 'error' }]);
       setShowOutput(true);
@@ -346,9 +419,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     });
 
     await window.runner.runFile(activeTab.path);
-  };
+  }, [activeTab]);
 
-  const runGitCommand = async (
+  const runGitCommand = useCallback(async (
     label: string,
     fn: () => Promise<{ success: boolean; output: string; error?: string }>,
   ) => {
@@ -372,9 +445,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     } finally {
       setGitLoading(false);
     }
-  };
+  }, [initialFolder]);
 
-  const refreshGitStatus = async () => {
+  const refreshGitStatus = useCallback(async () => {
     if (!initialFolder) return;
     const [statusResult, logResult] = await Promise.all([
       window.git.statusFiles(initialFolder),
@@ -400,15 +473,15 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     } else {
       setGitLog([]);
     }
-  };
+  }, [initialFolder]);
 
   useEffect(() => {
     if (initialFolder) {
       void refreshGitStatus();
     }
-  }, [initialFolder]);
+  }, [initialFolder, refreshGitStatus]);
 
-  const handleOpenFileDialog = async () => {
+  const handleOpenFileDialog = useCallback(async () => {
     const filePath = await window.fileSystem.openFile();
     if (!filePath) return;
     const result = await window.fileSystem.readFile(filePath);
@@ -416,17 +489,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       const filename = filePath.split('\\').pop() ?? filePath;
       openFileInTab(filePath, filename, result.content);
     }
-  };
+  }, [openFileInTab]);
 
-  const handleCloseTab = (index: number) => {
-    const newTabs = tabs.filter((_, tabIndex) => tabIndex !== index);
-    setTabs(newTabs);
-    if (newTabs.length === 0) {
-      setActiveTabIndex(0);
-    } else {
-      setActiveTabIndex(Math.min(activeTabIndex, newTabs.length - 1));
-    }
-  };
+  const handleCloseTab = useCallback((index: number) => {
+    setTabs((prev) => {
+      const newTabs = prev.filter((_, tabIndex) => tabIndex !== index);
+      if (newTabs.length === 0) {
+        setActiveTabIndex(0);
+      } else if (index < activeTabIndex) {
+        setActiveTabIndex(activeTabIndex - 1);
+      } else if (index === activeTabIndex) {
+        setActiveTabIndex(Math.min(activeTabIndex, newTabs.length - 1));
+      } else {
+        setActiveTabIndex(activeTabIndex);
+      }
+      return newTabs;
+    });
+  }, [activeTabIndex]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -437,7 +516,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab]);
+  }, [activeTab, handleSave]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -458,16 +537,18 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [floatingPanel]);
+  }, [floatingPanel, zoomIn, zoomOut, resetZoom]);
 
-  // Fullscreen toggling / exit for whichever panel is currently floating.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!floatingPanel) return;
-      if (event.key === 'F11') {
+      
+      if (event.key === 'Escape' && !isFullscreen) {
         event.preventDefault();
-        toggleFullscreen();
-      } else if (event.key === 'Escape' && isFullscreen) {
+        dockPanel();
+      }
+      
+      if (event.key === 'F11') {
         event.preventDefault();
         toggleFullscreen();
       }
@@ -475,9 +556,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [floatingPanel, isFullscreen, floatPosition, floatSize]);
+  }, [floatingPanel, isFullscreen, dockPanel, toggleFullscreen]);
 
-  // Leaving float mode entirely always clears fullscreen.
   useEffect(() => {
     if (!floatingPanel) {
       setIsFullscreen(false);
@@ -493,21 +573,27 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (showGit) {
       void refreshGitStatus();
     }
-  }, [showGit, initialFolder]);
+  }, [showGit, refreshGitStatus]);
 
+  // Safe access with null checks
+  const currentFloatingPanel = floatingPanel ?? 'preview';
+  const currentSize = floatSize[currentFloatingPanel] || { width: 420, height: 350 };
+  const currentPosition = floatPosition[currentFloatingPanel] || { x: 100, y: 100 };
+  
   const floatStyle = isFullscreen
     ? {
         width: '100vw',
         height: '100vh',
-        left: 0,
-        top: 0,
+        x: 0,
+        y: 0,
         borderRadius: 0,
       }
     : {
-        width: `${floatSize.width}px`,
-        height: `${floatSize.height}px`,
-        left: floatPosition.x,
-        top: floatPosition.y,
+        width: currentSize.width,
+        height: currentSize.height,
+        x: currentPosition.x,
+        y: currentPosition.y,
+        borderRadius: 8,
       };
 
   return (
@@ -686,7 +772,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 />
               </div>
 
-              {/* Right Panel - Preview and AI, collapsible so students can focus on just the editor */}
+              {/* Right Panel */}
               <div className="flex shrink-0 relative">
                 <button
                   type="button"
@@ -710,6 +796,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   }}
                 >
                   <div ref={rightPanelContentRef} className="flex flex-col h-full" style={{ width: `${RIGHT_PANEL_WIDTH}px` }}>
+                    {/* Preview Panel - Drag to float */}
                     {floatingPanel !== 'preview' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
@@ -732,11 +819,17 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           </span>
                         </div>
                         <div className="flex-1 overflow-hidden">
-                          <Preview html={previewHtml} isHtmlFile={isHtmlFile} zoom={1} />
+                          <Preview 
+                            key={activeTab?.path + previewHtml}
+                            html={previewHtml} 
+                            isHtmlFile={isHtmlFile} 
+                            zoom={1} 
+                          />
                         </div>
                       </div>
                     )}
 
+                    {/* AI Panel - Drag to float */}
                     {showAI && floatingPanel !== 'ai' && (
                       <>
                         {floatingPanel !== 'preview' && (
@@ -1073,15 +1166,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         )}
       </div>
 
+      {/* Floating Preview */}
       {floatingPanel === 'preview' && (
-        <div
-          ref={floatRef}
-          className="fixed shadow-2xl border"
+        <Rnd
+          size={{ width: floatStyle.width, height: floatStyle.height }}
+          position={{ x: floatStyle.x, y: floatStyle.y }}
+          minWidth={320}
+          minHeight={240}
+          bounds="window"
+          disableDragging={isFullscreen}
+          enableResizing={!isFullscreen}
+          dragHandleClassName="float-drag-handle"
+          onDragStop={handleFloatDragStop}
+          onResizeStop={handleFloatResizeStop}
           style={{
-            ...floatStyle,
-            borderRadius: isFullscreen ? 0 : '0.5rem',
+            borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
             backgroundColor: '#1e1e2e',
-            borderColor: '#2d2d3a',
+            border: '1px solid #2d2d3a',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(167, 139, 250, 0.15)',
             zIndex: 1000,
             display: 'flex',
@@ -1091,55 +1192,70 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }}
         >
           <div
-            className="flex items-center justify-between px-3 py-1 shrink-0 select-none"
+            className="float-drag-handle flex items-center justify-between px-3 py-1 shrink-0 select-none"
             style={{
               background: '#252535',
               borderBottom: '1px solid #2d2d3a',
               cursor: isFullscreen ? 'default' : 'move',
             }}
-            onMouseDown={handleFloatMouseDown}
             onDoubleClick={toggleFullscreen}
             title="Drag to move • double-click to toggle fullscreen"
           >
             <span className="text-xs font-medium" style={{ color: '#6b7280' }}>
               🔍 Live Preview
             </span>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom Out">➖</button>
-              <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
-              <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom In">➕</button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Reset Zoom">⟲</button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom Out">➖</button>
+                <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Zoom In">➕</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1" style={{ color: '#52525b' }} title="Reset Zoom">⟲</button>
+              </div>
+              
+              {isFullscreen && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className="text-[10px] hover:text-white transition-colors px-1"
+                  style={{ color: '#a78bfa' }}
+                  title="Exit Fullscreen (F11 or Escape)"
+                >
+                  ⛶ Exit
+                </button>
+              )}
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <Preview html={previewHtml} isHtmlFile={isHtmlFile} zoom={previewZoom} />
-          </div>
-          {!isFullscreen && (
-            <div
-              className="absolute bottom-0 right-0 w-4 h-4"
-              style={{
-                background: 'transparent',
-                borderRight: '2px solid #3d3d4a',
-                borderBottom: '2px solid #3d3d4a',
-                borderRadius: '0 0 4px 0',
-                cursor: 'se-resize',
-              }}
-              onMouseDown={handleResizeStart}
+            <Preview 
+              key={activeTab?.path + previewHtml}
+              html={previewHtml} 
+              isHtmlFile={isHtmlFile} 
+              zoom={previewZoom} 
             />
-          )}
-        </div>
+          </div>
+        </Rnd>
       )}
 
+      {/* Floating AI */}
       {floatingPanel === 'ai' && (
-        <div
-          ref={floatRef}
-          className="fixed shadow-2xl border"
+        <Rnd
+          size={{ width: floatStyle.width, height: floatStyle.height }}
+          position={{ x: floatStyle.x, y: floatStyle.y }}
+          minWidth={320}
+          minHeight={220}
+          bounds="window"
+          disableDragging={isFullscreen}
+          enableResizing={!isFullscreen}
+          dragHandleClassName="float-drag-handle"
+          onDragStop={handleFloatDragStop}
+          onResizeStop={handleFloatResizeStop}
           style={{
-            ...(isFullscreen
-              ? { width: '100vw', height: '100vh', left: 0, top: 0, borderRadius: 0 }
-              : { width: '420px', height: '350px', left: floatPosition.x, top: floatPosition.y, borderRadius: '0.5rem' }),
+            borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
             backgroundColor: '#1e1e2e',
-            borderColor: '#2d2d3a',
+            border: '1px solid #2d2d3a',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(167, 139, 250, 0.15)',
             zIndex: 1000,
             display: 'flex',
@@ -1149,13 +1265,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }}
         >
           <div
-            className="flex items-center justify-between px-3 py-1 shrink-0 select-none"
+            className="float-drag-handle flex items-center justify-between px-3 py-1 shrink-0 select-none"
             style={{
               background: '#252535',
               borderBottom: '1px solid #2d2d3a',
               cursor: isFullscreen ? 'default' : 'move',
             }}
-            onMouseDown={handleFloatMouseDown}
             onDoubleClick={toggleFullscreen}
             title="Drag to move • double-click to toggle fullscreen"
           >
@@ -1163,13 +1278,35 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               ✨ AI Assistant
             </span>
             <div className="flex items-center gap-2 float-controls">
-              <button type="button" onClick={() => { dockPanel(); setShowAI(false); }} className="text-[10px] hover:text-white transition-colors" style={{ color: '#52525b' }} title="Close AI">✕</button>
+              {isFullscreen && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className="text-[10px] hover:text-white transition-colors px-1"
+                  style={{ color: '#a78bfa' }}
+                  title="Exit Fullscreen (F11 or Escape)"
+                >
+                  ⛶ Exit
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { dockPanel(); setShowAI(false); }}
+                className="text-[10px] hover:text-white transition-colors"
+                style={{ color: '#52525b' }}
+                title="Close AI"
+              >
+                ✕
+              </button>
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
             <AIPanel selectedCode={selectedCode} />
           </div>
-        </div>
+        </Rnd>
       )}
 
       {/* Output Panel */}

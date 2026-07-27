@@ -103,11 +103,14 @@
   "dependencies": {
     "@electron/notarize": "^3.0.0",
     "@monaco-editor/react": "^4.7.0",
+    "@vscode/codicons": "^0.0.46-24",
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",
+    "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-rnd": "^10.5.3",
     "react-router-dom": "^7.3.0"
   },
   "devDependencies": {

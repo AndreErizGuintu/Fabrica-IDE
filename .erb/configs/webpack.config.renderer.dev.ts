@@ -138,6 +138,10 @@ const configuration: webpack.Configuration = {
 
     new webpack.NoEmitOnErrorsPlugin(),
 
+    new webpack.DefinePlugin({
+      'process.env.DRAGGABLE_DEBUG': JSON.stringify(false),
+    }),
+
     /**
      * Create global constants which can be configured at compile time.
      *

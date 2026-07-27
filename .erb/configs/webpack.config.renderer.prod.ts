@@ -144,6 +144,7 @@ const configuration: webpack.Configuration = {
     }),
 
     new webpack.DefinePlugin({
+      'process.env.DRAGGABLE_DEBUG': JSON.stringify(false),
       'process.type': '"renderer"',
     }),
   ],
