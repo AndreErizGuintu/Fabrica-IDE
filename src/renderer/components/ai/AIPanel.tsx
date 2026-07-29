@@ -117,6 +117,14 @@ function buildChatPrompt(systemPrompt: string, messages: ChatMessage[], userMess
   return `${systemPrompt}\n\n${formattedTranscript}\nAssistant:`;
 }
 
+function getCompletionErrorText(error?: string) {
+  if (typeof error === 'string' && error.trim() && error.trim() !== 'undefined') {
+    return `⚠️ ${error.trim()}`;
+  }
+
+  return '⚠️ AI request failed';
+}
+
 export default function AIPanel({ selectedCode }: AIPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('ask');
   const [response, setResponse] = useState('');
@@ -137,7 +145,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
         selectedCode: string;
         language: string;
       }) => Promise<void>;
-      complete: (prompt: string) => Promise<void>;
+      complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     electron?: {
       ipcRenderer: {
@@ -179,7 +187,43 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     });
 
     try {
-      await appWindow.ai?.complete(buildChatPrompt(systemPrompt, messages, trimmedPrompt));
+      const completion = await appWindow.ai?.complete(buildChatPrompt(systemPrompt, messages, trimmedPrompt));
+
+      if (!completion?.success) {
+        const errorText = getCompletionErrorText(completion?.error);
+        setMessages((prev) => {
+          const next = [...prev];
+
+          for (let index = next.length - 1; index >= 0; index -= 1) {
+            if (next[index]?.role === 'assistant') {
+              next[index] = {
+                ...next[index],
+                content: errorText,
+              };
+              break;
+            }
+          }
+
+          return next;
+        });
+      }
+    } catch (err) {
+      const errorText = getCompletionErrorText(err instanceof Error ? err.message : String(err));
+      setMessages((prev) => {
+        const next = [...prev];
+
+        for (let index = next.length - 1; index >= 0; index -= 1) {
+          if (next[index]?.role === 'assistant') {
+            next[index] = {
+              ...next[index],
+              content: errorText,
+            };
+            break;
+          }
+        }
+
+        return next;
+      });
     } finally {
       if (removeListener) removeListener();
       setLoadingState(false);
