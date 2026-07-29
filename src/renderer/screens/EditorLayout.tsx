@@ -79,7 +79,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
     : false;
 
-  // FIXED: Proper preview HTML generation without duplication
   const previewHtml = useMemo(() => {
     if (!activeTab) return '';
     if (activeTab.filename.endsWith('.css')) {
@@ -126,20 +125,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     return activeTab.content;
   }, [activeTab]);
 
-  // Check docking position - works for both left and right
+  // FIXED: ONLY dock when dragged to the RIGHT side
   const checkDockPosition = useCallback((x: number, y: number, width: number, height: number) => {
     if (!sidebarRef.current) return null;
     
     const sidebarRect = sidebarRef.current.getBoundingClientRect();
     const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
     
-    // If window is near the left side (sidebar area)
-    if (x < sidebarRect.right + 30 && x > sidebarRect.left - 30) {
-      return 'sidebar';
-    }
-    
-    // If window is near the right side (where the right panel is)
+    // ONLY dock when dragged to the RIGHT side (where the panel came from)
     const rightPanelX = sidebarRect.right + 50;
     if (x > rightPanelX - 50 && x < rightPanelX + 50) {
       return 'right-panel';
@@ -150,6 +143,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       return 'right-panel';
     }
     
+    // REMOVED: left side docking - now returns null instead of 'sidebar'
     return null;
   }, []);
 
@@ -189,52 +183,32 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     setIsResizingAIHeight(true);
   }, [aiPanelHeight]);
 
-  // FIXED: Simplified toggleFullscreen to avoid concurrent rendering issues
   const toggleFullscreen = useCallback(() => {
     if (!floatingPanel) return;
     const panel = floatingPanel;
-    
-    // Use a single state update with a function to avoid batching issues
-    setIsFullscreen((prevIsFullscreen) => {
-      const nextIsFullscreen = !prevIsFullscreen;
-      
-      if (nextIsFullscreen) {
-        // Save current state before going fullscreen
+    setIsFullscreen((prev) => {
+      const next = !prev;
+      if (next) {
         preFullscreenRef.current = {
           x: floatPosition[panel]?.x ?? 100,
           y: floatPosition[panel]?.y ?? 100,
           width: floatSize[panel]?.width ?? 420,
           height: floatSize[panel]?.height ?? 350,
         };
-        
-        // Set fullscreen position immediately
-        setTimeout(() => {
-          setFloatPosition((prev) => ({
-            ...prev,
-            [panel]: { x: 0, y: 0 },
-          }));
-          setFloatSize((prev) => ({
-            ...prev,
-            [panel]: { width: window.innerWidth, height: window.innerHeight },
-          }));
-        }, 0);
+        return true;
       } else if (preFullscreenRef.current) {
-        // Restore saved state
-        const saved = preFullscreenRef.current;
-        setTimeout(() => {
-          setFloatPosition((prev) => ({
-            ...prev,
-            [panel]: { x: saved.x, y: saved.y },
-          }));
-          setFloatSize((prev) => ({
-            ...prev,
-            [panel]: { width: saved.width, height: saved.height },
-          }));
-          preFullscreenRef.current = null;
-        }, 0);
+        setFloatPosition((prevPos) => ({
+          ...prevPos,
+          [panel]: { x: preFullscreenRef.current!.x, y: preFullscreenRef.current!.y },
+        }));
+        setFloatSize((prevSize) => ({
+          ...prevSize,
+          [panel]: { width: preFullscreenRef.current!.width, height: preFullscreenRef.current!.height },
+        }));
+        preFullscreenRef.current = null;
+        return false;
       }
-      
-      return nextIsFullscreen;
+      return false;
     });
   }, [floatingPanel, floatPosition, floatSize]);
 
@@ -575,7 +549,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
   }, [showGit, refreshGitStatus]);
 
-  // Safe access with null checks
   const currentFloatingPanel = floatingPanel ?? 'preview';
   const currentSize = floatSize[currentFloatingPanel] || { width: 420, height: 350 };
   const currentPosition = floatPosition[currentFloatingPanel] || { x: 100, y: 100 };

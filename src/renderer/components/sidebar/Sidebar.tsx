@@ -215,17 +215,17 @@ interface NewEntryRowProps {
 // is the piece that makes it feel like VS Code's explorer instead of a
 // separate text box floating above the tree.
 function NewEntryRow({ depth, type, value, onChange, onSubmit, onCancel }: NewEntryRowProps) {
-  const indent = depth * 12;
+  const indent = depth * 16;
   return (
     <div
-      className="w-full flex items-center gap-1.5"
+      className="w-full flex items-center gap-2"
       style={{
-        paddingLeft: `${indent + 8}px`,
-        paddingRight: '8px',
-        minHeight: '22px',
+        paddingLeft: `${indent + 12}px`,
+        paddingRight: '12px',
+        minHeight: '28px',
       }}
     >
-      <span style={{ fontSize: '14px', flexShrink: 0, width: '18px', textAlign: 'center' }}>
+      <span style={{ fontSize: '16px', flexShrink: 0, width: '22px', textAlign: 'center' }}>
         {type === 'file' ? '📄' : '📁'}
       </span>
       <input
@@ -305,7 +305,7 @@ function TreeNodeRow({
 }: TreeNodeRowProps) {
   const isActive = !node.entry.isDirectory && activeFilePath === node.entry.path;
   const isSelectedFolder = node.entry.isDirectory && selectedFolderPath === node.entry.path;
-  const indent = depth * 12;
+  const indent = depth * 16;
   const badge = !node.entry.isDirectory ? getStatusBadge(gitStatusMap[node.entry.path]) : null;
   const icon = getFileIcon(node.entry.name, node.entry.isDirectory);
   const isCreatingHere = node.entry.isDirectory && newEntry?.parentPath === node.entry.path;
@@ -316,7 +316,6 @@ function TreeNodeRow({
         type="button"
         onClick={() => {
           if (node.entry.isDirectory) {
-            // Select the folder AND toggle it open
             if (onSelectFolder) {
               onSelectFolder(node.entry.path);
             }
@@ -326,16 +325,16 @@ function TreeNodeRow({
           }
         }}
         onContextMenu={(e) => onContextMenu(e, node.entry)}
-        className="w-full text-left py-0.5 flex items-center gap-1.5 truncate"
+        className="w-full text-left py-1 flex items-center gap-2 hover:bg-white/5 transition-colors group"
         style={{
-          paddingLeft: `${indent + 8}px`,
-          paddingRight: '8px',
+          paddingLeft: `${indent + 12}px`,
+          paddingRight: '12px',
           color: isActive || isSelectedFolder ? '#ffffff' : '#a7adc5',
           borderLeft: isActive || isSelectedFolder ? '2px solid #a855f7' : '2px solid transparent',
           background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.12)' : 'transparent',
           fontFamily: 'Space Mono, monospace',
-          fontSize: '12px',
-          minHeight: '22px',
+          fontSize: '13px',
+          minHeight: '28px',
         }}
       >
         {node.entry.isDirectory && (
@@ -343,7 +342,7 @@ function TreeNodeRow({
             {node.isOpen ? '▼' : '▶'}
           </span>
         )}
-        <span style={{ fontSize: '14px', flexShrink: 0, width: '18px', textAlign: 'center' }}>
+        <span style={{ fontSize: '16px', flexShrink: 0, width: '22px', textAlign: 'center' }}>
           {icon}
         </span>
         {renamingPath === node.entry.path ? (
@@ -368,9 +367,18 @@ function TreeNodeRow({
             }}
           />
         ) : (
-          <span className="truncate" style={{ color: badge ? badge.color : '#a7adc5' }}>
-            {node.entry.name}
-          </span>
+          // FIXED: Properly truncate with ellipsis - wrapped in div with min-w-0
+          <div className="flex-1 min-w-0">
+            <span 
+              className="block truncate"
+              style={{ 
+                color: badge ? badge.color : '#a7adc5',
+              }}
+              title={node.entry.name}
+            >
+              {node.entry.name}
+            </span>
+          </div>
         )}
         {badge && (
           <span
@@ -427,10 +435,10 @@ function TreeNodeRow({
           {node.children.length === 0 && !isCreatingHere && (
             <div
               style={{
-                paddingLeft: `${(depth + 1) * 12 + 8}px`,
-                fontSize: '11px',
+                paddingLeft: `${(depth + 1) * 16 + 12}px`,
+                fontSize: '12px',
                 color: '#4b5563',
-                minHeight: '20px',
+                minHeight: '24px',
                 display: 'flex',
                 alignItems: 'center',
                 fontFamily: 'Space Mono, monospace',
@@ -459,7 +467,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   const [renameValue, setRenameValue] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
-  // Memoized instead of recomputed-and-thrown-away on every render.
   const gitStatusMap = useMemo(
     () => buildGitStatusMap(gitStatusFiles ?? [], folderName ?? undefined),
     [gitStatusFiles, folderName]
@@ -527,8 +534,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     setTree(updated);
   };
 
-  // Refreshes the tree from disk without collapsing anything the user
-  // already has open (used after create/rename/delete).
   const refreshTreeKeepingOpen = async () => {
     if (!folderName) return;
     const updated = await refreshTree(folderName, treeRef.current);
@@ -539,9 +544,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     await refreshTreeKeepingOpen();
   };
 
-  // Opens the inline "name it" row nested under whichever folder is
-  // selected (or at the root, if nothing/only the root is selected) —
-  // mirrors clicking the New File / New Folder icons in VS Code's explorer.
   const handleNewEntryClick = async (type: 'file' | 'folder') => {
     const target = selectedFolder || folderName;
     if (!target) return;
@@ -560,8 +562,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     const { parentPath, type } = newEntry;
     const trimmed = newEntryValue.trim();
 
-    // Clear immediately so Enter (which blurs the input) and the resulting
-    // onBlur don't both try to submit.
     setNewEntry(null);
     setNewEntryValue('');
 
@@ -635,20 +635,20 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   const isCreatingAtRoot = !!(newEntry && folderName && newEntry.parentPath === folderName);
 
   return (
-    <div className="flex flex-col h-full w-48 overflow-hidden" style={{ background: '#2d1b4e' }}>
+    <div className="flex flex-col h-full w-64 overflow-hidden" style={{ background: '#2d1b4e' }}>
       {/* Header */}
-      <div className="px-3 py-2 flex items-center justify-between shrink-0">
+      <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #1a0a2e' }}>
         <span
-          className="text-xs font-bold tracking-widest"
+          className="text-xs font-bold tracking-widest uppercase"
           style={{ color: '#6b7280', fontFamily: 'Space Mono, monospace' }}
         >
           EXPLORER
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleOpenFolder}
-            className="text-xs px-2 py-1 rounded"
+            className="text-xs px-3 py-1 rounded transition-colors hover:opacity-80"
             style={{ background: '#a855f7', color: '#ffffff' }}
           >
             Open
@@ -656,8 +656,8 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
           <button
             type="button"
             onClick={() => void handleNewEntryClick('file')}
-            className="w-6 h-6 flex items-center justify-center rounded text-sm"
-            style={{ background: '#2d1b4e', color: '#a855f7', border: '1px solid #a855f7' }}
+            className="w-7 h-7 flex items-center justify-center rounded transition-colors hover:bg-white/10"
+            style={{ color: '#a855f7' }}
             title={`New File in ${selectedFolderName || 'root'}`}
           >
             📄
@@ -665,8 +665,8 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
           <button
             type="button"
             onClick={() => void handleNewEntryClick('folder')}
-            className="w-6 h-6 flex items-center justify-center rounded text-sm"
-            style={{ background: '#2d1b4e', color: '#a855f7', border: '1px solid #a855f7' }}
+            className="w-7 h-7 flex items-center justify-center rounded transition-colors hover:bg-white/10"
+            style={{ color: '#a855f7' }}
             title={`New Folder in ${selectedFolderName || 'root'}`}
           >
             📁
@@ -676,7 +676,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
 
       {/* Show which folder is selected */}
       <div
-        className="px-3 py-0.5 text-[10px] truncate shrink-0 cursor-pointer hover:bg-white/5"
+        className="px-4 py-1 text-[10px] truncate shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
         style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #1a0a2e' }}
         onClick={() => setSelectedFolder(folderName)}
         title="Click to select root folder"
@@ -687,7 +687,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
       {/* Folder name */}
       {folderName && (
         <div
-          className="px-3 py-1 text-xs font-bold truncate shrink-0 cursor-pointer hover:bg-white/5"
+          className="px-4 py-1.5 text-xs font-bold truncate shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
           style={{
             color: selectedFolder === folderName ? '#a855f7' : '#ffffff',
             fontFamily: 'Space Mono, monospace',
@@ -702,7 +702,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 && !folderName && (
-          <div className="px-3 py-4 text-xs text-center" style={{ color: '#4b5563' }}>
+          <div className="px-4 py-4 text-xs text-center" style={{ color: '#4b5563' }}>
             Open a folder to start
           </div>
         )}
@@ -750,7 +750,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
       </div>
 
       {/* Status Bar */}
-      <div className="px-3 py-2 shrink-0">
+      <div className="px-4 py-2 shrink-0" style={{ borderTop: '1px solid #1a0a2e' }}>
         <span
           className="text-xs px-2 py-1 rounded-full"
           style={{ background: '#1a0a2e', color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
@@ -769,7 +769,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
             top: `${contextMenu.y}px`,
             background: '#1a0a2e',
             border: '1px solid #3d2b5e',
-            minWidth: '140px',
+            minWidth: '160px',
           }}
         >
           {!contextMenu.entry.isDirectory && (
@@ -779,7 +779,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
                 void handleFileClick(contextMenu.entry);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1.5"
+              className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
               style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
             >
               Open
@@ -792,7 +792,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
                 setSelectedFolder(contextMenu.entry.path);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1.5"
+              className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
               style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
             >
               Select Folder
@@ -805,7 +805,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
               setRenameValue(contextMenu.entry.name);
               setContextMenu(null);
             }}
-            className="text-left text-xs px-3 py-1.5"
+            className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
             style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
           >
             Rename
@@ -813,7 +813,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
           <button
             type="button"
             onClick={() => void handleDelete(contextMenu.entry)}
-            className="text-left text-xs px-3 py-1.5"
+            className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
             style={{ color: '#f87171', fontFamily: 'Space Mono, monospace' }}
           >
             Delete
