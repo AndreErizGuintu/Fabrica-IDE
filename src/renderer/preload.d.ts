@@ -26,6 +26,7 @@ declare global {
     store: StoreBridge;
     ai: {
       complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+      translate: (payload: { prompt: string; selectedCode: string; language: string }) => Promise<{ success: boolean; result?: string; error?: string }>;
       llamaTestPing: () => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     runner: {

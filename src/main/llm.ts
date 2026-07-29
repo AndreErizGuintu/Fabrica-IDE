@@ -7,18 +7,11 @@ export const GPU_LAYERS: number = parseInt(process.env.GPU_LAYERS || '0', 13);
 
 type LlamaRuntime = {
   llama: unknown;
-  model: unknown;
-  context: {
-    getSequence: () => unknown;
-  };
-  session: {
-    prompt: (
-      prompt: string,
-      options?: {
-        systemPrompt?: string;
-        onTextChunk?: (text: string) => void;
-      },
-    ) => Promise<string>;
+  model: {
+    createContext: () => Promise<{
+      getSequence: () => unknown;
+      dispose: () => Promise<void>;
+    }>;
   };
 };
 
@@ -52,12 +45,8 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
         modelPath,
         gpuLayers: GPU_LAYERS,
       });
-      const context = await model.createContext();
-      const session = new SessionCtor({
-        contextSequence: context.getSequence(),
-      });
 
-      return { llama, model, context, session };
+      return { llama, model };
     })().catch((err) => {
       runtimePromise = null;
       throw err;
@@ -72,10 +61,20 @@ export const generate = async (
   systemPrompt?: string,
   onTextChunk?: (text: string) => void,
 ): Promise<string> => {
-  const { session } = await initLlama();
-  const completion = await session.prompt(prompt, {
-    systemPrompt,
-    onTextChunk,
-  });
-  return completion;
+  const { model } = await initLlama();
+  const { LlamaChatSession: SessionCtor } = await importNodeLlamaCpp();
+  const context = await model.createContext();
+
+  try {
+    const session = new SessionCtor({
+      contextSequence: context.getSequence(),
+    });
+
+    return await session.prompt(prompt, {
+      systemPrompt,
+      onTextChunk,
+    });
+  } finally {
+    await context.dispose();
+  }
 };

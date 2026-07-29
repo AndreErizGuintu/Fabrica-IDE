@@ -17,7 +17,7 @@ function renderResponseContent(response: string) {
     content: string;
     language?: string;
   }> = [];
-  const fencePattern = /```(\w+)?\n ([\s\S]*?)```/g;
+  const fencePattern = /```(\w+)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -78,25 +78,36 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     if (!prompt.trim() && !selectedCode.trim()) return;
     setLoading(true);
     setResponse('');
-    const requestPrompt = [
-      `Language: ${language}`,
-      prompt.trim() ? `Prompt: ${prompt.trim()}` : 'Prompt: Complete the selected code.',
-      selectedCode.trim() ? `Selected code:\n${selectedCode.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
 
-    const removeListener = window.electron.ipcRenderer.on(
-      'ai:token',
-      (token: unknown) => {
-        setResponse((prev) => prev + String(token));
-      }
-    );
+    const appWindow = window as typeof window & {
+      ai?: {
+        translate: (payload: {
+          prompt: string;
+          selectedCode: string;
+          language: string;
+        }) => Promise<void>;
+      };
+      electron?: {
+        ipcRenderer: {
+          on: (channel: string, listener: (event: unknown, token: unknown) => void) => (() => void) | void;
+        };
+      };
+    };
 
-    await window.ai.complete(requestPrompt);
+    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (_event: unknown, token: unknown) => {
+      setResponse((prev) => prev + String(token));
+    });
 
-    if (removeListener) removeListener();
-    setLoading(false);
+    try {
+      await appWindow.ai?.translate({
+        prompt: prompt.trim(),
+        selectedCode: selectedCode.trim(),
+        language,
+      });
+    } finally {
+      if (removeListener) removeListener();
+      setLoading(false);
+    }
   };
 
   return (

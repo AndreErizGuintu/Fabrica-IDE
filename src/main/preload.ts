@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('store', {
 
 contextBridge.exposeInMainWorld('ai', {
   complete: (prompt: string) => ipcRenderer.invoke('ai:complete', prompt),
+  translate: (payload: { prompt: string; selectedCode: string; language: string }) =>
+    ipcRenderer.invoke('ai:translate', payload),
   llamaTestPing: () => ipcRenderer.invoke('llama-test-ping'),
 });
 
