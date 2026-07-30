@@ -3,7 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 
 const MODEL_FILE = 'deepseek-coder-6.7b-instruct.Q4_K_M.gguf';
-export const GPU_LAYERS: number = parseInt(process.env.GPU_LAYERS || '0', 13);
+export const GPU_LAYERS: number = parseInt(process.env. GPU_LAYERS || '13', 10);
 
 type LlamaRuntime = {
   llama: unknown;

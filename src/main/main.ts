@@ -9,14 +9,17 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import fs from 'fs';
+import crypto from 'crypto';
 import { exec, execFile, spawn } from 'child_process';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import * as pty from 'node-pty';
 import MenuBuilder from './menu';
 import { generate } from './llm';
 import { resolveHtmlPath } from './util';
+import { startSession, recordActivity, incrementAiCallCount, endSession } from './stats';
 
 type RecentProject = { name: string; path: string };
 type RuntimeName = 'node' | 'php' | 'dotnet' | 'dart';
@@ -45,6 +48,20 @@ const getBundledRuntimeBinary = (runtime: RuntimeName) => {
   }
 
   console.warn(`Bundled ${runtime} runtime not found at ${bundledPath}; falling back to PATH lookup.`);
+  return binaryName;
+};
+
+// Flutter is project-level (whole-folder `flutter run`), not file-level like the
+// RuntimeName runtimes above, so it gets its own resolver instead of joining that union.
+const getFlutterBinary = () => {
+  const binaryName = process.platform === 'win32' ? 'flutter.bat' : 'flutter';
+  const bundledPath = path.join(getBundledRuntimeRoot(), 'flutter', 'bin', binaryName);
+
+  if (fs.existsSync(bundledPath)) {
+    return bundledPath;
+  }
+
+  console.warn(`Bundled flutter runtime not found at ${bundledPath}; falling back to PATH lookup.`);
   return binaryName;
 };
 
@@ -89,19 +106,30 @@ const writeRecentProjects = (projects: RecentProject[]) => {
   fs.writeFileSync(getRecentProjectsPath(), JSON.stringify(projects, null, 2), 'utf-8');
 };
 
-function getRunConfig(filePath: string):
-  | { cmd: string; args: string[] }
+// Single source of truth for "how do I run this" across the app: the run:checkSDK
+// version-check, the terminal:run spawn, and (formerly) the separate flutter:run
+// handler all resolve through here instead of each keeping their own switch.
+function getRunConfig(targetPath: string, language: string):
+  | { cmd: string; args: string[]; cwd: string }
   | { html: true }
   | { error: string } {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'html': return { html: true };
-    case 'php': return { cmd: getBundledRuntimeBinary('php'), args: ['-f', filePath] };
-    case 'js': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
-    case 'ts': return { cmd: getBundledRuntimeBinary('node'), args: [filePath] };
-    case 'cs': return { cmd: getBundledRuntimeBinary('dotnet'), args: ['run', filePath] };
-    case 'dart': return { cmd: getBundledRuntimeBinary('dart'), args: ['run', filePath] };
-    default: return { error: `No runner configured for .${ext ?? 'unknown'} files` };
+  switch (language) {
+    case 'html':
+      return { html: true };
+    case 'php':
+      return { cmd: getBundledRuntimeBinary('php'), args: ['-f', targetPath], cwd: path.dirname(targetPath) };
+    case 'js':
+    case 'ts':
+      return { cmd: getBundledRuntimeBinary('node'), args: [targetPath], cwd: path.dirname(targetPath) };
+    case 'cs':
+      return { cmd: getBundledRuntimeBinary('dotnet'), args: ['run', targetPath], cwd: path.dirname(targetPath) };
+    case 'dart':
+      return { cmd: getBundledRuntimeBinary('dart'), args: ['run', targetPath], cwd: path.dirname(targetPath) };
+    case 'flutter':
+      // Project-level (whole-folder `flutter run`), so targetPath is the folder itself, not a file.
+      return { cmd: getFlutterBinary(), args: ['run', '-d', 'windows'], cwd: targetPath };
+    default:
+      return { error: `No runner configured for ${language}` };
   }
 }
 
@@ -229,6 +257,15 @@ ipcMain.handle('fs:delete', async (_event, targetPath: string) => {
   }
 });
 
+ipcMain.handle('stats:startSession', async (_event, projectPath: string) => {
+  startSession(projectPath);
+  return { success: true };
+});
+
+ipcMain.on('stats:activity', () => {
+  recordActivity();
+});
+
 ipcMain.handle('store:getRecentProjects', async () => {
   const projects = readRecentProjects();
   return { success: true, projects };
@@ -321,71 +358,30 @@ ipcMain.handle('git:clone', async (event, url: string, targetDir: string) => {
   });
 });
 
-// SDK detection
+// SDK detection — reuses getRunConfig for the binary resolution only; the
+// version-check args ('--version') are inherently different from run args,
+// so that part is still owned locally, but the runtime->binary switch is not.
+const LANGUAGE_BY_RUNTIME: Record<string, string> = {
+  node: 'js',
+  php: 'php',
+  dotnet: 'cs',
+  dart: 'dart',
+};
+
 ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
   return new Promise<{ available: boolean; version?: string; error?: string }>((resolve) => {
-    const cmds: Record<string, { cmd: string; args: string[] }> = {
-      node: { cmd: getBundledRuntimeBinary('node'), args: ['--version'] },
-      php: { cmd: getBundledRuntimeBinary('php'), args: ['--version'] },
-      dotnet: { cmd: getBundledRuntimeBinary('dotnet'), args: ['--version'] },
-      dart: { cmd: getBundledRuntimeBinary('dart'), args: ['--version'] },
-    };
-    const cmd = cmds[runtime];
-    if (!cmd) {
+    const language = LANGUAGE_BY_RUNTIME[runtime];
+    const config = language ? getRunConfig('', language) : undefined;
+    if (!config || !('cmd' in config)) {
       resolve({ available: false, error: `Unknown runtime: ${runtime}` });
       return;
     }
-    execFile(cmd.cmd, cmd.args, (error, stdout, stderr) => {
+    execFile(config.cmd, ['--version'], (error, stdout, stderr) => {
       if (error) {
         resolve({ available: false, error: error.message });
       } else {
         resolve({ available: true, version: (stdout || stderr).trim().split('\n')[0] });
       }
-    });
-  });
-});
-
-// Run file
-ipcMain.handle('run:file', async (event, filePath: string) => {
-  const config = getRunConfig(filePath);
-
-  if ('html' in config) {
-    return { success: true, html: true };
-  }
-
-  if ('error' in config) {
-    return { success: false, error: config.error };
-  }
-
-  return new Promise<{ success: boolean; error?: string }>((resolve) => {
-    const child = spawn(config.cmd, config.args, {
-      cwd: path.dirname(filePath),
-      shell: false,
-      env: {
-        ...process.env,
-        FORCE_COLOR: '0',
-        NO_COLOR: '1',
-        NODE_OPTIONS: '',
-      },
-    });
-
-    child.stdout.on('data', (data: Buffer) => {
-      event.sender.send('run:stdout', data.toString());
-    });
-
-    child.stderr.on('data', (data: Buffer) => {
-      event.sender.send('run:stderr', data.toString());
-    });
-
-    child.on('close', (code: number | null) => {
-      event.sender.send('run:done', code ?? -1);
-      resolve({ success: true });
-    });
-
-    child.on('error', (err: Error) => {
-      event.sender.send('run:stderr', `Error: ${err.message}\n`);
-      event.sender.send('run:done', -1);
-      resolve({ success: false, error: err.message });
     });
   });
 });
@@ -409,49 +405,91 @@ ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
   }
 });
 
-ipcMain.handle('code:run', async (event, filePath: string) => {
-  const config = getRunConfig(filePath);
+// Integrated terminal — every language (including Flutter's project-level `flutter
+// run`) is spawned through node-pty via getRunConfig, replacing the old run:file /
+// code:run child_process paths and the Flutter-only shell:true spawn. ConPTY (used
+// on Windows) doesn't open a separate visible console window the way shell:true did.
+const ptySessions = new Map<string, pty.IPty>();
+
+// Wraps an arg in double quotes for cmd.exe if it contains whitespace or a
+// quote, escaping any embedded quotes — so paths like "C:\My Project\file.js"
+// survive being typed into the shell as a single token.
+function quoteCmdArg(arg: string): string {
+  if (/[\s"]/.test(arg)) {
+    return `"${arg.replace(/"/g, '\\"')}"`;
+  }
+  return arg;
+}
+
+function buildCommandLine(cmd: string, args: string[]): string {
+  return [cmd, ...args].map(quoteCmdArg).join(' ');
+}
+
+ipcMain.handle('terminal:run', async (event, { language, path: targetPath }: { language: string; path: string }) => {
+  recordActivity();
+  const config = getRunConfig(targetPath, language);
 
   if ('html' in config) {
     return { success: true, html: true };
   }
 
   if ('error' in config) {
-    event.sender.send('run:output', { type: 'stderr', text: config.error + '\n' });
-    event.sender.send('run:done', { exitCode: 1 });
     return { success: false, error: config.error };
   }
 
-  return new Promise<{ success: boolean; exitCode?: number; error?: string }>((resolve) => {
-    const child = spawn(config.cmd, config.args, {
-      cwd: path.dirname(filePath),
-      shell: false,
-      env: { ...process.env, NODE_OPTIONS: '', FORCE_COLOR: '0', NO_COLOR: '1' },
+  const sessionId = crypto.randomUUID();
+  // NODE_OPTIONS is set by the dev-mode launch chain (cross-env NODE_OPTIONS="-r
+  // ts-node/register ..." in the start:renderer/start:main scripts) and inherited by
+  // this Electron main process. Spawned runtimes (e.g. Dart, PHP, dotnet) must not
+  // see it — it makes them try to load a Node/ts-node module that doesn't apply to them.
+  const { NODE_OPTIONS, ...spawnEnv } = process.env;
+  const env = Object.fromEntries(
+    Object.entries({ ...spawnEnv, FORCE_COLOR: '1' }).filter(([, v]) => v !== undefined),
+  ) as Record<string, string>;
+
+  try {
+    // Spawn a persistent cmd.exe shell as the pty's root process (like VS Code's
+    // integrated terminal) instead of running the target command directly as the
+    // root process — that way the shell (and its prompt) survives after the run
+    // command finishes, instead of the pty having nothing left running.
+    const ptyProcess = pty.spawn('cmd.exe', [], {
+      cwd: config.cwd,
+      env,
+      cols: 80,
+      rows: 24,
     });
 
-    child.stdout.on('data', (data: Buffer) => {
-      event.sender.send('run:output', { type: 'stdout', text: data.toString() });
+    ptySessions.set(sessionId, ptyProcess);
+
+    ptyProcess.onData((data) => {
+      event.sender.send('terminal:output', { sessionId, data });
     });
 
-    child.stderr.on('data', (data: Buffer) => {
-      event.sender.send('run:output', { type: 'stderr', text: data.toString() });
+    ptyProcess.onExit(({ exitCode }) => {
+      ptySessions.delete(sessionId);
+      event.sender.send('terminal:exit', { sessionId, exitCode });
     });
 
-    child.on('close', (code: number | null) => {
-      const exitCode = code ?? 1;
-      event.sender.send('run:done', { exitCode });
-      resolve({ success: exitCode === 0, exitCode });
-    });
+    ptyProcess.write(`${buildCommandLine(config.cmd, config.args)}\r`);
 
-    child.on('error', (err: Error) => {
-      const msg = err.message.includes('ENOENT')
-        ? `Command not found: '${config.cmd}' — is it installed and on PATH?\n`
-        : `${err.message}\n`;
-      event.sender.send('run:output', { type: 'stderr', text: msg });
-      event.sender.send('run:done', { exitCode: 1 });
-      resolve({ success: false, error: err.message });
-    });
-  });
+    return { success: true, sessionId };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.on('terminal:input', (_event, { sessionId, data }: { sessionId: string; data: string }) => {
+  ptySessions.get(sessionId)?.write(data);
+});
+
+ipcMain.handle('terminal:stop', async (_event, { sessionId }: { sessionId: string }) => {
+  const session = ptySessions.get(sessionId);
+  if (!session) {
+    return { success: false, error: 'No such session' };
+  }
+  session.kill();
+  ptySessions.delete(sessionId);
+  return { success: true };
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -539,6 +577,10 @@ const createWindow = async () => {
  * Add event listeners...
  */
 
+app.on('before-quit', () => {
+  endSession();
+});
+
 app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
@@ -567,6 +609,7 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
       event.sender.send('ai:token', chunk);
     });
 
+    incrementAiCallCount();
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };
@@ -588,6 +631,7 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
       event.sender.send('ai:token', chunk);
     });
 
+    incrementAiCallCount();
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };

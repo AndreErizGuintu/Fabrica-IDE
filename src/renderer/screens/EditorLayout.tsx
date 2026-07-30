@@ -5,6 +5,7 @@ import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import AIPanel from '../components/ai/AIPanel';
+import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -28,6 +29,21 @@ function getLanguage(filename: string): string {
   }
 }
 
+const RUNTIME_BY_EXT: Record<string, string> = {
+  js: 'node', ts: 'node',
+  php: 'php',
+  cs: 'dotnet',
+  dart: 'dart',
+};
+
+const RUN_LANGUAGE_BY_EXT: Record<string, string> = {
+  html: 'html',
+  js: 'js', ts: 'ts',
+  php: 'php',
+  cs: 'cs',
+  dart: 'dart',
+};
+
 const DETACH_THRESHOLD = 6;
 
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
@@ -42,10 +58,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [gitChangesOpen, setGitChangesOpen] = useState(true);
   const [gitHistoryOpen, setGitHistoryOpen] = useState(true);
   const [gitLoading, setGitLoading] = useState(false);
-  const [outputLines, setOutputLines] = useState<{ text: string; type: 'stdout' | 'stderr' | 'info' | 'error' }[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
-  const outputEndRef = useRef<HTMLDivElement>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const terminalRef = useRef<TerminalHandle>(null);
 
   // Floating panel states
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
@@ -73,6 +89,15 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const RIGHT_PANEL_WIDTH = 380;
+
+  useEffect(() => {
+    if (initialFolder) {
+      window.stats?.startSession(initialFolder);
+    }
+    // Session boundary is one continuous app open->close for the loaded
+    // project; write-on-quit is handled in the main process, not here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFolder]);
 
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
@@ -319,6 +344,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (!activeTab) return;
+    window.stats?.activity();
     setTabs((prev) =>
       prev.map((tab, index) =>
         index === activeTabIndex
@@ -342,80 +368,60 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const handleRun = useCallback(async () => {
     if (!activeTab?.path) {
-      setOutputLines([{ text: 'No file saved. Save the file before running.', type: 'error' }]);
+      setRunError('No file saved. Save the file before running.');
       setShowOutput(true);
       return;
     }
 
     const ext = activeTab.filename.split('.').pop()?.toLowerCase();
-    const runtimeMap: Record<string, string> = {
-      js: 'node', ts: 'node',
-      php: 'php',
-      cs: 'dotnet',
-      dart: 'dart',
-    };
-    const runtime = ext ? runtimeMap[ext] : undefined;
+    const language = ext ? RUN_LANGUAGE_BY_EXT[ext] : undefined;
 
-    if (!runtime) {
-      setOutputLines([{ text: `Cannot run .${ext ?? '?'} files directly.`, type: 'error' }]);
+    if (!language) {
+      setRunError(`Cannot run .${ext ?? '?'} files directly.`);
       setShowOutput(true);
       return;
     }
 
-    const sdkCheck = await window.runner.checkSDK(runtime);
-    if (!sdkCheck.available) {
-      setOutputLines([{
-        text: `Runtime not found: ${runtime}\nInstall it and make sure it's on your PATH.\n${sdkCheck.error ?? ''}`,
-        type: 'error',
-      }]);
-      setShowOutput(true);
-      return;
+    if (language !== 'html') {
+      const runtime = ext ? RUNTIME_BY_EXT[ext] : undefined;
+      const sdkCheck = runtime ? await window.runner.checkSDK(runtime) : undefined;
+      if (runtime && !sdkCheck?.available) {
+        setRunError(`Runtime not found: ${runtime}\nInstall it and make sure it's on your PATH.\n${sdkCheck?.error ?? ''}`);
+        setShowOutput(true);
+        return;
+      }
     }
 
-    setOutputLines([{ text: `▶ Running ${activeTab.filename} (${sdkCheck.version ?? runtime})...\n`, type: 'info' }]);
+    setRunError(null);
     setShowOutput(true);
-    setIsRunning(true);
-
-    const removeStdout = window.runner.onStdout((data) => {
-      setOutputLines((prev) => [...prev, { text: data, type: 'stdout' }]);
-    });
-    const removeStderr = window.runner.onStderr((data) => {
-      setOutputLines((prev) => [...prev, { text: data, type: 'stderr' }]);
-    });
-    window.runner.onDone((code) => {
-      setOutputLines((prev) => [
-        ...prev,
-        { text: `\n● Process exited with code ${code}`, type: code === 0 ? 'info' : 'error' },
-      ]);
-      setIsRunning(false);
-      removeStdout();
-      removeStderr();
-    });
-
-    await window.runner.runFile(activeTab.path);
+    await terminalRef.current?.run({ language, path: activeTab.path });
   }, [activeTab]);
+
+  const handleFlutterRun = useCallback(async () => {
+    if (!initialFolder) return;
+    setRunError(null);
+    setShowOutput(true);
+    await terminalRef.current?.run({ language: 'flutter', path: initialFolder });
+  }, [initialFolder]);
 
   const runGitCommand = useCallback(async (
     label: string,
     fn: () => Promise<{ success: boolean; output: string; error?: string }>,
   ) => {
     if (!initialFolder) {
-      setOutputLines([{ text: 'No folder open. Open a folder first.', type: 'error' }]);
       setShowOutput(true);
+      terminalRef.current?.write('No folder open. Open a folder first.\n');
       return;
     }
 
     setGitLoading(true);
-    setOutputLines([{ text: `⎇ git ${label}...\n`, type: 'info' }]);
     setShowOutput(true);
+    terminalRef.current?.write(`⎇ git ${label}...\n`);
 
     try {
       const result = await fn();
-      setOutputLines((prev) => [
-        ...prev,
-        { text: result.output || result.error || '(no output)', type: result.success ? 'stdout' : 'stderr' },
-        { text: result.success ? `\n✓ Done` : `\n✗ Failed`, type: result.success ? 'info' : 'error' },
-      ]);
+      terminalRef.current?.write(`${result.output || result.error || '(no output)'}\n`);
+      terminalRef.current?.write(result.success ? '✓ Done\n' : '✗ Failed\n');
     } finally {
       setGitLoading(false);
     }
@@ -540,10 +546,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   }, [floatingPanel]);
 
   useEffect(() => {
-    outputEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [outputLines]);
-
-  useEffect(() => {
     if (showGit) {
       void refreshGitStatus();
     }
@@ -630,16 +632,36 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <button
             type="button"
             onClick={handleRun}
-            disabled={isRunning || !activeTab}
+            disabled={!activeTab}
+            title={isRunning ? 'A process is already running — this will stop it and start a new one' : undefined}
             className="px-4 py-1 rounded text-sm font-medium transition-colors hover:bg-white/10"
             style={{
-              background: isRunning ? 'transparent' : 'rgba(78, 201, 176, 0.15)',
-              color: isRunning ? '#d4d4d4' : '#4ec9b0',
-              cursor: isRunning || !activeTab ? 'not-allowed' : 'pointer',
+              background: 'rgba(78, 201, 176, 0.15)',
+              color: '#4ec9b0',
+              cursor: !activeTab ? 'not-allowed' : 'pointer',
               opacity: !activeTab ? 0.4 : 1,
             }}
           >
             {isRunning ? 'Running…' : 'Run'}
+          </button>
+          <button
+            type="button"
+            onClick={handleFlutterRun}
+            disabled={!initialFolder}
+            title={
+              isRunning
+                ? 'A process is already running — this will stop it and start a new one'
+                : 'Launch Flutter Windows desktop preview for the open project'
+            }
+            className="px-4 py-1 rounded text-sm font-medium transition-colors hover:bg-white/10"
+            style={{
+              background: 'rgba(96, 165, 250, 0.15)',
+              color: '#60a5fa',
+              cursor: !initialFolder ? 'not-allowed' : 'pointer',
+              opacity: !initialFolder ? 0.4 : 1,
+            }}
+          >
+            Flutter Preview
           </button>
           <button
             type="button"
@@ -1282,83 +1304,34 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         </Rnd>
       )}
 
-      {/* Output Panel */}
-      {showOutput && (
-        <div
-          className="flex flex-col shrink-0"
-          style={{
-            height: '150px',
-            background: '#1e1e2e',
-            borderTop: '1px solid #2d2d3a',
-          }}
-        >
+      {/* Terminal Panel — always mounted (so the ref is ready before the first Run/Git
+          click), just collapsed to zero height when closed rather than unmounted. */}
+      <div
+        className="flex flex-col shrink-0 overflow-hidden"
+        style={{
+          height: showOutput ? '220px' : '0px',
+          background: '#1e1e2e',
+          borderTop: showOutput ? '1px solid #2d2d3a' : 'none',
+        }}
+      >
+        {runError && (
           <div
-            className="flex items-center justify-between px-3 py-1 shrink-0"
-            style={{ background: '#252535', borderBottom: '1px solid #2d2d3a' }}
+            className="px-3 py-1 text-xs shrink-0"
+            style={{
+              color: '#f87171',
+              background: '#2d1b1b',
+              borderBottom: '1px solid #2d2d3a',
+              fontFamily: 'Consolas, monospace',
+              whiteSpace: 'pre-wrap',
+            }}
           >
-            <div className="flex items-center gap-2">
-              <span
-                className="text-[10px] font-medium"
-                style={{ 
-                  color: '#6b7280', 
-                  fontFamily: 'Segoe UI, sans-serif',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}
-              >
-                Terminal
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ade80' }} />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setOutputLines([])}
-                className="text-[10px] transition-colors hover:text-white"
-                style={{ color: '#52525b' }}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowOutput(false)}
-                className="text-[10px] transition-colors hover:text-white"
-                style={{ color: '#52525b' }}
-              >
-                ✕
-              </button>
-            </div>
+            {runError}
           </div>
-          <div
-            className="flex-1 overflow-y-auto px-3 py-2"
-            style={{ fontFamily: 'Consolas, monospace', fontSize: '12px', lineHeight: '1.6' }}
-          >
-            {outputLines.length === 0 ? (
-              <div style={{ color: '#3f3f46' }}>No output to display</div>
-            ) : (
-              outputLines.map((line, i) => (
-                <pre
-                  key={i}
-                  style={{
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                    color:
-                      line.type === 'stderr' || line.type === 'error'
-                        ? '#f87171'
-                        : line.type === 'info'
-                        ? '#a78bfa'
-                        : '#4ade80',
-                  }}
-                >
-                  {line.text}
-                </pre>
-              ))
-            )}
-            <div ref={outputEndRef} />
-          </div>
+        )}
+        <div className="flex-1 min-h-0">
+          <Terminal ref={terminalRef} onClose={() => setShowOutput(false)} onRunningChange={setIsRunning} />
         </div>
-      )}
+      </div>
     </div>
   );
 }

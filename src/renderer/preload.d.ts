@@ -30,11 +30,18 @@ declare global {
       llamaTestPing: () => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     runner: {
-      runFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       checkSDK: (runtime: string) => Promise<{ available: boolean; version?: string; error?: string }>;
-      onStdout: (cb: (data: string) => void) => () => void;
-      onStderr: (cb: (data: string) => void) => () => void;
-      onDone: (cb: (code: number) => void) => () => void;
+    };
+    stats: {
+      startSession: (projectPath: string) => Promise<{ success: boolean }>;
+      activity: () => void;
+    };
+    terminal: {
+      run: (payload: { language: string; path: string }) => Promise<{ success: boolean; sessionId?: string; html?: boolean; error?: string }>;
+      input: (sessionId: string, data: string) => void;
+      stop: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+      onOutput: (cb: (sessionId: string, data: string) => void) => () => void;
+      onExit: (cb: (sessionId: string, exitCode: number) => void) => () => void;
     };
     git: {
       init: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;

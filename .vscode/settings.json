@@ -27,5 +27,8 @@
     "test/**/__snapshots__": true,
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
+  },
+  "chat.tools.terminal.autoApprove": {
+    "npx tsc": true
   }
 }

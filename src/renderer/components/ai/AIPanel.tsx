@@ -149,7 +149,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     };
     electron?: {
       ipcRenderer: {
-        on: (channel: string, listener: (event: unknown, token: unknown) => void) => (() => void) | void;
+        on: (channel: string, listener: (token: unknown) => void) => (() => void) | void;
       };
     };
   };
@@ -169,7 +169,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     setPromptState('');
     setMessages((prev) => [...prev, { role: 'user', content: trimmedPrompt }, { role: 'assistant', content: '' }]);
 
-    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (_event: unknown, token: unknown) => {
+    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (token: unknown) => {
       setMessages((prev) => {
         const next = [...prev];
         for (let index = next.length - 1; index >= 0; index -= 1) {
@@ -257,7 +257,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     setLoading(true);
     setResponse('');
 
-    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (_event: unknown, token: unknown) => {
+    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (token: unknown) => {
       setResponse((prev) => prev + String(token));
     });
 

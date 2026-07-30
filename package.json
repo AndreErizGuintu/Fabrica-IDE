@@ -33,6 +33,9 @@
       "url": "https://github.com/amilajack"
     }
   ],
+  "overrides": {
+  "node-abi": "^4.31.0"
+},
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
@@ -57,7 +60,7 @@
   "prettier": {
     "singleQuote": true,
     "overrides": [
-      {
+      {   
         "files": [
           ".prettierrc",
           ".eslintrc"
@@ -104,6 +107,8 @@
     "@electron/notarize": "^3.0.0",
     "@monaco-editor/react": "^4.7.0",
     "@vscode/codicons": "^0.0.46-24",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",

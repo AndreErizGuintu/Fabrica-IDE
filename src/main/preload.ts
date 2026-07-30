@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token' | 'run:stdout' | 'run:stderr' | 'run:done' | 'git:progress';
+export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit';
 
 const electronHandler = {
   ipcRenderer: {
@@ -54,22 +54,29 @@ contextBridge.exposeInMainWorld('ai', {
 });
 
 contextBridge.exposeInMainWorld('runner', {
-  runFile: (filePath: string) => ipcRenderer.invoke('run:file', filePath),
   checkSDK: (runtime: string) => ipcRenderer.invoke('run:checkSDK', runtime),
-  onStdout: (cb: (data: string) => void) => {
-    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
-    ipcRenderer.on('run:stdout', handler);
-    return () => ipcRenderer.removeListener('run:stdout', handler);
+});
+
+contextBridge.exposeInMainWorld('stats', {
+  startSession: (projectPath: string) => ipcRenderer.invoke('stats:startSession', projectPath),
+  activity: () => ipcRenderer.send('stats:activity'),
+});
+
+contextBridge.exposeInMainWorld('terminal', {
+  run: (payload: { language: string; path: string }) => ipcRenderer.invoke('terminal:run', payload),
+  input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),
+  stop: (sessionId: string) => ipcRenderer.invoke('terminal:stop', { sessionId }),
+  onOutput: (cb: (sessionId: string, data: string) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { sessionId: string; data: string }) =>
+      cb(payload.sessionId, payload.data);
+    ipcRenderer.on('terminal:output', handler);
+    return () => ipcRenderer.removeListener('terminal:output', handler);
   },
-  onStderr: (cb: (data: string) => void) => {
-    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
-    ipcRenderer.on('run:stderr', handler);
-    return () => ipcRenderer.removeListener('run:stderr', handler);
-  },
-  onDone: (cb: (code: number) => void) => {
-    const handler = (_event: IpcRendererEvent, code: number) => cb(code);
-    ipcRenderer.once('run:done', handler);
-    return () => ipcRenderer.removeListener('run:done', handler);
+  onExit: (cb: (sessionId: string, exitCode: number) => void) => {
+    const handler = (_event: IpcRendererEvent, payload: { sessionId: string; exitCode: number }) =>
+      cb(payload.sessionId, payload.exitCode);
+    ipcRenderer.on('terminal:exit', handler);
+    return () => ipcRenderer.removeListener('terminal:exit', handler);
   },
 });
 
