@@ -35,6 +35,26 @@ declare global {
     stats: {
       startSession: (projectPath: string) => Promise<{ success: boolean }>;
       activity: () => void;
+      getCurrentSession: () => Promise<{
+        projectPath: string;
+        sessionStart: string;
+        idleTimeMs: number;
+        aiCallCount: number;
+      } | null>;
+      getAggregate: () => Promise<{
+        totalIdleTimeMs: number;
+        totalAiCallCount: number;
+        totalSessionCount: number;
+        lastUpdated: string;
+      }>;
+      getSessionHistory: (projectPath: string) => Promise<Array<{
+        fileName: string;
+        projectPath: string;
+        sessionStart: string;
+        sessionEnd: string;
+        idleTimeMs: number;
+        aiCallCount: number;
+      }>>;
     };
     terminal: {
       run: (payload: { language: string; path: string }) => Promise<{ success: boolean; sessionId?: string; html?: boolean; error?: string }>;

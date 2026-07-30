@@ -18,8 +18,23 @@ import log from 'electron-log';
 import * as pty from 'node-pty';
 import MenuBuilder from './menu';
 import { generate } from './llm';
+import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { resolveHtmlPath } from './util';
-import { startSession, recordActivity, incrementAiCallCount, endSession } from './stats';
+import {
+  startSession,
+  recordActivity,
+  incrementAiCallCount,
+  endSession,
+  getCurrentSession,
+  getAggregate,
+  getSessionHistory,
+} from './stats';
+
+// package.json's root "name" is still "electron-react-boilerplate" (only
+// build.productName is "ElectronReact", which Electron itself never reads),
+// so without this app.getPath('userData') resolves under
+// %APPDATA%/electron-react-boilerplate instead of %APPDATA%/Fabrica.
+app.setName('Fabrica');
 
 type RecentProject = { name: string; path: string };
 type RuntimeName = 'node' | 'php' | 'dotnet' | 'dart';
@@ -265,6 +280,15 @@ ipcMain.handle('stats:startSession', async (_event, projectPath: string) => {
 ipcMain.on('stats:activity', () => {
   recordActivity();
 });
+
+// Debug-only handlers backing the temporary StatsDebugPanel UI.
+ipcMain.handle('stats:getCurrentSession', () => getCurrentSession());
+
+ipcMain.handle('stats:getAggregate', () => getAggregate());
+
+ipcMain.handle('stats:getSessionHistory', (_event, projectPath: string) =>
+  getSessionHistory(projectPath),
+);
 
 ipcMain.handle('store:getRecentProjects', async () => {
   const projects = readRecentProjects();
@@ -591,7 +615,11 @@ app.on('window-all-closed', () => {
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
+    // Must run before createWindow(): if isolation is needed, this relaunches
+    // the whole app (app.relaunch() + app.exit()) so the fresh process
+    // inherits GGML_VK_VISIBLE_DEVICES from creation. See gpuIsolation.ts.
+    await ensureGpuDeviceIsolation();
     createWindow();
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the

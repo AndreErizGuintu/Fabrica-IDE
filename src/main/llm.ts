@@ -1,9 +1,37 @@
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
+import modelConfig from './modelConfig.json';
 
-const MODEL_FILE = 'deepseek-coder-6.7b-instruct.Q4_K_M.gguf';
-export const GPU_LAYERS: number = parseInt(process.env. GPU_LAYERS || '13', 10);
+// Single swap point: change modelFile in src/main/modelConfig.json and drop the new
+// .gguf into resources/models/ to switch models. scripts/benchmark.mjs and
+// scripts/test-gpu-layers.mjs read the same file, so this is the only place to edit.
+const MODEL_FILE = modelConfig.modelFile;
+
+// "auto" adapts layer count to available VRAM at load time (see node-llama-cpp's
+// LlamaModelOptions.gpuLayers docs). Set GPU_LAYERS env var to override with a fixed count.
+export const GPU_LAYERS: number | 'auto' = process.env.GPU_LAYERS
+  ? parseInt(process.env.GPU_LAYERS, 10)
+  : 'auto';
+
+// Used as a safety net under gpuLayers "auto"/an explicit override: if loading at the
+// requested layer count fails with a VRAM error, step down through this ladder (only
+// values below the starting point are tried) until something fits.
+const GPU_LAYERS_FALLBACK_LADDER = [20, 13, 8, 4, 0];
+const MAX_LOAD_ATTEMPTS = 6;
+
+const VRAM_ERROR_PATTERNS = [
+  /ErrorOutOfDeviceMemory/i,
+  /out of device memory/i,
+  /failed to allocate .*buffer/i,
+  /failed to create context/i,
+  /insufficient.*memory/i,
+];
+
+const isVramError = (err: unknown): boolean => {
+  const message = err instanceof Error ? err.message : String(err);
+  return VRAM_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+};
 
 type LlamaRuntime = {
   llama: unknown;
@@ -12,6 +40,7 @@ type LlamaRuntime = {
       getSequence: () => unknown;
       dispose: () => Promise<void>;
     }>;
+    dispose: () => Promise<void>;
   };
 };
 
@@ -35,16 +64,71 @@ const getModelPath = () => {
   return modelPath;
 };
 
+// ---------------------------------------------------------------------------
+// gpuLayers step-down retry: a safety net under GPU device isolation (see
+// gpuIsolation.ts, run at app startup before this module is ever used), in
+// case isolation was skipped (ambiguous/no GPU) or the isolated device still
+// doesn't have enough VRAM for the requested/auto-resolved layer count.
+const buildLayerAttempts = (): (number | 'auto')[] => {
+  const start = GPU_LAYERS;
+  const ladder = GPU_LAYERS_FALLBACK_LADDER.filter((n) => start === 'auto' || n < start);
+  const attempts: (number | 'auto')[] = [start, ...ladder];
+  return attempts.slice(0, MAX_LOAD_ATTEMPTS);
+};
+
+const loadModelWithFallback = async (llama: any, modelPath: string) => {
+  const attempts = buildLayerAttempts();
+  let lastError: unknown;
+
+  for (let i = 0; i < attempts.length; i += 1) {
+    const gpuLayers = attempts[i];
+    const isLastAttempt = i === attempts.length - 1;
+    let model: any;
+
+    try {
+      model = await llama.loadModel({ modelPath, gpuLayers });
+    } catch (err) {
+      lastError = err;
+      if (!isVramError(err) || isLastAttempt) throw err;
+      console.warn(`[llm] loadModel failed with gpuLayers=${gpuLayers}: ${(err as Error).message}. Stepping down.`);
+      continue;
+    }
+
+    // Validate the layer count actually fits by creating (and immediately
+    // disposing) a context — KV-cache VRAM is allocated at context creation,
+    // not at loadModel time, so a load can "succeed" and still be unusable.
+    try {
+      const probeContext = await model.createContext();
+      await probeContext.dispose();
+      console.log(`[llm] Model loaded successfully with gpuLayers=${gpuLayers}.`);
+      return model;
+    } catch (err) {
+      lastError = err;
+      await model.dispose();
+      if (!isVramError(err) || isLastAttempt) throw err;
+      console.warn(`[llm] createContext failed with gpuLayers=${gpuLayers}: ${(err as Error).message}. Stepping down.`);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Model failed to load at every gpuLayers fallback level.');
+};
+
 export const initLlama = async (): Promise<LlamaRuntime> => {
   if (!runtimePromise) {
     runtimePromise = (async () => {
-      const { getLlama, LlamaChatSession: SessionCtor } = await importNodeLlamaCpp();
+      const { getLlama } = await importNodeLlamaCpp();
       const modelPath = getModelPath();
+      // TEMPORARY DIAGNOSTIC: confirm what the real, process-wide getLlama() call
+      // actually sees at the moment it runs.
+      console.log('[llm] DIAGNOSTIC: process.env.GGML_VK_VISIBLE_DEVICES immediately before real getLlama() =', JSON.stringify(process.env.GGML_VK_VISIBLE_DEVICES));
       const llama = await getLlama();
-      const model = await llama.loadModel({
-        modelPath,
-        gpuLayers: GPU_LAYERS,
-      });
+      // TEMPORARY DIAGNOSTIC: does the REAL, in-process native Vulkan backend
+      // actually honor the filter, or does it still see both devices despite
+      // the env var being correctly set (per the logs above)? This isolates
+      // "our JS set the var correctly" from "the native layer respected it."
+      console.log('[llm] DIAGNOSTIC: llama.getGpuDeviceNames() after real getLlama() =', await llama.getGpuDeviceNames());
+      console.log('[llm] DIAGNOSTIC: llama.getVramState() after real getLlama() =', await llama.getVramState());
+      const model = await loadModelWithFallback(llama, modelPath);
 
       return { llama, model };
     })().catch((err) => {

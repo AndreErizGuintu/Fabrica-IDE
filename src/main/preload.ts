@@ -60,6 +60,10 @@ contextBridge.exposeInMainWorld('runner', {
 contextBridge.exposeInMainWorld('stats', {
   startSession: (projectPath: string) => ipcRenderer.invoke('stats:startSession', projectPath),
   activity: () => ipcRenderer.send('stats:activity'),
+  getCurrentSession: () => ipcRenderer.invoke('stats:getCurrentSession'),
+  getAggregate: () => ipcRenderer.invoke('stats:getAggregate'),
+  getSessionHistory: (projectPath: string) =>
+    ipcRenderer.invoke('stats:getSessionHistory', projectPath),
 });
 
 contextBridge.exposeInMainWorld('terminal', {

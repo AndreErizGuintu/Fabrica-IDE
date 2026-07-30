@@ -127,6 +127,39 @@ export function incrementAiCallCount() {
   recordActivity();
 }
 
+export function getCurrentSession() {
+  if (!current) return null;
+  return {
+    projectPath: current.projectPath,
+    sessionStart: current.sessionStart,
+    idleTimeMs: current.idleTimeMs,
+    aiCallCount: current.aiCallCount,
+  };
+}
+
+export function getAggregate(): AggregateFile {
+  return readAggregate();
+}
+
+export function getSessionHistory(projectPath: string): Array<SessionFile & { fileName: string }> {
+  const projectDir = path.join(getProjectsRoot(), hashProjectPath(projectPath));
+  if (!fs.existsSync(projectDir)) return [];
+
+  return fs
+    .readdirSync(projectDir)
+    .filter((fileName) => fileName.startsWith('session-') && fileName.endsWith('.json'))
+    .map((fileName) => {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(path.join(projectDir, fileName), 'utf-8'));
+        return { fileName, ...parsed };
+      } catch (err) {
+        console.warn(`Failed to parse session file ${fileName}.`, err);
+        return null;
+      }
+    })
+    .filter((entry): entry is SessionFile & { fileName: string } => entry !== null);
+}
+
 export function endSession() {
   if (!current) return;
 

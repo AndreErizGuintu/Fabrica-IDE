@@ -6,6 +6,7 @@ import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import AIPanel from '../components/ai/AIPanel';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
+import StatsDebugPanel from '../components/StatsDebugPanel';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -573,6 +574,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1e1e2e', color: '#d4d4d4' }}>
+      {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx */}
+      <StatsDebugPanel projectPath={initialFolder} />
       {/* Top Bar */}
       <div
         className="flex items-center justify-between px-4 py-1.5 shrink-0"
