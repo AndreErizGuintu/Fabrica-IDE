@@ -1,1 +1,78 @@
 /* Monaco editor overrides go here when enabled. */
+/* Editor styles - Override Monaco defaults to match violet theme */
+.monaco-editor {
+  background-color: #1a0a2e !important;
+}
+
+.monaco-editor .margin {
+  background-color: #1a0a2e !important;
+}
+
+.monaco-editor .monaco-editor-background {
+  background-color: #1a0a2e !important;
+}
+
+/* Scrollbar styling to match theme */
+.monaco-editor .scrollbar .slider {
+  background: #2d1b4e !important;
+}
+
+.monaco-editor .scrollbar .slider:hover {
+  background: #3d2b5e !important;
+}
+
+/* Selection highlight */
+.monaco-editor .selected-text {
+  background-color: #3d2b5e !important;
+}
+
+/* Line numbers */
+.monaco-editor .line-numbers {
+  color: #6b7280 !important;
+}
+
+.monaco-editor .current-line ~ .line-numbers {
+  color: #a855f7 !important;
+}
+
+/* Current line highlight */
+.monaco-editor .view-overlays .current-line {
+  background-color: rgba(45, 27, 78, 0.5) !important;
+  border: none !important;
+}
+
+/* Find match highlight */
+.monaco-editor .findMatch {
+  background-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+/* Bracket matching */
+.monaco-editor .bracket-match {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+  border: 1px solid #a855f7 !important;
+}
+
+/* Hover and suggestion widgets */
+.monaco-editor .monaco-hover {
+  background-color: #1a0a2e !important;
+  border: 1px solid #2d1b4e !important;
+}
+
+.monaco-editor .suggest-widget {
+  background-color: #1a0a2e !important;
+  border: 1px solid #2d1b4e !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list-row.focused {
+  background-color: #2d1b4e !important;
+}
+
+/* Peek view */
+.monaco-editor .peekview-widget {
+  background-color: #1a0a2e !important;
+  border: 1px solid #2d1b4e !important;
+}
+
+.monaco-editor .peekview-widget .head {
+  background-color: #2d1b4e !important;
+}
