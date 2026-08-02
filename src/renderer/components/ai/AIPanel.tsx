@@ -4,7 +4,7 @@ interface AIPanelProps {
   selectedCode: string;
 }
 
-type TabKey = 'ask' | 'plan' | 'translate';
+type TabKey = 'ask' | 'plan' | 'translate' | 'explain';
 type ChatRole = 'user' | 'assistant';
 
 type ChatMessage = {
@@ -137,6 +137,9 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
   const [planMessages, setPlanMessages] = useState<ChatMessage[]>([]);
   const [planPrompt, setPlanPrompt] = useState('');
   const [planLoading, setPlanLoading] = useState(false);
+  const [explainPrompt, setExplainPrompt] = useState('');
+  const [explainResponse, setExplainResponse] = useState('');
+  const [explainLoading, setExplainLoading] = useState(false);
 
   const appWindow = window as typeof window & {
     ai?: {
@@ -145,6 +148,10 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
         selectedCode: string;
         language: string;
       }) => Promise<void>;
+      explain: (payload: {
+        prompt: string;
+        selectedCode: string;
+      }) => Promise<{ success: boolean; result?: string; error?: string }>;
       complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     electron?: {
@@ -273,6 +280,32 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     }
   };
 
+  const handleExplain = async () => {
+    if (!explainPrompt.trim() && !selectedCode.trim()) return;
+    setExplainLoading(true);
+    setExplainResponse('');
+
+    const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (token: unknown) => {
+      setExplainResponse((prev) => prev + String(token));
+    });
+
+    try {
+      const completion = await appWindow.ai?.explain({
+        prompt: explainPrompt.trim(),
+        selectedCode: selectedCode.trim(),
+      });
+
+      if (!completion?.success) {
+        setExplainResponse(getCompletionErrorText(completion?.error));
+      }
+    } catch (err) {
+      setExplainResponse(getCompletionErrorText(err instanceof Error ? err.message : String(err)));
+    } finally {
+      if (removeListener) removeListener();
+      setExplainLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#1a0a2e] border-l border-[#2d1b4e]">
       <div className="px-3 py-2 text-xs font-bold tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #2d1b4e' }}>
@@ -280,7 +313,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
       </div>
 
       <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: '1px solid #2d1b4e' }}>
-        {(['ask', 'plan', 'translate'] as TabKey[]).map((tab) => {
+        {(['ask', 'plan', 'translate', 'explain'] as TabKey[]).map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
@@ -457,6 +490,59 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
 
             <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#2d1b4e] text-[#ffffff]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
               {response ? renderResponseContent(response) : 'AI response will appear here...'}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'explain' && (
+          <>
+            <textarea
+              value={explainPrompt}
+              onChange={(e) => setExplainPrompt(e.target.value)}
+              placeholder="Ask a specific question about the code, or leave blank for a general explanation..."
+              className="text-xs p-2 rounded resize-none outline-none"
+              style={{
+                background: '#2d1b4e',
+                color: '#ffffff',
+                fontFamily: 'IBM Plex Sans, sans-serif',
+                minHeight: '92px',
+                border: '1px solid #4c1d95',
+              }}
+            />
+
+            <div
+              className="text-xs p-2 rounded overflow-y-auto"
+              style={{
+                background: '#2d1b4e',
+                color: '#a7adc5',
+                fontFamily: 'Space Mono, monospace',
+                minHeight: '60px',
+                maxHeight: '120px',
+                whiteSpace: 'pre',
+                overflowX: 'hidden',
+              }}
+            >
+              {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to explain'}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleExplain}
+                disabled={explainLoading || (!explainPrompt.trim() && !selectedCode.trim())}
+                className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
+                style={{
+                  background: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
+                  color: '#ffffff',
+                  cursor: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {explainLoading ? 'Thinking...' : 'Explain'}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#2d1b4e] text-[#ffffff]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+              {explainResponse ? renderResponseContent(explainResponse) : 'AI response will appear here...'}
             </div>
           </>
         )}

@@ -666,6 +666,27 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
   }
 });
 
+ipcMain.handle('ai:explain', async (event, payload: { prompt: string; selectedCode: string }) => {
+  try {
+    const systemPrompt = 'You are a precise code-explanation assistant. Describe exactly what the provided code does, its structure, and its properties as they actually appear in the code. Do not invent, assume, or add any properties, styles, values, or behavior that are not explicitly present in the code. If something is referenced but not defined, point that out rather than guessing or filling it in.';
+    const userPrompt = [
+      payload.prompt.trim() ? `Question: ${payload.prompt.trim()}` : 'Explain what this code does.',
+      payload.selectedCode.trim() ? `Code:\n${payload.selectedCode.trim()}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    let fullText = '';
+    const result = await generate(userPrompt, systemPrompt, (chunk: string) => {
+      fullText += chunk;
+      event.sender.send('ai:token', chunk);
+    });
+
+    incrementAiCallCount();
+    return { success: true, result: fullText || result };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
 ipcMain.handle('llama-test-ping', async () => {
   try {
     const result = await generate('Write a JS function that adds two numbers');

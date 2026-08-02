@@ -27,6 +27,7 @@ declare global {
     ai: {
       complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
       translate: (payload: { prompt: string; selectedCode: string; language: string }) => Promise<{ success: boolean; result?: string; error?: string }>;
+      explain: (payload: { prompt: string; selectedCode: string }) => Promise<{ success: boolean; result?: string; error?: string }>;
       llamaTestPing: () => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     runner: {
