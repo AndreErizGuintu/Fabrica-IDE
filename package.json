@@ -34,8 +34,8 @@
     }
   ],
   "overrides": {
-  "node-abi": "^4.31.0"
-},
+    "node-abi": "^4.31.0"
+  },
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
@@ -60,7 +60,7 @@
   "prettier": {
     "singleQuote": true,
     "overrides": [
-      {   
+      {
         "files": [
           ".prettierrc",
           ".eslintrc"

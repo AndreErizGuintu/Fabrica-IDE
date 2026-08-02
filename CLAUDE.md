@@ -60,7 +60,7 @@ Missing runtimes show a human-readable error in the Output panel, not a crash.
 - Headings: Space Grotesk | Body: IBM Plex Sans | Code/Labels: Space Mono
 
 ## App.css Rules
-ONLY allowed in App.css: `@import "tailwindcss"`, Google Fonts `@import`, `:root` CSS variables for brand colors, body background radial gradient, pseudo-element glow effects, `@keyframes` animations.
+ONLY allowed in App.css: `@import "tailwindcss"`, Google Fonts `@import`, `@import "@vscode/codicons/dist/codicon.css"` (icon font, added 2026-08-02, planned for sidebar icons), `:root` CSS variables for brand colors, body background radial gradient, pseudo-element glow effects, `@keyframes` animations.
 NEVER write layout, spacing, or component styles in App.css.
 
 ## Navigation

@@ -17,6 +17,11 @@ const LANGUAGES = [
   'Dart',
   'C#',
   'PHP',
+  'Python',
+  'Java',
+  'TypeScript',
+  'Go',
+  'Rust',
 ];
 
 function renderResponseContent(response: string) {
@@ -47,19 +52,19 @@ function renderResponseContent(response: string) {
   }
 
   if (!sections.length) {
-    return <div>{response}</div>;
+    return <div className="whitespace-pre-wrap text-xs leading-5">{response}</div>;
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {sections.map((section, index) => {
         if (section.type === 'code') {
           return (
             <div key={`${section.language}-${index}`} className="overflow-hidden rounded border border-[#7c3aed] bg-[#12081f]">
-              <div className="border-b border-[#2d1b4e] px-3 py-1 text-[10px] uppercase tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace' }}>
+              <div className="border-b border-[#2d1b4e] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace' }}>
                 {section.language}
               </div>
-              <pre className="m-0 overflow-x-auto p-3 text-xs text-[#f8fafc]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
+              <pre className="m-0 overflow-x-auto p-2 text-[10px] text-[#f8fafc]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
                 <code>{section.content}</code>
               </pre>
             </div>
@@ -67,7 +72,7 @@ function renderResponseContent(response: string) {
         }
 
         return (
-          <p key={index} className="m-0 whitespace-pre-wrap leading-5">
+          <p key={index} className="m-0 whitespace-pre-wrap leading-4 text-xs">
             {section.content}
           </p>
         );
@@ -78,7 +83,7 @@ function renderResponseContent(response: string) {
 
 function renderChatThread(messages: ChatMessage[]) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {messages.length ? (
         messages.map((message, index) => {
           const isUser = message.role === 'user';
@@ -86,7 +91,7 @@ function renderChatThread(messages: ChatMessage[]) {
           return (
             <div key={`${message.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
               <div
-                className="max-w-[85%] rounded border px-3 py-2 text-xs leading-5"
+                className="max-w-[85%] rounded border px-2 py-1.5 text-xs leading-4"
                 style={{
                   background: isUser ? '#4c1d95' : '#12081f',
                   borderColor: isUser ? '#a855f7' : '#2d1b4e',
@@ -141,7 +146,8 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
   const [explainResponse, setExplainResponse] = useState('');
   const [explainLoading, setExplainLoading] = useState(false);
 
-  const appWindow = window as typeof window & {
+  const appWindow = typeof window !== 'undefined' ? window : ({} as typeof window);
+  const appWindowWithAI = appWindow as typeof window & {
     ai?: {
       translate: (payload: {
         prompt: string;
@@ -188,19 +194,17 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
             break;
           }
         }
-
         return next;
       });
     });
 
     try {
-      const completion = await appWindow.ai?.complete(buildChatPrompt(systemPrompt, messages, trimmedPrompt));
+      const completion = await appWindowWithAI.ai?.complete(buildChatPrompt(systemPrompt, messages, trimmedPrompt));
 
       if (!completion?.success) {
         const errorText = getCompletionErrorText(completion?.error);
         setMessages((prev) => {
           const next = [...prev];
-
           for (let index = next.length - 1; index >= 0; index -= 1) {
             if (next[index]?.role === 'assistant') {
               next[index] = {
@@ -210,7 +214,6 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
               break;
             }
           }
-
           return next;
         });
       }
@@ -218,7 +221,6 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
       const errorText = getCompletionErrorText(err instanceof Error ? err.message : String(err));
       setMessages((prev) => {
         const next = [...prev];
-
         for (let index = next.length - 1; index >= 0; index -= 1) {
           if (next[index]?.role === 'assistant') {
             next[index] = {
@@ -228,7 +230,6 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
             break;
           }
         }
-
         return next;
       });
     } finally {
@@ -269,7 +270,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     });
 
     try {
-      await appWindow.ai?.translate({
+      await appWindowWithAI.ai?.translate({
         prompt: prompt.trim(),
         selectedCode: selectedCode.trim(),
         language,
@@ -307,8 +308,9 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1a0a2e] border-l border-[#2d1b4e]">
-      <div className="px-3 py-2 text-xs font-bold tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #2d1b4e' }}>
+    <div className="flex flex-col h-full bg-[#1a0a2e] border-l border-[#2d1b4e] overflow-hidden">
+      {/* Header */}
+      <div className="px-3 py-1.5 text-[10px] font-bold tracking-widest text-[#a855f7] shrink-0" style={{ fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #2d1b4e' }}>
         AI ASSISTANT
       </div>
 
@@ -320,7 +322,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className="text-xs px-3 py-2 rounded-t font-semibold tracking-widest"
+              className="text-[10px] px-3 py-1 rounded-t font-semibold tracking-widest transition-colors"
               style={{
                 background: isActive ? '#2d1b4e' : 'transparent',
                 color: isActive ? '#ffffff' : '#a7adc5',
@@ -335,160 +337,172 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
         })}
       </div>
 
-      <div className="px-3 py-2 flex flex-col gap-2 flex-1 overflow-hidden">
+      {/* Content */}
+      <div className="flex-1 flex flex-col gap-1.5 px-3 py-2 overflow-hidden min-h-0">
         {activeTab === 'ask' && (
           <>
-            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2">
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2 min-h-0">
               {renderChatThread(askMessages)}
             </div>
 
-            <textarea
-              value={askPrompt}
-              onChange={(e) => setAskPrompt(e.target.value)}
-              placeholder="Ask for help with code, concepts, debugging, or explanation..."
-              className="text-xs p-2 rounded resize-none outline-none"
-              style={{
-                background: '#2d1b4e',
-                color: '#ffffff',
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                minHeight: '92px',
-                border: '1px solid #4c1d95',
-              }}
-            />
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={handleAskSend}
-                disabled={askLoading || !askPrompt.trim()}
-                className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
+            {/* Input Area */}
+            <div className="shrink-0 flex flex-col gap-1.5">
+              <textarea
+                value={askPrompt}
+                onChange={(e) => setAskPrompt(e.target.value)}
+                placeholder="Ask for help with code, concepts, debugging, or explanation..."
+                className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: askLoading || !askPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                  background: '#2d1b4e',
                   color: '#ffffff',
-                  cursor: askLoading || !askPrompt.trim() ? 'not-allowed' : 'pointer',
+                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  minHeight: '50px',
+                  maxHeight: '70px',
+                  border: '1px solid #4c1d95',
                 }}
-              >
-                {askLoading ? 'Thinking...' : 'Send'}
-              </button>
+              />
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleAskSend}
+                  disabled={askLoading || !askPrompt.trim()}
+                  className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
+                  style={{
+                    background: askLoading || !askPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                    color: '#ffffff',
+                    cursor: askLoading || !askPrompt.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {askLoading ? 'Thinking...' : 'Send'}
+                </button>
+              </div>
             </div>
           </>
         )}
 
         {activeTab === 'plan' && (
           <>
-            <div className="rounded border border-[#2d1b4e] bg-[#12081f] px-3 py-2 text-xs text-[#a7adc5]" style={{ fontFamily: 'Space Mono, monospace' }}>
+            <div className="shrink-0 rounded border border-[#2d1b4e] bg-[#12081f] px-3 py-1 text-[10px] text-[#a7adc5]" style={{ fontFamily: 'Space Mono, monospace' }}>
               Plan mode — outlines steps only, does not make changes.
             </div>
 
-            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2">
+            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2 min-h-0">
               {renderChatThread(planMessages)}
             </div>
 
-            <textarea
-              value={planPrompt}
-              onChange={(e) => setPlanPrompt(e.target.value)}
-              placeholder="Describe what you want to plan..."
-              className="text-xs p-2 rounded resize-none outline-none"
-              style={{
-                background: '#2d1b4e',
-                color: '#ffffff',
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                minHeight: '92px',
-                border: '1px solid #4c1d95',
-              }}
-            />
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={handlePlanSend}
-                disabled={planLoading || !planPrompt.trim()}
-                className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
+            <div className="shrink-0 flex flex-col gap-1.5">
+              <textarea
+                value={planPrompt}
+                onChange={(e) => setPlanPrompt(e.target.value)}
+                placeholder="Describe what you want to plan..."
+                className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: planLoading || !planPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                  background: '#2d1b4e',
                   color: '#ffffff',
-                  cursor: planLoading || !planPrompt.trim() ? 'not-allowed' : 'pointer',
+                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  minHeight: '50px',
+                  maxHeight: '70px',
+                  border: '1px solid #4c1d95',
                 }}
-              >
-                {planLoading ? 'Thinking...' : 'Send'}
-              </button>
+              />
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handlePlanSend}
+                  disabled={planLoading || !planPrompt.trim()}
+                  className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
+                  style={{
+                    background: planLoading || !planPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                    color: '#ffffff',
+                    cursor: planLoading || !planPrompt.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {planLoading ? 'Thinking...' : 'Send'}
+                </button>
+              </div>
             </div>
           </>
         )}
 
         {activeTab === 'translate' && (
           <>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask the AI to complete, explain, refactor, or generate code..."
-              className="text-xs p-2 rounded resize-none outline-none"
-              style={{
-                background: '#2d1b4e',
-                color: '#ffffff',
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                minHeight: '92px',
-                border: '1px solid #4c1d95',
-              }}
-            />
-
-            <div
-              className="text-xs p-2 rounded overflow-y-auto"
-              style={{
-                background: '#2d1b4e',
-                color: '#a7adc5',
-                fontFamily: 'Space Mono, monospace',
-                minHeight: '60px',
-                maxHeight: '120px',
-                whiteSpace: 'pre',
-                overflowX: 'hidden',
-              }}
-            >
-              {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to translate'}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="text-xs px-2 py-1 rounded bg-[#2d1b4e] text-[#ffffff]"
-                style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
-              >
-                {LANGUAGES.map((ln) => (
-                  <option key={ln} value={ln} className="bg-[#2d1b4e]">
-                    {ln}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={handleTranslate}
-                disabled={loading || (!prompt.trim() && !selectedCode.trim())}
-                className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
+            <div className="shrink-0 flex flex-col gap-1.5">
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Ask the AI to complete, explain, refactor, or generate code..."
+                className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
+                  background: '#2d1b4e',
                   color: '#ffffff',
-                  cursor: loading || (!prompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
+                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  minHeight: '50px',
+                  maxHeight: '70px',
+                  border: '1px solid #4c1d95',
+                }}
+              />
+
+              <div
+                className="text-[10px] p-1.5 rounded overflow-y-auto shrink-0"
+                style={{
+                  background: '#2d1b4e',
+                  color: '#a7adc5',
+                  fontFamily: 'Space Mono, monospace',
+                  minHeight: '30px',
+                  maxHeight: '50px',
+                  whiteSpace: 'pre',
+                  overflowX: 'hidden',
                 }}
               >
-                {loading ? (
-                  'Thinking...'
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 3v2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M5 6h14" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M4 12h16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M5 18h14" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Translate
-                  </>
-                )}
-              </button>
+                {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to translate'}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="text-[10px] px-2 py-1 rounded bg-[#2d1b4e] text-[#ffffff] flex-1"
+                  style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+                >
+                  {LANGUAGES.map((ln) => (
+                    <option key={ln} value={ln} className="bg-[#2d1b4e]">
+                      {ln}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  disabled={loading || (!prompt.trim() && !selectedCode.trim())}
+                  className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors shrink-0"
+                  style={{
+                    background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
+                    color: '#ffffff',
+                    cursor: loading || (!prompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loading ? (
+                    'Thinking...'
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 3v2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5 6h14" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M4 12h16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5 18h14" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Translate
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#2d1b4e] text-[#ffffff]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+            <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#2d1b4e] text-[#ffffff] min-h-0" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
               {response ? renderResponseContent(response) : 'AI response will appear here...'}
             </div>
           </>
