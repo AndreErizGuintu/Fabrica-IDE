@@ -440,7 +440,10 @@ const ptySessions = new Map<string, pty.IPty>();
 // survive being typed into the shell as a single token.
 function quoteCmdArg(arg: string): string {
   if (/[\s"]/.test(arg)) {
-    return `"${arg.replace(/"/g, '\\"')}"`;
+    const escaped = arg
+      .replace(/(\\*)"/g, '$1$1\\"')
+      .replace(/(\\+)$/g, '$1$1');
+    return `"${escaped}"`;
   }
   return arg;
 }
