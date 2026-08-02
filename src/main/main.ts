@@ -440,7 +440,10 @@ const ptySessions = new Map<string, pty.IPty>();
 // survive being typed into the shell as a single token.
 function quoteCmdArg(arg: string): string {
   if (/[\s"]/.test(arg)) {
-    return `"${arg.replace(/"/g, '\\"')}"`;
+    const escaped = arg
+      .replace(/(\\*)"/g, '$1$1\\"')
+      .replace(/(\\+)$/g, '$1$1');
+    return `"${escaped}"`;
   }
   return arg;
 }
@@ -651,6 +654,27 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
       `Language: ${payload.language}`,
       payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : 'Prompt: Complete the selected code.',
       payload.selectedCode.trim() ? `Selected code:\n${payload.selectedCode.trim()}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    let fullText = '';
+    const result = await generate(userPrompt, systemPrompt, (chunk: string) => {
+      fullText += chunk;
+      event.sender.send('ai:token', chunk);
+    });
+
+    incrementAiCallCount();
+    return { success: true, result: fullText || result };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('ai:explain', async (event, payload: { prompt: string; selectedCode: string }) => {
+  try {
+    const systemPrompt = 'You are a precise code-explanation assistant. Describe exactly what the provided code does, its structure, and its properties as they actually appear in the code. Do not invent, assume, or add any properties, styles, values, or behavior that are not explicitly present in the code. If something is referenced but not defined, point that out rather than guessing or filling it in.';
+    const userPrompt = [
+      payload.prompt.trim() ? `Question: ${payload.prompt.trim()}` : 'Explain what this code does.',
+      payload.selectedCode.trim() ? `Code:\n${payload.selectedCode.trim()}` : '',
     ].filter(Boolean).join('\n\n');
 
     let fullText = '';
