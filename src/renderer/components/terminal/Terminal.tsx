@@ -3,7 +3,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export type TerminalRunPayload = { language: string; path: string };
+export type TerminalRunPayload = { language: string; path: string; deviceId?: string };
 
 export type TerminalHandle = {
   run: (payload: TerminalRunPayload) => Promise<void>;

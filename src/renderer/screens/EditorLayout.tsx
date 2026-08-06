@@ -7,6 +7,8 @@ import Sidebar from '../components/sidebar/Sidebar';
 import AIPanel from '../components/ai/AIPanel';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
 import StatsDebugPanel from '../components/StatsDebugPanel';
+import AdaptiveToast from '../components/adaptive/AdaptiveToast';
+import FlutterTargetSelector, { FlutterTarget } from '../components/flutter/FlutterTargetSelector';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -493,11 +495,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     await terminalRef.current?.run({ language, path: activeTab.path });
   }, [activeTab]);
 
-  const handleFlutterRun = useCallback(async () => {
+  const handleFlutterRun = useCallback(async (target: FlutterTarget) => {
     if (!initialFolder) return;
     setRunError(null);
     setShowOutput(true);
-    await terminalRef.current?.run({ language: 'flutter', path: initialFolder });
+    await terminalRef.current?.run({ language: 'flutter', path: initialFolder, deviceId: target.id });
   }, [initialFolder]);
 
   const runGitCommand = useCallback(async (
@@ -675,6 +677,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
       {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx */}
       <StatsDebugPanel projectPath={initialFolder} />
+      <AdaptiveToast
+        currentCode={activeTab?.content ?? ''}
+        language={activeTab ? getLanguage(activeTab.filename) : 'plaintext'}
+      />
       {/* Top Bar - Redesigned */}
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0"
@@ -763,25 +769,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               {isRunning ? 'Running…' : 'Run'}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={handleFlutterRun}
+          <FlutterTargetSelector
             disabled={!initialFolder}
-            title={
-              isRunning
-                ? 'A process is already running — this will stop it and start a new one'
-                : 'Launch Flutter Windows desktop preview for the open project'
-            }
-            className="px-4 py-1 rounded text-sm font-medium transition-colors hover:bg-white/10"
-            style={{
-              background: 'rgba(96, 165, 250, 0.15)',
-              color: '#60a5fa',
-              cursor: !initialFolder ? 'not-allowed' : 'pointer',
-              opacity: !initialFolder ? 0.4 : 1,
-            }}
-          >
-            Flutter Preview
-          </button>
+            isRunning={isRunning}
+            onRun={handleFlutterRun}
+          />
           <button
             type="button"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:bg-white/10"

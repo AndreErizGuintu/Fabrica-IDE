@@ -28,6 +28,19 @@ type SessionHistoryEntry = {
   aiCallCount: number;
 };
 
+function formatSeconds(s: number | null): string {
+  if (s === null) return '—';
+  return `${s.toFixed(1)}s`;
+}
+
+function Indicator({ on }: { on: boolean }) {
+  return (
+    <span style={{ color: on ? '#86efac' : '#666', fontWeight: 700 }}>
+      {on ? 'YES' : 'no'}
+    </span>
+  );
+}
+
 function formatMs(ms: number): string {
   const totalSeconds = ms / 1000;
   if (totalSeconds < 60) {
@@ -81,19 +94,22 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
   const [history, setHistory] = useState<SessionHistoryEntry[]>([]);
+  const [adaptive, setAdaptive] = useState<Awaited<ReturnType<typeof window.adaptive.getDebugState>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     setError(null);
     try {
-      const [current, agg, hist] = await Promise.all([
+      const [current, agg, hist, adaptiveState] = await Promise.all([
         window.stats.getCurrentSession(),
         window.stats.getAggregate(),
         projectPath ? window.stats.getSessionHistory(projectPath) : Promise.resolve([]),
+        window.adaptive.getDebugState(),
       ]);
       setCurrentSession(current);
       setAggregate(agg);
       setHistory(hist);
+      setAdaptive(adaptiveState);
     } catch (err) {
       setError(String(err));
     }
@@ -109,10 +125,11 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
   useEffect(() => {
     if (!open) return undefined;
     const intervalId = setInterval(() => {
-      Promise.all([window.stats.getCurrentSession(), window.stats.getAggregate()])
-        .then(([current, agg]) => {
+      Promise.all([window.stats.getCurrentSession(), window.stats.getAggregate(), window.adaptive.getDebugState()])
+        .then(([current, agg, adaptiveState]) => {
           setCurrentSession(current);
           setAggregate(agg);
+          setAdaptive(adaptiveState);
         })
         .catch((err) => setError(String(err)));
     }, 1000);
@@ -237,6 +254,99 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
                 </table>
               ) : (
                 <p style={{ color: '#888', margin: 0 }}>No active session.</p>
+              )}
+            </div>
+
+            <div style={sectionStyle}>
+              <h3 style={headingStyle}>Adaptive Engine (src/main/adaptiveEngine.ts)</h3>
+              {adaptive ? (
+                <>
+                  <table style={{ borderCollapse: 'collapse', marginBottom: 10 }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ ...tdStyle, color: '#888' }}>Priority winner (raw, pre-suppression)</td>
+                        <td style={tdStyle}>{adaptive.priorityWinner ?? 'none'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...tdStyle, color: '#888' }}>Suggestion active</td>
+                        <td style={tdStyle}>
+                          {adaptive.suggestionActive
+                            ? `Scenario ${adaptive.suggestionActive.scenario}`
+                            : 'none'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...tdStyle, color: '#888' }}>Cooldown</td>
+                        <td style={tdStyle}>
+                          {adaptive.cooldown.active
+                            ? `active, ${formatSeconds(adaptive.cooldown.remainingSeconds)} remaining`
+                            : 'not active'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...tdStyle, color: '#888' }}>Last suggestion fired</td>
+                        <td style={tdStyle}>
+                          {adaptive.lastSuggestionFired
+                            ? `Scenario ${adaptive.lastSuggestionFired.scenario} @ ${formatTime(new Date(adaptive.lastSuggestionFired.firedAt).toISOString())}`
+                            : 'none this session'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Scenario</th>
+                          <th style={thStyle}>Would fire now</th>
+                          <th style={thStyle}>Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style={tdStyle}>1 — idle→call</td>
+                          <td style={tdStyle}><Indicator on={adaptive.scenario1.conditionTrue} /></td>
+                          <td style={tdStyle}>
+                            last idle-expiry:{' '}
+                            {adaptive.scenario1.lastIdleExpiredAt
+                              ? formatTime(new Date(adaptive.scenario1.lastIdleExpiredAt).toISOString())
+                              : 'none'}
+                            {' | '}window open: {adaptive.scenario1.windowOpen ? 'yes' : 'no'}
+                            {' | '}remaining: {formatSeconds(adaptive.scenario1.windowRemainingSeconds)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={tdStyle}>2 — rapid calls</td>
+                          <td style={tdStyle}><Indicator on={adaptive.scenario2.conditionTrue} /></td>
+                          <td style={tdStyle}>
+                            {adaptive.scenario2.callCountInWindow}/{adaptive.scenario2.threshold} calls in window
+                            {' | '}runs in window: {adaptive.scenario2.runCountInWindow}
+                            {' | '}window resets in: {formatSeconds(adaptive.scenario2.windowRemainingSeconds)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={tdStyle}>3 — silent struggle</td>
+                          <td style={tdStyle}><Indicator on={adaptive.scenario3.conditionTrue} /></td>
+                          <td style={tdStyle}>
+                            consecutiveIdleResets: {adaptive.scenario3.consecutiveIdleResets}/{adaptive.scenario3.threshold}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={tdStyle}>4 — session ratio</td>
+                          <td style={tdStyle}><Indicator on={adaptive.scenario4.conditionTrue} /></td>
+                          <td style={tdStyle}>
+                            calls:runs = {adaptive.scenario4.sessionCallCount}:{adaptive.scenario4.sessionRunCount}
+                            {' | '}ratio: {adaptive.scenario4.ratio !== null ? adaptive.scenario4.ratio.toFixed(2) : '—'} / {adaptive.scenario4.threshold}
+                            {' | '}min runs met: {adaptive.scenario4.minimumRunsMet ? 'yes' : `no (need ${adaptive.scenario4.minimumRunsBeforeEvaluating})`}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p style={{ color: '#888', margin: 0 }}>Loading...</p>
               )}
             </div>
 

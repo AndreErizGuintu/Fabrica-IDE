@@ -24,11 +24,24 @@ import {
   startSession,
   recordActivity,
   incrementAiCallCount,
+  incrementRunCount,
   endSession,
   getCurrentSession,
   getAggregate,
   getSessionHistory,
 } from './stats';
+import {
+  startEngineSession,
+  stopEngineSession,
+  onEditorActivity,
+  onAiCall,
+  onRun,
+  dismissSuggestion,
+  requestHint,
+  setSuggestionSink,
+  getDebugState,
+  Suggestion,
+} from './adaptiveEngine';
 
 // package.json's root "name" is still "electron-react-boilerplate" (only
 // build.productName is "ElectronReact", which Electron itself never reads),
@@ -124,7 +137,7 @@ const writeRecentProjects = (projects: RecentProject[]) => {
 // Single source of truth for "how do I run this" across the app: the run:checkSDK
 // version-check, the terminal:run spawn, and (formerly) the separate flutter:run
 // handler all resolve through here instead of each keeping their own switch.
-function getRunConfig(targetPath: string, language: string):
+function getRunConfig(targetPath: string, language: string, deviceId?: string):
   | { cmd: string; args: string[]; cwd: string }
   | { html: true }
   | { error: string } {
@@ -142,10 +155,107 @@ function getRunConfig(targetPath: string, language: string):
       return { cmd: getBundledRuntimeBinary('dart'), args: ['run', targetPath], cwd: path.dirname(targetPath) };
     case 'flutter':
       // Project-level (whole-folder `flutter run`), so targetPath is the folder itself, not a file.
-      return { cmd: getFlutterBinary(), args: ['run', '-d', 'windows'], cwd: targetPath };
+      // deviceId comes from the run-target selector in the renderer; falls back to
+      // the Windows desktop target when unset (e.g. a caller that predates the selector).
+      return { cmd: getFlutterBinary(), args: ['run', '-d', deviceId || 'windows'], cwd: targetPath };
     default:
       return { error: `No runner configured for ${language}` };
   }
+}
+
+type FlutterTarget = { id: string; name: string; platform: string };
+
+// `flutter devices --machine` schema: each entry has a `platform` field that's
+// arch-qualified (e.g. "windows-x64", "android-arm64") and a separate
+// `platformType` field that's the coarse group ("windows", "android", "ios", "web").
+// We filter on platformType to match the spec's plain "windows" / "android" check.
+ipcMain.handle('flutter:listDevices', async () => {
+  return new Promise<{ success: boolean; devices?: FlutterTarget[]; error?: string }>((resolve) => {
+    // flutter.bat (like all .bat/.cmd files on Windows) isn't a real PE executable —
+    // it can only be launched through a shell, so execFile(getFlutterBinary(), ...)
+    // throws EINVAL here the same way it would for any other .bat target.
+    //
+    // execFile(..., { shell: true }) alone is NOT a safe fix: Node's shell:true path
+    // (see lib/child_process.js normalizeSpawnArguments) naively joins file+args with
+    // a single space and wraps the *whole* result in one pair of quotes — it does not
+    // quote the file/each arg individually. That breaks the instant the resolved
+    // flutter.bat path itself contains a space (this project's own path,
+    // "Documents\Capstone\Fabrica-IDE", doesn't, but a different install location
+    // easily could — e.g. "My Documents" or a "Program Files" style path).
+    //
+    // Fixed by driving cmd.exe /d /s /c ourselves with a manually quoted command
+    // line, reusing quoteCmdArg()/buildCommandLine() below — the same helpers the
+    // working pty-based Flutter Preview run path (terminal:run) already relies on to
+    // survive spaces, which is why that path never hit this bug.
+    const commandLine = buildCommandLine(getFlutterBinary(), ['devices', '--machine']);
+    execFile(
+      'cmd.exe',
+      ['/d', '/s', '/c', `"${commandLine}"`],
+      { timeout: 20000, windowsVerbatimArguments: true },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({ success: false, error: stderr || error.message });
+          return;
+        }
+        try {
+          const raw = JSON.parse(stdout);
+          const devices: FlutterTarget[] = (raw as Array<Record<string, unknown>>)
+            .filter((d) => {
+              const platformType = d.platformType as string | undefined;
+              if (platformType === 'windows') return true;
+              return typeof platformType === 'string' && platformType.startsWith('android') && d.emulator === false;
+            })
+            .map((d) => ({ id: String(d.id), name: String(d.name), platform: String(d.platformType) }));
+          resolve({ success: true, devices });
+        } catch (err) {
+          resolve({ success: false, error: `Failed to parse flutter devices output: ${String(err)}` });
+        }
+      },
+    );
+  });
+});
+
+// Best-effort secondary signal for the run-target dropdown: detects raw USB
+// connection events at the OS level so the UI can distinguish "nothing plugged
+// in" from "something's plugged in but Flutter/adb doesn't see it as debug-ready"
+// (missing OEM driver, USB debugging not enabled, etc.).
+//
+// Deliberately implemented via polling `Get-PnpDevice` through child_process
+// rather than a native module (e.g. usb-detection) — see DECISIONS.md's standing
+// node-gyp/VS2022 rebuild-pain note for node-pty; this avoids that risk class
+// entirely at the cost of ~3s detection latency, which is fine for a nicety.
+let knownUsbDeviceIds = new Set<string>();
+let usbWatcherStarted = false;
+
+function startUsbWatcher() {
+  if (usbWatcherStarted || process.platform !== 'win32') return;
+  usbWatcherStarted = true;
+
+  const poll = () => {
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        "Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\\*' } | Select-Object -ExpandProperty InstanceId",
+      ],
+      { timeout: 5000 },
+      (error, stdout) => {
+        if (error) return; // best-effort — silently skip this tick rather than surface noise
+        const current = new Set(
+          stdout.split('\n').map((line) => line.trim()).filter(Boolean),
+        );
+        const added = [...current].filter((id) => !knownUsbDeviceIds.has(id));
+        knownUsbDeviceIds = current;
+        if (added.length > 0) {
+          mainWindow?.webContents.send('usb:connected', added);
+        }
+      },
+    );
+  };
+
+  poll();
+  setInterval(poll, 3000);
 }
 
 class AppUpdater {
@@ -157,6 +267,10 @@ class AppUpdater {
 }
 
 let mainWindow: BrowserWindow | null = null;
+
+setSuggestionSink((suggestion: Suggestion) => {
+  mainWindow?.webContents.send('adaptive:suggest', suggestion);
+});
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
@@ -274,11 +388,28 @@ ipcMain.handle('fs:delete', async (_event, targetPath: string) => {
 
 ipcMain.handle('stats:startSession', async (_event, projectPath: string) => {
   startSession(projectPath);
+  startEngineSession();
   return { success: true };
 });
 
 ipcMain.on('stats:activity', () => {
   recordActivity();
+  onEditorActivity();
+});
+
+ipcMain.on('adaptive:dismiss', () => {
+  dismissSuggestion();
+});
+
+ipcMain.handle('adaptive:getDebugState', () => getDebugState());
+
+ipcMain.handle('adaptive:hint', async (_event, payload: { code: string; language: string }) => {
+  try {
+    const hint = await requestHint(payload.code, payload.language);
+    return { success: true, hint };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
 });
 
 // Debug-only handlers backing the temporary StatsDebugPanel UI.
@@ -452,9 +583,11 @@ function buildCommandLine(cmd: string, args: string[]): string {
   return [cmd, ...args].map(quoteCmdArg).join(' ');
 }
 
-ipcMain.handle('terminal:run', async (event, { language, path: targetPath }: { language: string; path: string }) => {
+ipcMain.handle('terminal:run', async (event, { language, path: targetPath, deviceId }: { language: string; path: string; deviceId?: string }) => {
   recordActivity();
-  const config = getRunConfig(targetPath, language);
+  incrementRunCount();
+  onRun();
+  const config = getRunConfig(targetPath, language, deviceId);
 
   if ('html' in config) {
     return { success: true, html: true };
@@ -598,6 +731,8 @@ const createWindow = async () => {
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
   new AppUpdater();
+
+  startUsbWatcher();
 };
 
 /**
@@ -606,6 +741,7 @@ const createWindow = async () => {
 
 app.on('before-quit', () => {
   endSession();
+  stopEngineSession();
 });
 
 app.on('window-all-closed', () => {
@@ -641,6 +777,7 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
     });
 
     incrementAiCallCount();
+    onAiCall();
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };
@@ -663,6 +800,7 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
     });
 
     incrementAiCallCount();
+    onAiCall();
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };
@@ -684,6 +822,7 @@ ipcMain.handle('ai:explain', async (event, payload: { prompt: string; selectedCo
     });
 
     incrementAiCallCount();
+    onAiCall();
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };

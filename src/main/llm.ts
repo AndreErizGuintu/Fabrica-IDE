@@ -36,7 +36,7 @@ const isVramError = (err: unknown): boolean => {
 type LlamaRuntime = {
   llama: unknown;
   model: {
-    createContext: () => Promise<{
+    createContext: (options?: { contextSize?: number }) => Promise<{
       getSequence: () => unknown;
       dispose: () => Promise<void>;
     }>;
@@ -144,10 +144,14 @@ export const generate = async (
   prompt: string,
   systemPrompt?: string,
   onTextChunk?: (text: string) => void,
+  options?: { maxTokens?: number; contextSize?: number },
 ): Promise<string> => {
-  const { model } = await initLlama();
+  const { llama, model } = await initLlama();
+  console.log('[llm] generate() using GPU device(s):', await (llama as any).getGpuDeviceNames());
   const { LlamaChatSession: SessionCtor } = await importNodeLlamaCpp();
-  const context = await model.createContext();
+  const context = options?.contextSize
+    ? await model.createContext({ contextSize: options.contextSize })
+    : await model.createContext();
 
   try {
     const session = new SessionCtor({
@@ -157,6 +161,7 @@ export const generate = async (
     return await session.prompt(prompt, {
       systemPrompt,
       onTextChunk,
+      maxTokens: options?.maxTokens,
     });
   } finally {
     await context.dispose();

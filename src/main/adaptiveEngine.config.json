@@ -1,0 +1,8 @@
+{
+  "idleThresholdSeconds": 15,
+  "scenario1_idleThenCall": { "callWithinSecondsAfterIdle": 10},
+  "scenario2_rapidCalls": { "windowMinutes": 5, "callCountThreshold": 3 },
+  "scenario3_silentStruggle": { "consecutiveIdleResetsThreshold": 5 },
+  "scenario4_sessionRatio": { "callToRunRatioThreshold": 3, "minimumRunsBeforeEvaluating": 2 },
+  "suggestion": { "cooldownMinutesAfterDismiss": 10, "autoDismissSeconds": 10 }
+}

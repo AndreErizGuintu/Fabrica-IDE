@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit';
+export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit' | 'usb:connected' | 'adaptive:suggest';
 
 const electronHandler = {
   ipcRenderer: {
@@ -68,8 +68,21 @@ contextBridge.exposeInMainWorld('stats', {
     ipcRenderer.invoke('stats:getSessionHistory', projectPath),
 });
 
+contextBridge.exposeInMainWorld('adaptive', {
+  dismiss: () => ipcRenderer.send('adaptive:dismiss'),
+  requestHint: (payload: { code: string; language: string }) =>
+    ipcRenderer.invoke('adaptive:hint', payload),
+  getDebugState: () => ipcRenderer.invoke('adaptive:getDebugState'),
+  onSuggest: (cb: (suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) => void) => {
+    const handler = (_event: IpcRendererEvent, suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) =>
+      cb(suggestion);
+    ipcRenderer.on('adaptive:suggest', handler);
+    return () => ipcRenderer.removeListener('adaptive:suggest', handler);
+  },
+});
+
 contextBridge.exposeInMainWorld('terminal', {
-  run: (payload: { language: string; path: string }) => ipcRenderer.invoke('terminal:run', payload),
+  run: (payload: { language: string; path: string; deviceId?: string }) => ipcRenderer.invoke('terminal:run', payload),
   input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),
   stop: (sessionId: string) => ipcRenderer.invoke('terminal:stop', { sessionId }),
   onOutput: (cb: (sessionId: string, data: string) => void) => {
@@ -83,6 +96,15 @@ contextBridge.exposeInMainWorld('terminal', {
       cb(payload.sessionId, payload.exitCode);
     ipcRenderer.on('terminal:exit', handler);
     return () => ipcRenderer.removeListener('terminal:exit', handler);
+  },
+});
+
+contextBridge.exposeInMainWorld('flutter', {
+  listDevices: () => ipcRenderer.invoke('flutter:listDevices'),
+  onUsbConnected: (cb: (deviceIds: string[]) => void) => {
+    const handler = (_event: IpcRendererEvent, deviceIds: string[]) => cb(deviceIds);
+    ipcRenderer.on('usb:connected', handler);
+    return () => ipcRenderer.removeListener('usb:connected', handler);
   },
 });
 

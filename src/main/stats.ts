@@ -15,6 +15,7 @@ type SessionState = {
   lastTickAt: number;
   idleTimeMs: number;
   aiCallCount: number;
+  runCount: number;
   intervalId: ReturnType<typeof setInterval>;
 };
 
@@ -24,11 +25,13 @@ type SessionFile = {
   sessionEnd: string;
   idleTimeMs: number;
   aiCallCount: number;
+  runCount: number;
 };
 
 type AggregateFile = {
   totalIdleTimeMs: number;
   totalAiCallCount: number;
+  totalRunCount: number;
   totalSessionCount: number;
   lastUpdated: string;
 };
@@ -56,6 +59,7 @@ function readAggregate(): AggregateFile {
     return {
       totalIdleTimeMs: 0,
       totalAiCallCount: 0,
+      totalRunCount: 0,
       totalSessionCount: 0,
       lastUpdated: new Date().toISOString(),
     };
@@ -68,6 +72,7 @@ function readAggregate(): AggregateFile {
     return {
       totalIdleTimeMs: 0,
       totalAiCallCount: 0,
+      totalRunCount: 0,
       totalSessionCount: 0,
       lastUpdated: new Date().toISOString(),
     };
@@ -78,6 +83,7 @@ function updateAggregate(session: SessionFile) {
   const aggregate = readAggregate();
   aggregate.totalIdleTimeMs += session.idleTimeMs;
   aggregate.totalAiCallCount += session.aiCallCount;
+  aggregate.totalRunCount += session.runCount ?? 0;
   aggregate.totalSessionCount += 1;
   aggregate.lastUpdated = new Date().toISOString();
   atomicWriteJson(getAggregatePath(), aggregate);
@@ -112,6 +118,7 @@ export function startSession(projectPath: string) {
     lastTickAt: now,
     idleTimeMs: 0,
     aiCallCount: 0,
+    runCount: 0,
     intervalId: setInterval(tick, TICK_MS),
   };
 }
@@ -127,6 +134,12 @@ export function incrementAiCallCount() {
   recordActivity();
 }
 
+export function incrementRunCount() {
+  if (!current) return;
+  current.runCount += 1;
+  recordActivity();
+}
+
 export function getCurrentSession() {
   if (!current) return null;
   return {
@@ -134,6 +147,7 @@ export function getCurrentSession() {
     sessionStart: current.sessionStart,
     idleTimeMs: current.idleTimeMs,
     aiCallCount: current.aiCallCount,
+    runCount: current.runCount,
   };
 }
 
@@ -172,6 +186,7 @@ export function endSession() {
     sessionEnd: new Date().toISOString(),
     idleTimeMs: current.idleTimeMs,
     aiCallCount: current.aiCallCount,
+    runCount: current.runCount,
   };
 
   const fileTimestamp = current.sessionStart.replace(/[:.]/g, '-');

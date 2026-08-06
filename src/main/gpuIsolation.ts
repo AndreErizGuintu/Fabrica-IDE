@@ -26,6 +26,13 @@ import { app } from 'electron';
 const IGPU_NAME_PATTERN = /intel|uhd|iris|graphics/i;
 const DEDICATED_VENDOR_PATTERN = /nvidia|geforce|rtx|gtx|quadro|amd|radeon/i;
 
+// NOTE: this exact name-pattern classification (and the probe-script string
+// below) is intentionally duplicated in scripts/resolve-gpu-isolation.mjs,
+// which runs the same decision under plain Node *before* Electron/electronmon
+// start (this file can't be imported there -- it pulls in 'electron', which
+// only resolves inside the Electron binary). If you change the classification
+// rule or the probe command here, mirror the change in that script too.
+//
 // Known misclassification risks with this name-based heuristic:
 // - AMD APU integrated graphics (e.g. "AMD Radeon(TM) Graphics") contain both
 //   an iGPU-signature word ("Graphics") AND a dedicated-vendor word
@@ -40,7 +47,16 @@ const DEDICATED_VENDOR_PATTERN = /nvidia|geforce|rtx|gtx|quadro|amd|radeon/i;
 const looksLikeIntegratedGpu = (name: string): boolean =>
   IGPU_NAME_PATTERN.test(name) && !DEDICATED_VENDOR_PATTERN.test(name);
 
-const probeGpuDeviceNames = (): Promise<string[]> => new Promise((resolve, reject) => {
+// 40s: first probe after a cold boot/restart genuinely needs this long for
+// Vulkan device enumeration alone (confirmed via err.killed/err.signal -- a
+// timeout kill, not a driver crash -- the original 15s was just too tight for
+// first-run cold-start overhead; see DECISIONS.md). Every subsequent probe in
+// the same session finishes in well under a second. Keep in sync with
+// scripts/resolve-gpu-isolation.mjs's PROBE_TIMEOUT_MS per the duplication
+// note above.
+const PROBE_TIMEOUT_MS = 40000;
+
+const probeGpuDeviceNamesOnce = (): Promise<string[]> => new Promise((resolve, reject) => {
   const probeScript = [
     "import('node-llama-cpp').then(async ({ getLlama }) => {",
     '  const llama = await getLlama();',
@@ -60,7 +76,7 @@ const probeGpuDeviceNames = (): Promise<string[]> => new Promise((resolve, rejec
     ['-e', probeScript],
     {
       cwd: app.getAppPath(),
-      timeout: 15000,
+      timeout: PROBE_TIMEOUT_MS,
       env: { ...probeEnv, ELECTRON_RUN_AS_NODE: '1' },
     },
     (err, stdout, stderr) => {
@@ -86,6 +102,20 @@ const probeGpuDeviceNames = (): Promise<string[]> => new Promise((resolve, rejec
   );
 });
 
+// Secondary safety net only -- the timeout bump above is the real fix. One
+// retry in case even 40s isn't enough on a particularly slow first run.
+const probeGpuDeviceNames = async (): Promise<string[]> => {
+  try {
+    return await probeGpuDeviceNamesOnce();
+  } catch (err) {
+    console.warn(
+      '[gpu-isolation] First probe attempt failed, retrying once:',
+      err instanceof Error ? err.message : String(err),
+    );
+    return probeGpuDeviceNamesOnce();
+  }
+};
+
 /**
  * Call once, at app startup, before createWindow(). If this process is a
  * relaunch that already carries GGML_VK_VISIBLE_DEVICES, it's a fast no-op.
@@ -95,11 +125,18 @@ const probeGpuDeviceNames = (): Promise<string[]> => new Promise((resolve, rejec
  * normally in that case (app.exit() terminates the process).
  */
 export const ensureGpuDeviceIsolation = async (): Promise<void> => {
-  // Loop-guard: this is the branch the relaunched process takes. It's the
-  // only thing standing between us and a relaunch loop, so it gets a log
-  // line every time it fires -- if a loop ever happened, this line repeating
-  // rapidly in the log would make it obvious immediately instead of the app
-  // silently spinning.
+  // Loop-guard: this is the branch the relaunched process takes. In dev,
+  // GGML_VK_VISIBLE_DEVICES is normally already set by the time this runs --
+  // resolved once by scripts/resolve-gpu-isolation.mjs before electronmon/
+  // Electron ever launched, and inherited down through the npm/webpack spawn
+  // chain -- so this returns immediately, no probe/relaunch on every hot
+  // reload. Packaged builds have no such pre-start chain to hook into, so
+  // they still take the probe+relaunch path below, once, at cold start (a
+  // packaged app is a single long-lived process -- not a hot-reload concern).
+  // It's also the only thing standing between us and a relaunch loop, so it
+  // gets a log line every time it fires -- if a loop ever happened, this line
+  // repeating rapidly in the log would make it obvious immediately instead of
+  // the app silently spinning.
   if (process.env.GGML_VK_VISIBLE_DEVICES) {
     console.log(`[gpu-isolation] GGML_VK_VISIBLE_DEVICES already set (${process.env.GGML_VK_VISIBLE_DEVICES}), skipping isolation probe.`);
     return;
