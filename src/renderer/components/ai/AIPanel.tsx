@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 
 interface AIPanelProps {
   selectedCode: string;
@@ -12,15 +12,10 @@ interface AIPanelProps {
     content: string,
     language: string,
   ) => Promise<{ success: boolean; error?: string; skipped?: boolean }>;
+  // Chat/session state, owned by EditorLayout via useAIPanelState and shared
+  // across the docked and floating instances so it survives the swap.
+  panelState: AIPanelState;
 }
-
-type TabKey = 'ask' | 'plan' | 'translate' | 'explain';
-type ChatRole = 'user' | 'assistant';
-
-type ChatMessage = {
-  role: ChatRole;
-  content: string;
-};
 
 const LANGUAGES = [
   'JavaScript',
@@ -138,23 +133,25 @@ function getCompletionErrorText(error?: string) {
   return '⚠️ AI request failed';
 }
 
-export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile }: AIPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('ask');
-  const [response, setResponse] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [language, setLanguage] = useState('JavaScript');
-  const [prompt, setPrompt] = useState('');
-  const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
-  const [askPrompt, setAskPrompt] = useState('');
-  const [askLoading, setAskLoading] = useState(false);
-  const [planMessages, setPlanMessages] = useState<ChatMessage[]>([]);
-  const [planPrompt, setPlanPrompt] = useState('');
-  const [planLoading, setPlanLoading] = useState(false);
-  const [explainPrompt, setExplainPrompt] = useState('');
-  const [explainResponse, setExplainResponse] = useState('');
-  const [explainLoading, setExplainLoading] = useState(false);
+export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile, panelState }: AIPanelProps) {
+  const {
+    activeTab, setActiveTab,
+    response, setResponse,
+    loading, setLoading,
+    saving, setSaving,
+    saveMessage, setSaveMessage,
+    language, setLanguage,
+    prompt, setPrompt,
+    askMessages, setAskMessages,
+    askPrompt, setAskPrompt,
+    askLoading, setAskLoading,
+    planMessages, setPlanMessages,
+    planPrompt, setPlanPrompt,
+    planLoading, setPlanLoading,
+    explainPrompt, setExplainPrompt,
+    explainResponse, setExplainResponse,
+    explainLoading, setExplainLoading,
+  } = panelState;
 
   const appWindow = typeof window !== 'undefined' ? window : ({} as typeof window);
   const appWindowWithAI = appWindow as typeof window & {
