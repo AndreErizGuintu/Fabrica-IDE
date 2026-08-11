@@ -111,6 +111,11 @@ declare global {
       onSuggest: (cb: (suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) => void) => () => void;
       getDebugState: () => Promise<AdaptiveDebugState>;
     };
+    codeInference: {
+      checkTrigger: (payload: { prefix: string; suffix: string; language: string }) => Promise<{ triggered: boolean }>;
+      request: (payload: { prefix: string; suffix: string; language: string }) => Promise<{ success: boolean; suggestion: string | null; error?: string }>;
+      getConfig: () => Promise<{ debounceMs: number; maxTriggerChars: number; maxTriggerLines: number }>;
+    };
     terminal: {
       run: (payload: { language: string; path: string; deviceId?: string }) => Promise<{ success: boolean; sessionId?: string; html?: boolean; error?: string }>;
       input: (sessionId: string, data: string) => void;

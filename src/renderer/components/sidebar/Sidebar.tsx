@@ -9,6 +9,9 @@ interface SidebarProps {
   initialFolder?: string;
   activeFilePath?: string;
   gitStatusFiles?: string[];
+  // Bumped by the parent whenever a file is created outside the sidebar (e.g.
+  // AI Translate "Save as file") so the tree re-reads from disk and shows it.
+  refreshSignal?: number;
 }
 
 interface TreeNode {
@@ -453,7 +456,7 @@ function TreeNodeRow({
   );
 }
 
-export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, gitStatusFiles }: SidebarProps) {
+export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, gitStatusFiles, refreshSignal }: SidebarProps) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [newEntry, setNewEntry] = useState<NewEntryState | null>(null);
@@ -543,6 +546,14 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   const reloadAfterChange = async () => {
     await refreshTreeKeepingOpen();
   };
+
+  // Re-read the tree when the parent bumps refreshSignal (e.g. a file created
+  // by AI Translate "Save as file"). Skips the initial 0 so mount is untouched.
+  useEffect(() => {
+    if (!refreshSignal) return;
+    void refreshTreeKeepingOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   const handleNewEntryClick = async (type: 'file' | 'folder') => {
     const target = selectedFolder || folderName;

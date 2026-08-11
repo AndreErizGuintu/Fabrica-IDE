@@ -17,7 +17,8 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import * as pty from 'node-pty';
 import MenuBuilder from './menu';
-import { generate } from './llm';
+import { generate, shutdownWorker } from './llm';
+import { ensureRequiredImports } from './translateImports';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { resolveHtmlPath } from './util';
 import {
@@ -42,6 +43,11 @@ import {
   getDebugState,
   Suggestion,
 } from './adaptiveEngine';
+import {
+  requestCodeInference,
+  checkCodeInferenceTrigger,
+  getCodeInferenceConfig,
+} from './codeInference';
 
 // package.json's root "name" is still "electron-react-boilerplate" (only
 // build.productName is "ElectronReact", which Electron itself never reads),
@@ -412,6 +418,57 @@ ipcMain.handle('adaptive:hint', async (_event, payload: { code: string; language
   }
 });
 
+// --- Code Inference (confirmation-based boilerplate completion) --------------
+// Two handlers with deliberately different weights:
+//   checkTrigger - a pure string match. No model, no lock, no counter. Asked on
+//                  a debounce while the student types, so it must stay cheap.
+//   request      - the real generation, reachable ONLY from an explicit accept.
+//
+// COUNTER NOTE, REVERSED 2026-08-07: this used to be the one AI path in the app
+// that deliberately touched no counters, because ghost text appeared unasked.
+// It is now accept-gated, so requestCodeInference() calls
+// incrementAiCallCount() + onAiCall() itself, exactly like requestHint(). The
+// counting lives in codeInference.ts next to the generation rather than here.
+ipcMain.handle(
+  'codeInference:checkTrigger',
+  (_event, payload: { prefix: string; suffix: string; language: string }) =>
+    checkCodeInferenceTrigger(payload),
+);
+
+ipcMain.handle(
+  'codeInference:request',
+  async (_event, payload: { prefix: string; suffix: string; language: string }) => {
+    // TEMPORARY DIAGNOSTIC LOGGING - remove or gate before defense.
+    const receivedAt = Date.now();
+    console.log(
+      '[CodeInference:main] accept -> generation requested',
+      `language=${payload?.language}`,
+      `prefixLen=${payload?.prefix?.length} suffixLen=${payload?.suffix?.length}`,
+    );
+    try {
+      const { suggestion } = await requestCodeInference(payload);
+      console.log(
+        '[CodeInference:main] IPC responding',
+        `elapsed=${Date.now() - receivedAt}ms`,
+        `suggestion=${suggestion === null ? 'null' : `${suggestion.length} chars`}`,
+      );
+      return { success: true, suggestion };
+    } catch (err) {
+      // requestCodeInference already handles its own generation failures; this
+      // is a backstop so a failed completion can never surface an error dialog.
+      // The renderer shows a short inline message instead.
+      console.log(
+        '[CodeInference:main] IPC handler THREW',
+        `elapsed=${Date.now() - receivedAt}ms`,
+        String(err),
+      );
+      return { success: false, suggestion: null, error: String(err) };
+    }
+  },
+);
+
+ipcMain.handle('codeInference:getConfig', () => getCodeInferenceConfig());
+
 // Debug-only handlers backing the temporary StatsDebugPanel UI.
 ipcMain.handle('stats:getCurrentSession', () => getCurrentSession());
 
@@ -742,6 +799,16 @@ const createWindow = async () => {
 app.on('before-quit', () => {
   endSession();
   stopEngineSession();
+  // PART 2 of the utility-process migration (DECISIONS.md §9). Covers BOTH
+  // teardown cases with one call, because electronmon's hot-reload restart is
+  // itself a graceful `app.quit()` -- on a main-file change it sends 'reset' to
+  // the hook it injects with `--require`, and that hook calls app.quit()
+  // (node_modules/electronmon/src/hook.js). So every dev file save runs this
+  // exact path, which is what stops a worker -- and its ~5GB of model VRAM --
+  // leaking once per reload. Synchronous on purpose: nothing awaits this
+  // handler, and electronmon's own 'will-quit' listener calls app.exit()
+  // immediately after.
+  shutdownWorker('app quit');
 });
 
 app.on('window-all-closed', () => {
@@ -751,6 +818,37 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+// ===========================================================================
+// TEMPORARY DIAGNOSTIC: main-process event-loop heartbeat probe.
+// Added 2026-08-07 to diagnose the UI-freeze during AI generation. A plain
+// setInterval fires from the main-process JS event loop; if generation starves
+// that loop, the ticks stall and the logged gap balloons well past ~50ms,
+// pointing at JS event-loop starvation (fixable via a utility process). If the
+// heartbeat keeps ticking cleanly at ~50ms straight through a generation while
+// the UI is still frozen, the stall is lower-level (GPU/compositor) and needs a
+// different fix. Correlate the gap against llm.ts's [CodeInference:lock]
+// generate() ENTRY / GENERATION START / END / LOCK RELEASED markers.
+//
+// Deliberately NOT tied to the model-busy lock, initLlama(), or any generation
+// state -- it must keep trying to fire no matter what generate() is doing;
+// that independence is the whole point of the probe. Same temporary-DEBUG
+// pattern as tonight's CI_DEBUG/LOCK_DEBUG. Gate: HEARTBEAT_DEBUG=1. Strip
+// before defense.
+// ===========================================================================
+if (process.env.HEARTBEAT_DEBUG === '1') {
+  let lastTick = Date.now();
+  const heartbeat = setInterval(() => {
+    const now = Date.now();
+    const gap = now - lastTick;
+    lastTick = now;
+    // gap far above the ~50ms interval == the event loop was blocked that long.
+    console.log(`[heartbeat] ${now} gap=${gap}ms`);
+  }, 50);
+  // Don't let the probe keep the process alive on quit.
+  heartbeat.unref();
+  console.log('[heartbeat] probe armed (HEARTBEAT_DEBUG=1), interval=50ms');
+}
 
 app
   .whenReady()
@@ -786,12 +884,50 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
 
 ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selectedCode: string; language: string }) => {
   try {
-    const systemPrompt = `You are a helpful coding assistant. Translate the user request into ${payload.language} code or explanation. Preserve the intent and provide a concise, accurate result. If code is provided, return code only when appropriate, otherwise explain briefly.`;
+    const systemPrompt = `You are a code translator. Translate the following code into ${payload.language}. Always return ONLY the translated code, with no explanation, no commentary, and no markdown fencing unless the code itself requires it. If the translated code uses any functions, types, or classes that require an import in ${payload.language} (for example, dart:math for min/max/sqrt in Dart, or System/System.Linq for C#), you MUST include the necessary import statement(s) at the top of the output — even if the original source code did not need an equivalent import. Before finalizing your answer, check your own output for any function calls or types that require an import and make sure every one of them is imported. If the code is already valid ${payload.language}, return it unchanged — do not explain why.`;
     const userPrompt = [
       `Language: ${payload.language}`,
-      payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : 'Prompt: Complete the selected code.',
+      payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : `Prompt: Translate the selected code into ${payload.language}.`,
       payload.selectedCode.trim() ? `Selected code:\n${payload.selectedCode.trim()}` : '',
     ].filter(Boolean).join('\n\n');
+
+    // TEMPORARY DIAGNOSTIC LOGGING - remove or gate before defense.
+    //
+    // Added 2026-08-10 for the RECURRENCE of the missing-import bug (JS
+    // Math.min/Math.max -> Dart dropping `import 'dart:math'`) after the 08-08
+    // systemPrompt delivery fix. Unconditional, matching this file's existing
+    // diagnostic convention (see the codeInference:request handler above) --
+    // main.ts has no debug-flag const like codeInference.ts's CI_DEBUG or
+    // llmWorker.ts's LOCK_DEBUG, and this needs to be on without anyone having
+    // to remember to enable it.
+    //
+    // Printed VERBATIM and unabridged -- deliberately not run through a
+    // preview()-style truncator like codeInference.ts uses for code, because
+    // the clause being checked for ("you MUST include the necessary import
+    // statement(s)") sits in the MIDDLE of the system prompt, which is exactly
+    // what truncation would hide.
+    //
+    // SCOPE, read this before drawing a conclusion from it: this proves what
+    // main SENDS, not what the model RECEIVES. Since the utility-process split
+    // those are different places -- the system prompt now crosses a
+    // MessagePort and is applied to the LlamaChatSession constructor over in
+    // worker/llmWorker.ts, which is the exact layer the 08-08 delivery bug
+    // lived in. An intact instruction here narrows the fault to the worker
+    // side or to the model itself; it does not clear delivery.
+    console.log(
+      `[ai:translate] --- system prompt sent to the model ---\n${systemPrompt}\n--- end system prompt ---`,
+    );
+    console.log(
+      `[ai:translate] --- user prompt sent to the model ---\n${userPrompt}\n--- end user prompt ---`,
+    );
+    console.log(
+      '[ai:translate] calling generate()',
+      `language=${payload.language}`,
+      `systemPromptLen=${systemPrompt.length}`,
+      `userPromptLen=${userPrompt.length}`,
+      // One-glance answer to "did the import clause survive into this call?"
+      `hasImportInstruction=${/you MUST include the necessary import statement/i.test(systemPrompt)}`,
+    );
 
     let fullText = '';
     const result = await generate(userPrompt, systemPrompt, (chunk: string) => {
@@ -799,9 +935,30 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
       event.sender.send('ai:token', chunk);
     });
 
+    // DETERMINISTIC IMPORT REPAIR (2026-08-10). Closes the 4-attempt
+    // missing-import saga in DECISIONS.md with a mechanical guarantee instead
+    // of a fifth prompt rewrite: the 08-10 diagnostic confirmed the import
+    // instruction reaches the model intact and the 6.7B model drops it anyway,
+    // so this is a compliance limit that wording cannot fix. Pure string/regex
+    // work, no AI call -- see src/main/translateImports.ts.
+    //
+    // Applied to the FINALIZED text, after streaming has completed, because the
+    // decision needs the whole output: whether an import is required cannot be
+    // known until every symbol has been seen.
+    const rawResponse = fullText || result;
+    const finalResponse = ensureRequiredImports(rawResponse, payload.language);
+
+    if (finalResponse !== rawResponse) {
+      console.log(
+        '[ai:translate] deterministic import repair APPLIED',
+        `language=${payload.language}`,
+        `addedChars=${finalResponse.length - rawResponse.length}`,
+      );
+    }
+
     incrementAiCallCount();
     onAiCall();
-    return { success: true, result: fullText || result };
+    return { success: true, result: finalResponse };
   } catch (err) {
     return { success: false, error: String(err) };
   }

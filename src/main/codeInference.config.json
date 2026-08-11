@@ -1,0 +1,21 @@
+{
+  "debounceMs": 500,
+  "maxTriggerChars": 400,
+  "maxTriggerLines": 6,
+  "maxContentLinesBeyondPattern": 1,
+  "patternScanLines": 3,
+  "maxTokens": 128,
+  "contextSize": 1024,
+  "maxPrefixChars": 1500,
+  "maxSuffixChars": 500,
+  "maxCompletionChars": 600,
+  "languages": {
+    "html": { "patterns": ["<!doctype", "<html"] },
+    "php": { "patterns": [] },
+    "csharp": { "patterns": ["using system", "namespace"] },
+    "dart": { "patterns": ["import", "void main"] },
+    "css": { "patterns": [] },
+    "javascript": { "patterns": [] },
+    "typescript": { "patterns": [] }
+  }
+}

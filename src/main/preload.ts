@@ -81,6 +81,16 @@ contextBridge.exposeInMainWorld('adaptive', {
   },
 });
 
+contextBridge.exposeInMainWorld('codeInference', {
+  // Cheap eligibility check, no model behind it.
+  checkTrigger: (payload: { prefix: string; suffix: string; language: string }) =>
+    ipcRenderer.invoke('codeInference:checkTrigger', payload),
+  // The real generation. Only ever called from an explicit accept.
+  request: (payload: { prefix: string; suffix: string; language: string }) =>
+    ipcRenderer.invoke('codeInference:request', payload),
+  getConfig: () => ipcRenderer.invoke('codeInference:getConfig'),
+});
+
 contextBridge.exposeInMainWorld('terminal', {
   run: (payload: { language: string; path: string; deviceId?: string }) => ipcRenderer.invoke('terminal:run', payload),
   input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),

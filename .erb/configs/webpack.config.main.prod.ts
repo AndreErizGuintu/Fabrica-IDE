@@ -25,6 +25,24 @@ const configuration: webpack.Configuration = {
   entry: {
     main: path.join(webpackPaths.srcMainPath, 'main.ts'),
     preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
+    // Inference utility process -- the packaged counterpart of the dev entry in
+    // webpack.config.main.dev.ts (PART 2 of the utility-process migration,
+    // DECISIONS.md §9). Same source file, same reasoning for sharing this
+    // config (inherits `externals` from webpack.config.base.ts, so
+    // `node-llama-cpp` stays external and its native .node binaries are
+    // asarUnpack'd at package time, exactly as when the model lived in main).
+    //
+    // The ONLY difference from dev is where it lands, and it is the reason
+    // resolveWorkerPath() in llm.ts branches on app.isPackaged rather than
+    // assuming one layout: the `output` block below emits to
+    // webpackPaths.distMainPath as `[name].js` (-> dist/main/llmWorker.js),
+    // where dev emits to webpackPaths.dllPath as `[name].bundle.dev.js`.
+    // Sibling-of-main.js holds in both, which is what that resolver relies on.
+    // Source moved to src/main/worker/ on 2026-08-10 (cosmetic only). As in the
+    // dev config, the entry KEY stays `llmWorker` -- that is what `[name]`
+    // resolves to -- so this still emits dist/main/llmWorker.js and
+    // resolveWorkerPath()'s packaged branch is untouched.
+    llmWorker: path.join(webpackPaths.srcMainPath, 'worker', 'llmWorker.ts'),
   },
 
   output: {

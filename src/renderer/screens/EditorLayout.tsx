@@ -8,6 +8,7 @@ import AIPanel from '../components/ai/AIPanel';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
 import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
+import CodeInferencePrompt from '../components/inference/CodeInferencePrompt';
 import FlutterTargetSelector, { FlutterTarget } from '../components/flutter/FlutterTargetSelector';
 import { Tab } from '../types/index';
 
@@ -46,6 +47,48 @@ const RUN_LANGUAGE_BY_EXT: Record<string, string> = {
   cs: 'cs',
   dart: 'dart',
 };
+
+// Maps the AI panel's Translate-mode target-language display names (see
+// LANGUAGES in AIPanel.tsx) to file extensions, for "Save as file". The
+// existing *_BY_EXT maps above are keyed by extension, not by these display
+// names, so none of them could be reused as-is here.
+const LANGUAGE_NAME_TO_EXT: Record<string, string> = {
+  JavaScript: 'js',
+  TypeScript: 'ts',
+  Dart: 'dart',
+  'C#': 'cs',
+  PHP: 'php',
+  Python: 'py',
+  Java: 'java',
+  Go: 'go',
+  Rust: 'rs',
+};
+
+// Reduces a raw AI Translate response to pure source code before it is written
+// to disk. The model sometimes wraps the code in a markdown fence and/or adds an
+// explanation paragraph despite the prompt; saved verbatim, that prose lands
+// inside the .dart/.cs file and shows up as compiler errors when Run echoes the
+// offending source lines. It can also emit the translation twice (a second
+// fenced block), which caused the "'x' is already declared" duplicate-declaration
+// bug. Rule: if the response contains fenced code, keep ONLY the first fenced
+// block (the translated program) and drop everything around/after it; otherwise
+// save the trimmed text as-is. This does not attempt to de-duplicate repetition
+// that occurs *inside* a single unfenced block — that is the separate
+// generation-level EOG/non-terminating-loop issue tracked in DECISIONS.md.
+function extractTranslatedCode(raw: string): string {
+  const text = raw.trim();
+  // First complete fenced block: ```lang\n <code> \n```
+  const closedFence = /```[^\n]*\n([\s\S]*?)```/.exec(text);
+  if (closedFence) {
+    return closedFence[1].replace(/^\n+/, '').replace(/\s+$/, '');
+  }
+  // Opening fence with no closing fence (truncated stream): drop the marker line.
+  const openFence = /^```[^\n]*\n([\s\S]*)$/.exec(text);
+  if (openFence) {
+    return openFence[1].trim();
+  }
+  return text;
+}
 
 const DETACH_THRESHOLD = 6;
 const MIN_SIDEBAR_WIDTH = 180;
@@ -114,6 +157,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
+  const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
   const [showAI, setShowAI] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -433,6 +477,67 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     });
   }, []);
 
+  // Saves an AI Translate-mode result to a new file in the SAME directory as
+  // the currently active file, deriving the name from the active file's base
+  // name + the target language's extension. Prompts before overwriting, opens
+  // the new file in a tab, and refreshes the sidebar tree. Returns a result the
+  // AI panel surfaces inline. (AI panel = teammate-owned; the file/path/refresh
+  // logic lives here in the editor lane where openFileInTab already lives.)
+  const handleSaveTranslatedFile = useCallback(
+    async (
+      content: string,
+      language: string,
+    ): Promise<{ success: boolean; error?: string; skipped?: boolean }> => {
+      const activePath = tabs[activeTabIndex]?.path;
+      if (!activePath) {
+        return { success: false, error: 'Open a file first so the new filename can be derived from it.' };
+      }
+
+      const ext = LANGUAGE_NAME_TO_EXT[language];
+      if (!ext) {
+        return { success: false, error: `No file extension is known for "${language}".` };
+      }
+
+      // Save pure code only — strip any explanation prose / markdown fences the
+      // model added, so the file compiles and Run doesn't echo AI text back into
+      // the terminal. See extractTranslatedCode's note on the duplicate bug.
+      const cleaned = extractTranslatedCode(content);
+      if (!cleaned.trim()) {
+        return { success: false, error: 'Nothing to save — the translation was empty.' };
+      }
+
+      const sep = activePath.includes('\\') ? '\\' : '/';
+      const lastSep = activePath.lastIndexOf(sep);
+      const dir = lastSep >= 0 ? activePath.slice(0, lastSep) : '';
+      const nameOnly = lastSep >= 0 ? activePath.slice(lastSep + 1) : activePath;
+      const dotIdx = nameOnly.lastIndexOf('.');
+      const base = dotIdx > 0 ? nameOnly.slice(0, dotIdx) : nameOnly;
+      const newName = `${base}.${ext}`;
+      const targetPath = dir ? `${dir}${sep}${newName}` : newName;
+
+      // Ask before overwriting — never silently clobber, never silently rename.
+      const listing = await window.fileSystem.readDir(dir);
+      const alreadyExists =
+        listing.success && (listing.files ?? []).some((f) => !f.isDirectory && f.name === newName);
+      if (alreadyExists) {
+        const overwrite = window.confirm(
+          `"${newName}" already exists in this folder. Overwrite it?`,
+        );
+        if (!overwrite) return { success: false, skipped: true };
+      }
+
+      const result = await window.fileSystem.writeFile(targetPath, cleaned);
+      if (!result.success) {
+        return { success: false, error: result.error || 'Failed to write file.' };
+      }
+
+      openFileInTab(targetPath, newName, cleaned);
+      setSidebarRefreshToken((n) => n + 1);
+      return { success: true };
+    },
+    [tabs, activeTabIndex, openFileInTab],
+  );
+
   const handleFileOpen = useCallback(async (filePath: string, filename: string) => {
     const result = await window.fileSystem.readFile(filePath);
     if (result.success && result.content !== undefined) {
@@ -681,6 +786,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         currentCode={activeTab?.content ?? ''}
         language={activeTab ? getLanguage(activeTab.filename) : 'plaintext'}
       />
+      {/* Self-contained: watches the editor and offers boilerplate completion
+          on confirmation. Renders only its own small prompt card. */}
+      <CodeInferencePrompt />
       {/* Top Bar - Redesigned */}
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0"
@@ -854,6 +962,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               initialFolder={initialFolder}
               activeFilePath={activeTab?.path}
               gitStatusFiles={gitStatusFiles}
+              refreshSignal={sidebarRefreshToken}
             />
           </div>
           
@@ -1028,7 +1137,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           </div>
                         </div>
                         <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
-                          <AIPanel selectedCode={selectedCode} />
+                          <AIPanel
+                            selectedCode={selectedCode}
+                            activeFilePath={activeTab?.path}
+                            onSaveTranslatedFile={handleSaveTranslatedFile}
+                          />
                         </div>
                       </div>
                     )}
@@ -1477,7 +1590,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             </div>
           </div>
           <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
-            <AIPanel selectedCode={selectedCode} />
+            <AIPanel
+              selectedCode={selectedCode}
+              activeFilePath={activeTab?.path}
+              onSaveTranslatedFile={handleSaveTranslatedFile}
+            />
           </div>
         </Rnd>
       )}

@@ -16,7 +16,9 @@ Offline-first, AI-assisted desktop IDE (capstone project). Repo branch: `master`
 
 ## File Structure
 - `src/main/main.ts` — Electron main process + all IPC handlers, bundled-runtime resolver
-- `src/main/llm.ts` — node-llama-cpp integration, model loading, generation
+- `src/main/llm.ts` — main-process inference PROXY: resolves the model path, forks the worker, speaks the message protocol, owns worker lifecycle. The model itself does NOT load here.
+- `src/main/worker/llmWorker.ts` — the inference utility process (moved from `src/main/` on 2026-08-10): model loading, gpuLayers ladder, single-flight lock, generation. Never imports `electron`.
+- `src/main/worker/llmProtocol.ts` — the shared main↔worker wire contract (message types, error serialization). Imported by both sides; imports nothing itself.
 - `src/main/preload.ts` — contextBridge surface (what renderer can call)
 - `src/renderer/preload.d.ts` — TypeScript types for all window.* bridges
 - `src/renderer/App.tsx` — navigation controller + SplashScreen + MainMenu + CreateProject + useRecentProjects hook
@@ -24,7 +26,7 @@ Offline-first, AI-assisted desktop IDE (capstone project). Repo branch: `master`
 - `src/renderer/components/editor/Editor.tsx` — Monaco wrapper
 - `src/renderer/components/sidebar/Sidebar.tsx` — file tree
 - `src/renderer/components/preview/Preview.tsx` — HTML iframe preview
-- `src/renderer/components/ai/AIPanel.tsx` — AI panel (Ask/chat default, Translate/Explain secondary — **in active redesign this week, verify current state before relying on this description**)
+- `src/renderer/components/ai/AIPanel.tsx` — AI panel; four tabbed modes (`TabKey = 'ask' | 'plan' | 'translate' | 'explain'`), rendered as a tab row and selected via `activeTab`, defaulting to **Ask**. Single model, one system prompt per mode.
 - `src/renderer/types/index.ts` — shared TypeScript types (Tab, FileEntry)
 
 ## IPC Bridge API (window.*)

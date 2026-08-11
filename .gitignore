@@ -47,8 +47,8 @@ Project/
 .vscode/
 resources
 bench.js
-scripts/
 test_windows_app
+scripts/
 
 # Generated style typings
 *.css.d.ts

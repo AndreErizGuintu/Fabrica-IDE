@@ -2,6 +2,16 @@ import { useState } from 'react';
 
 interface AIPanelProps {
   selectedCode: string;
+  // Absolute path of the currently active editor file; the "Save as file"
+  // button in Translate mode derives the new filename from this. Optional so
+  // the panel still renders when no file is open.
+  activeFilePath?: string;
+  // Delegated to the editor lane (EditorLayout), which owns file writes, the
+  // overwrite prompt, opening the result in a tab, and refreshing the sidebar.
+  onSaveTranslatedFile?: (
+    content: string,
+    language: string,
+  ) => Promise<{ success: boolean; error?: string; skipped?: boolean }>;
 }
 
 type TabKey = 'ask' | 'plan' | 'translate' | 'explain';
@@ -19,9 +29,7 @@ const LANGUAGES = [
   'PHP',
   'Python',
   'Java',
-  'TypeScript',
-  'Go',
-  'Rust',
+  'TypeScript'
 ];
 
 function renderResponseContent(response: string) {
@@ -130,10 +138,12 @@ function getCompletionErrorText(error?: string) {
   return '⚠️ AI request failed';
 }
 
-export default function AIPanel({ selectedCode }: AIPanelProps) {
+export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile }: AIPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('ask');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [language, setLanguage] = useState('JavaScript');
   const [prompt, setPrompt] = useState('');
   const [askMessages, setAskMessages] = useState<ChatMessage[]>([]);
@@ -153,7 +163,7 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
         prompt: string;
         selectedCode: string;
         language: string;
-      }) => Promise<void>;
+      }) => Promise<{ success: boolean; result?: string; error?: string }>;
       explain: (payload: {
         prompt: string;
         selectedCode: string;
@@ -264,20 +274,72 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
     if (!prompt.trim() && !selectedCode.trim()) return;
     setLoading(true);
     setResponse('');
+    setSaveMessage(null);
 
     const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (token: unknown) => {
       setResponse((prev) => prev + String(token));
     });
 
     try {
-      await appWindowWithAI.ai?.translate({
+      const completion = await appWindowWithAI.ai?.translate({
         prompt: prompt.trim(),
         selectedCode: selectedCode.trim(),
         language,
       });
+
+      if (!completion?.success) {
+        setResponse(getCompletionErrorText(completion?.error));
+      } else if (completion.result) {
+        // Adopt the FINAL returned string in place of the streamed
+        // accumulation. Translate is the one mode whose result is
+        // post-processed in the main process: `ensureRequiredImports()` may
+        // prepend a missing import (e.g. `import 'dart:math' as math;`) once
+        // the whole output is known, which cannot be expressed as a token in
+        // the stream because it belongs at the TOP of code already streamed.
+        // Without this line the repaired string is discarded and both the
+        // panel and the saved file keep the broken, import-less version.
+        // See DECISIONS.md, "MISSING-IMPORT SAGA CLOSED" (2026-08-10).
+        //
+        // Streaming is unaffected -- tokens still render live as they arrive;
+        // this only replaces the text once, at completion, and is a no-op
+        // whenever the repair did not fire.
+        setResponse(completion.result);
+      }
+    } catch (err) {
+      setResponse(getCompletionErrorText(err instanceof Error ? err.message : String(err)));
     } finally {
       if (removeListener) removeListener();
       setLoading(false);
+    }
+  };
+
+  const handleSaveTranslatedFile = async () => {
+    if (!response.trim() || saving) return;
+    if (!activeFilePath) {
+      setSaveMessage('⚠️ Open a file first so the new filename can be derived from it.');
+      return;
+    }
+    if (!onSaveTranslatedFile) {
+      setSaveMessage('⚠️ Saving is unavailable.');
+      return;
+    }
+
+    setSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const result = await onSaveTranslatedFile(response, language);
+      if (result.success) {
+        setSaveMessage('✔ Saved to file');
+      } else if (result.skipped) {
+        setSaveMessage('Save cancelled — existing file kept.');
+      } else {
+        setSaveMessage(getCompletionErrorText(result.error));
+      }
+    } catch (err) {
+      setSaveMessage(getCompletionErrorText(err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -501,6 +563,35 @@ export default function AIPanel({ selectedCode }: AIPanelProps) {
                 </button>
               </div>
             </div>
+
+            {response.trim() && !loading && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleSaveTranslatedFile}
+                  disabled={saving || !activeFilePath}
+                  title={activeFilePath ? 'Save the translated code to a new file' : 'Open a file first'}
+                  className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-1.5 transition-colors shrink-0"
+                  style={{
+                    background: saving || !activeFilePath ? '#2d1b4e' : '#7c3aed',
+                    color: '#ffffff',
+                    cursor: saving || !activeFilePath ? 'not-allowed' : 'pointer',
+                    fontFamily: 'Space Mono, monospace',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M5 4h11l3 3v13H5V4z" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M8 4v5h7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {saving ? 'Saving...' : 'Save as file'}
+                </button>
+                {saveMessage && (
+                  <span className="text-[9px] leading-3 truncate" style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}>
+                    {saveMessage}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#2d1b4e] text-[#ffffff] min-h-0" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
               {response ? renderResponseContent(response) : 'AI response will appear here...'}
