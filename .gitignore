@@ -48,7 +48,7 @@ Project/
 resources
 bench.js
 test_windows_app
-scripts/
+
 
 # Generated style typings
 *.css.d.ts
