@@ -5,6 +5,7 @@ import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import AIPanel from '../components/ai/AIPanel';
+import { useAIPanelState } from '../components/useAIPanelState';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
 import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
@@ -183,6 +184,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   // Floating panel states
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
+  // Single source of truth for AI panel chat state, shared by the docked and
+  // floating <AIPanel> instances so history/prompt survive float<->dock toggles.
+  const aiPanelState = useAIPanelState();
   const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
     preview: { x: 100, y: 100 },
     ai: { x: 140, y: 120 },
@@ -1141,6 +1145,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                             selectedCode={selectedCode}
                             activeFilePath={activeTab?.path}
                             onSaveTranslatedFile={handleSaveTranslatedFile}
+                            panelState={aiPanelState}
                           />
                         </div>
                       </div>
@@ -1594,6 +1599,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               selectedCode={selectedCode}
               activeFilePath={activeTab?.path}
               onSaveTranslatedFile={handleSaveTranslatedFile}
+              panelState={aiPanelState}
             />
           </div>
         </Rnd>
