@@ -858,6 +858,33 @@ app
     // inherits GGML_VK_VISIBLE_DEVICES from creation. See gpuIsolation.ts.
     await ensureGpuDeviceIsolation();
     createWindow();
+
+    // Fire-and-forget model warmup: forces the worker fork, the model load and
+    // the resolveChatWrapper() cache to happen now instead of on the student's
+    // first real AI request. Safe only POST-utility-process-migration -- run
+    // in-process this would have frozen main for the whole ~14s load + ~3s
+    // wrapper resolve; the model now loads in the worker, so main's event loop
+    // and the window created directly above are untouched while it happens.
+    //
+    // Calls llm.generate() DIRECTLY, not via the 'ai:complete' handler below:
+    // that handler calls incrementAiCallCount() and onAiCall(), and a silent
+    // background call must not inflate aiCallCount or reset the adaptive-engine
+    // idle timer that Scenarios 1-4 read from.
+    //
+    // 'opportunistic' so warmup can never make a real request wait: an
+    // 'explicit' generation cancels an in-flight opportunistic one (see the
+    // single-flight lock policy in llmWorker.ts). The load itself is shared via
+    // initLlama()'s cached promise, so a cancelled warmup still leaves the
+    // model loaded -- only the throwaway generation is dropped.
+    generate('hi', undefined, undefined, { maxTokens: 1, priority: 'opportunistic' }).catch(
+      (err: unknown) => {
+        console.warn(
+          '[warmup] Startup model warmup failed (harmless -- the first real AI request will load the model):',
+          err instanceof Error ? err.message : err,
+        );
+      },
+    );
+
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.

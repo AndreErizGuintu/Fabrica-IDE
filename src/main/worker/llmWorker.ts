@@ -323,7 +323,8 @@ const loadModelWithFallback = async (
 // NOTE: this instruments runGeneration() itself, so it logs EVERY caller
 // (Ask/Plan/Translate/Explain/Hint as well as Code Inference), not just Code
 // Inference. Each line carries its priority so callers can be told apart:
-// 'opportunistic' is Code Inference, 'explicit' is everything else.
+// 'opportunistic' is the startup warmup in main.ts (it was Code Inference until
+// the 08-07 pivot -- see the lock policy below), 'explicit' is everything else.
 // ===========================================================================
 const LOCK_DEBUG = true;
 let generationSeq = 0;
@@ -486,6 +487,19 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
 // is on the correct side of the boundary: the process that owns the model owns
 // its lock (DECISIONS.md section 4). `isModelBusy()` intentionally did NOT come
 // along; main cannot answer it synchronously any more, and it had zero callers.
+//
+// UPDATE 2026-08-19: THE 08-07 "NO CALLERS" NOTE ABOVE IS OUT OF DATE -- a
+// passive caller came back. Startup warmup in `main.ts` (fire-and-forget
+// generate() with maxTokens: 1, right after createWindow() in app.whenReady())
+// runs as 'opportunistic', and that is the whole point of choosing it: it is
+// the only priority that guarantees a background warmup never blocks a real
+// user request. Under the default 'explicit' a student clicking Ask mid-warmup
+// would QUEUE BEHIND it; under 'opportunistic' the explicit request cancels the
+// warmup and proceeds at once. ModelBusyError and GenerationAbortedError are
+// therefore REACHABLE AGAIN, and this branch is load-bearing rather than the
+// removable dead weight the 08-07 note flagged it as. Note that a warmup
+// cancelled this way still did its job: initLlama()'s cached runtimePromise is
+// shared, so only the throwaway generation is dropped, never the model load.
 type InFlightGeneration = {
   priority: GenerationPriority;
   abort: () => void;
