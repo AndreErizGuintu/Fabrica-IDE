@@ -10,7 +10,12 @@ import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
 import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
 import CodeInferencePrompt from '../components/inference/CodeInferencePrompt';
-import FlutterTargetSelector, { FlutterTarget } from '../components/flutter/FlutterTargetSelector';
+import FlutterTargetSelector, {
+  FlutterTarget,
+  WINDOWS_TARGET,
+  isAndroidPlatform,
+} from '../components/flutter/FlutterTargetSelector';
+import MirrorButton from '../components/mirror/MirrorButton';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -168,6 +173,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [gitHistoryOpen, setGitHistoryOpen] = useState(true);
   const [gitLoading, setGitLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  // Lifted out of FlutterTargetSelector so siblings in this toolbar can react to
+  // WHICH target is selected, not just to whether a device is plugged in.
+  // Still defaults to Windows on every load and is not persisted, as before.
+  const [selectedTarget, setSelectedTarget] = useState<FlutterTarget>(WINDOWS_TARGET);
   const [showOutput, setShowOutput] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
@@ -884,8 +893,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <FlutterTargetSelector
             disabled={!initialFolder}
             isRunning={isRunning}
+            selected={selectedTarget}
+            onTargetChange={setSelectedTarget}
             onRun={handleFlutterRun}
           />
+          {/* Mirroring only makes sense for the device that is actually
+              selected as the run target, so this is keyed off the selection —
+              not off a device merely being connected. */}
+          {isAndroidPlatform(selectedTarget.platform) && (
+            <MirrorButton udid={selectedTarget.id} />
+          )}
           <button
             type="button"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:bg-white/10"

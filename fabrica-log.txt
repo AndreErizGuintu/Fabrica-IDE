@@ -1,0 +1,10 @@
+
+[gpu-isolation] Detected GPU device(s): [
+  'NVIDIA GeForce RTX 3050 6GB Laptop GPU',
+  'Intel(R) UHD Graphics 770'
+]
+[gpu-isolation] Isolating Vulkan to device #0 ("NVIDIA GeForce RTX 3050 6GB Laptop GPU") via GGML_VK_VISIBLE_DEVICES. Relaunching so the new process inherits this from creation (required -- setting it mid-process does not work).
+13:11:44.513 > Checking for update
+[llm] forking inference utility process: C:\Users\Andre\Documents\Capstone\Fabrica-IDE\release\build\win-unpacked\resources\app.asar\dist\main\llmWorker.js
+[llm] inference utility process CRASHED (exit code 0) -- consecutive crash 1/3.
+[warmup] Startup model warmup failed (harmless -- the first real AI request will load the model): [llm] The inference process exited during startup (exit code 0). The model was not loaded and the AI request could not be started.

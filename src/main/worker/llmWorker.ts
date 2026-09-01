@@ -38,7 +38,7 @@
 // ===========================================================================
 
 import fs from 'fs';
-import os from 'node:os';
+import os from 'os';
 import modelConfig from '../modelConfig.json';
 import {
   GenerationPriority,
@@ -191,10 +191,6 @@ const readModelPathArg = (): string => {
 // and unavailable (see resolveTotalModelLayers).
 let resolvedTotalModelLayers: number | null | undefined;
 
-// Fraction of the model's layers the capped primary attempt may put on the
-// GPU. The remainder is deliberate VRAM headroom.
-const GPU_LAYER_FRACTION = 0.9;
-
 // readGgufFileInfo() parses only the file header, not the weights -- measured
 // at ~56ms against our 4GB Q4_K_M -- so it is cheap enough to run inline right
 // before the real load. `readTensorInfo: false` skips the per-tensor table,
@@ -229,8 +225,7 @@ const resolveTotalModelLayers = async (modelPath: string): Promise<number | null
     }
 
     console.log(
-      `[llm] GGUF metadata: architecture=${architecture}, block_count=${blockCount} ` +
-        `-> gpuLayers cap ${Math.floor(blockCount * GPU_LAYER_FRACTION)}.`,
+      `[llm] GGUF metadata: architecture=${architecture}, block_count=${blockCount}.`,
     );
     resolvedTotalModelLayers = blockCount;
     return resolvedTotalModelLayers;
@@ -245,41 +240,23 @@ const resolveTotalModelLayers = async (modelPath: string): Promise<number | null
 };
 
 // ---------------------------------------------------------------------------
-// A single entry in the load ladder: node-llama-cpp accepts a fixed count,
-// "auto", or an options object (used for the capped primary attempt below).
-type GpuLayersAttempt = number | 'auto' | { max: number };
-
-// Objects would stringify to "[object Object]" in the load logs below.
-const formatLayerAttempt = (attempt: GpuLayersAttempt): string =>
-  typeof attempt === 'object' ? JSON.stringify(attempt) : String(attempt);
+// A single entry in the load ladder: node-llama-cpp accepts a fixed count or
+// "auto".
+type GpuLayersAttempt = number | 'auto';
 
 // gpuLayers step-down retry: a safety net under GPU device isolation (see
 // gpuIsolation.ts, run at app startup before this module is ever used), in
 // case isolation was skipped (ambiguous/no GPU) or the isolated device still
 // doesn't have enough VRAM for the requested/auto-resolved layer count.
-const buildLayerAttempts = (totalLayers: number | null): GpuLayersAttempt[] => {
+const buildLayerAttempts = (): GpuLayersAttempt[] => {
   const start = GPU_LAYERS;
   const ladder = GPU_LAYERS_FALLBACK_LADDER.filter((n) => start === 'auto' || n < start);
-  // Primary attempt under "auto": still VRAM-adaptive (node-llama-cpp resolves
-  // the layer count to what actually fits), just capped below the model's own
-  // block_count so the resolver leaves ~10% of the layers on the CPU. When the
-  // count could not be read, the cap is dropped and plain "auto" is used --
-  // i.e. exactly the pre-cap behaviour, never a load failure. An explicit
-  // GPU_LAYERS override is passed through untouched.
-  const primary: GpuLayersAttempt =
-    start === 'auto' && totalLayers !== null
-      ? { max: Math.floor(totalLayers * GPU_LAYER_FRACTION) }
-      : start;
-  const attempts: GpuLayersAttempt[] = [primary, ...ladder];
+  const attempts: GpuLayersAttempt[] = [start, ...ladder];
   return attempts.slice(0, MAX_LOAD_ATTEMPTS);
 };
 
-const loadModelWithFallback = async (
-  llama: any,
-  modelPath: string,
-  totalLayers: number | null,
-) => {
-  const attempts = buildLayerAttempts(totalLayers);
+const loadModelWithFallback = async (llama: any, modelPath: string) => {
+  const attempts = buildLayerAttempts();
   let lastError: unknown;
 
   for (let i = 0; i < attempts.length; i += 1) {
@@ -292,7 +269,7 @@ const loadModelWithFallback = async (
     } catch (err) {
       lastError = err;
       if (!isVramError(err) || isLastAttempt) throw err;
-      console.warn(`[llm] loadModel failed with gpuLayers=${formatLayerAttempt(gpuLayers)}: ${(err as Error).message}. Stepping down.`);
+      console.warn(`[llm] loadModel failed with gpuLayers=${gpuLayers}: ${(err as Error).message}. Stepping down.`);
       continue;
     }
 
@@ -302,13 +279,13 @@ const loadModelWithFallback = async (
     try {
       const probeContext = await model.createContext();
       await probeContext.dispose();
-      console.log(`[llm] Model loaded successfully with gpuLayers=${formatLayerAttempt(gpuLayers)}.`);
+      console.log(`[llm] Model loaded successfully with gpuLayers=${gpuLayers} -> resolved ${model.gpuLayers} layers.`);
       return model;
     } catch (err) {
       lastError = err;
       await model.dispose();
       if (!isVramError(err) || isLastAttempt) throw err;
-      console.warn(`[llm] createContext failed with gpuLayers=${formatLayerAttempt(gpuLayers)}: ${(err as Error).message}. Stepping down.`);
+      console.warn(`[llm] createContext failed with gpuLayers=${gpuLayers}: ${(err as Error).message}. Stepping down.`);
     }
   }
 
@@ -397,14 +374,18 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
       phaseLog('init', 'diagnostics (getGpuDeviceNames+getVramState)', diagnosticsStartHr, process.hrtime.bigint(), diagnosticsStartMs, Date.now());
       // Resolve the model's real layer count once, here, and reuse it for the
       // rest of the process -- same "resolve once, cache" shape as the
-      // resolveChatWrapper() fix below.
+      // resolveChatWrapper() fix below. No longer used to cap gpuLayers (see
+      // buildLayerAttempts()); kept purely for its architecture/block_count
+      // diagnostic log line -- an A/B test (capped 28 vs full offload 33 layers)
+      // showed the cap was a large net negative (prompt() total 12928ms ->
+      // 1515ms uncapped, zero VRAM errors), so it was removed 2026-08-26.
       const resolveLayersStartHr = process.hrtime.bigint();
       const resolveLayersStartMs = Date.now();
-      const totalModelLayers = await resolveTotalModelLayers(modelPath);
+      await resolveTotalModelLayers(modelPath);
       phaseLog('init', 'resolveTotalModelLayers() (cached for the rest of the process)', resolveLayersStartHr, process.hrtime.bigint(), resolveLayersStartMs, Date.now());
       const loadModelStartHr = process.hrtime.bigint();
       const loadModelStartMs = Date.now();
-      const model = await loadModelWithFallback(llama, modelPath, totalModelLayers);
+      const model = await loadModelWithFallback(llama, modelPath);
       phaseLog('init', 'loadModelWithFallback()', loadModelStartHr, process.hrtime.bigint(), loadModelStartMs, Date.now());
 
       // FIX 2026-08-09: resolve the chat wrapper ONCE per process instead of

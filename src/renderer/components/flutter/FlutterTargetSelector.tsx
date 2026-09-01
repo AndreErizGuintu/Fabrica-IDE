@@ -1,55 +1,60 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import useFlutterDevices, {
+  FlutterTarget,
+  isAndroidPlatform,
+} from '../../hooks/useFlutterDevices';
 
-export type FlutterTarget = { id: string; name: string; platform: string };
+// Re-exported so consumers keep importing the whole run-target vocabulary from
+// the selector they already import. The definitions themselves live with the
+// shared device poll, which keeps the dependency one-way.
+export type { FlutterTarget };
+export { isAndroidPlatform };
 
-const WINDOWS_TARGET: FlutterTarget = { id: 'windows', name: 'Windows (desktop)', platform: 'windows' };
+// Exported so the owner of the selection state (EditorLayout) can seed it with
+// the exact same default this component used to hold internally. Stays here
+// rather than in the hook: it is a synthetic UI entry, not something Flutter
+// reports, and the hook deliberately reports only what Flutter actually sees.
+export const WINDOWS_TARGET: FlutterTarget = { id: 'windows', name: 'Windows (desktop)', platform: 'windows' };
 
 type FlutterTargetSelectorProps = {
   disabled?: boolean;
   isRunning?: boolean;
+  selected: FlutterTarget;
+  onTargetChange: (target: FlutterTarget) => void;
   onRun: (target: FlutterTarget) => void;
 };
 
 // Android Studio-style split run button: left side runs on the currently
 // selected target, right side opens a dropdown to change the selection
-// (selecting alone never triggers a run). Default selection is always
-// Windows on load and is not persisted across sessions, per spec.
-export default function FlutterTargetSelector({ disabled, isRunning, onRun }: FlutterTargetSelectorProps) {
-  const [targets, setTargets] = useState<FlutterTarget[]>([WINDOWS_TARGET]);
-  const [selected, setSelected] = useState<FlutterTarget>(WINDOWS_TARGET);
+// (selecting alone never triggers a run). The selection itself is owned by the
+// parent so siblings can read it — this component reports picks up via
+// onTargetChange and renders whatever `selected` it is handed. Default
+// selection is still always Windows on load and is not persisted across
+// sessions, per spec; that default now lives with the parent's state.
+export default function FlutterTargetSelector({
+  disabled,
+  isRunning,
+  selected,
+  onTargetChange,
+  onRun,
+}: FlutterTargetSelectorProps) {
+  const { targets: devices } = useFlutterDevices();
   const [isOpen, setIsOpen] = useState(false);
-  const [usbNotReady, setUsbNotReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const mergeWithWindows = (devices: FlutterTarget[]) =>
-    devices.some((d) => d.platform === 'windows') ? devices : [WINDOWS_TARGET, ...devices];
-
-  const refreshDevices = useCallback(async () => {
-    const result = await window.flutter.listDevices();
-    if (result.success && result.devices) {
-      setTargets(mergeWithWindows(result.devices));
-      return result.devices;
-    }
-    return undefined;
-  }, []);
-
-  useEffect(() => {
-    void refreshDevices();
-  }, [refreshDevices]);
-
-  useEffect(() => {
-    const off = window.flutter.onUsbConnected(() => {
-      setUsbNotReady(true);
-      // Give adb/Flutter a moment to enumerate the newly connected device
-      // before re-checking — this is a best-effort nicety, not a hard guarantee.
-      setTimeout(async () => {
-        const devices = await refreshDevices();
-        const hasAndroid = devices?.some((d) => d.platform.startsWith('android')) ?? false;
-        setUsbNotReady(!hasAndroid);
-      }, 3000);
-    });
-    return off;
-  }, [refreshDevices]);
+  // Windows is offered even before the first poll lands (and even if it never
+  // lands), so it is merged in here rather than in the shared hook, which
+  // reports only what Flutter actually sees.
+  const targets = useMemo(
+    () =>
+      // Prefix match, not equality: `platform` carries Flutter's arch-qualified
+      // targetPlatform ("windows-x64"), so `=== 'windows'` never matched and
+      // this synthetic entry got prepended next to the real Windows device.
+      devices.some((d) => d.platform.startsWith('windows'))
+        ? devices
+        : [WINDOWS_TARGET, ...devices],
+    [devices],
+  );
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -63,7 +68,7 @@ export default function FlutterTargetSelector({ disabled, isRunning, onRun }: Fl
   }, [isOpen]);
 
   const handleSelect = (target: FlutterTarget) => {
-    setSelected(target);
+    onTargetChange(target);
     setIsOpen(false);
   };
 
@@ -136,14 +141,6 @@ export default function FlutterTargetSelector({ disabled, isRunning, onRun }: Fl
               </span>
             </button>
           ))}
-          {usbNotReady && (
-            <div
-              className="w-full text-left px-3 py-2 text-xs"
-              style={{ color: '#f59e0b', borderTop: '1px solid #3d2b5e' }}
-            >
-              Device connected, not debug-ready
-            </div>
-          )}
         </div>
       )}
     </div>

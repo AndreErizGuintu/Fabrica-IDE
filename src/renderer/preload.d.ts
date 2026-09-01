@@ -60,7 +60,16 @@ type AdaptiveDebugState = {
 
 type FlutterBridge = {
   listDevices: () => Promise<{ success: boolean; devices?: FlutterTarget[]; error?: string }>;
-  onUsbConnected: (cb: (deviceIds: string[]) => void) => () => void;
+};
+
+// Embedded device mirroring. Unlike the other bridges these REJECT on failure
+// rather than resolving `{ success: false }` -- the main-process error text is
+// diagnostic (missing bundle, server stderr, startup timeout) and is meant to
+// be shown, so callers must try/catch. `start()` is safe to call repeatedly:
+// it returns the running server's port instead of forking a second one.
+type MirrorBridge = {
+  start: () => Promise<{ port: number }>;
+  stop: () => Promise<void>;
 };
 
 declare global {
@@ -124,6 +133,7 @@ declare global {
       onExit: (cb: (sessionId: string, exitCode: number) => void) => () => void;
     };
     flutter: FlutterBridge;
+    mirror: MirrorBridge;
     git: {
       init: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       status: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;

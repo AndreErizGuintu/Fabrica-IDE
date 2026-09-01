@@ -112,7 +112,7 @@
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",
-    "node-llama-cpp": "^3.19.0",
+    "node-llama-cpp": "3.20.0",
     "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -193,7 +193,12 @@
     "productName": "ElectronReact",
     "appId": "org.erb.ElectronReact",
     "asar": true,
-    "asarUnpack": "**\\*.{node,dll}",
+    "asarUnpack": [
+      "**/*.{node,dll}",
+      "node_modules/**",
+      "dist/main/llmWorker.js",
+      "dist/main/llmWorkerBootstrap.js"
+    ],
     "files": [
       "dist",
       "node_modules",

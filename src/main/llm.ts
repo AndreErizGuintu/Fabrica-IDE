@@ -95,25 +95,101 @@ const getModelPath = () => {
 //        utilityProcess.fork() reads modules out of the asar the same way
 //        require() does. The path shape did not change from what PART 1
 //        predicted -- only the entry that makes the file exist, plus this note.
-const DEV_WORKER_BUNDLE = 'llmWorker.bundle.dev.js';
-const PROD_WORKER_BUNDLE = 'llmWorker.js';
+// FORK TARGET, 2026-08-22: the crash-visibility bootstrap, not the worker
+// module itself. `llmWorkerBootstrap.ts` installs uncaughtException /
+// unhandledRejection handlers and then require()s `llmWorker` inside a
+// try/catch, so a synchronous top-level throw in the worker arrives here as a
+// stack on stderr instead of an ambiguous exit code. The worker module is
+// still built as its own entry in both webpack main configs -- it is now
+// REQUIRED by the bootstrap rather than forked directly.
+const DEV_WORKER_BUNDLE = 'llmWorkerBootstrap.bundle.dev.js';
+const PROD_WORKER_BUNDLE = 'llmWorkerBootstrap.js';
+
+// The real worker module, a sibling of the bootstrap in both layouts. Main
+// never forks this -- the only thing here that still cares about it is the dev
+// bundle watcher, which must watch the file you actually EDIT.
+const DEV_WORKER_MODULE_BUNDLE = 'llmWorker.bundle.dev.js';
+
+// ---------------------------------------------------------------------------
+// ASAR UNPACK REDIRECT (2026-08-23). ROOT CAUSE of the packaged-only failure
+// where the forked worker came up with `process.parentPort` unavailable:
+// `utilityProcess.fork()` needs a REAL FILE ON DISK. Electron's patched `fs`
+// makes an in-asar path pass `existsSync()` and lets `require()` read it, so
+// the old packaged branch looked correct and resolved happily -- but the fork
+// itself is a process spawn, and the OS cannot execute a path that lives
+// inside an archive. Dev never hit this because it forks a loose file out of
+// .erb/dll.
+//
+// The fix has two halves and BOTH are required:
+//   1. package.json `build.asarUnpack` now lists dist/main/llmWorker.js and
+//      dist/main/llmWorkerBootstrap.js, so electron-builder ALSO writes them
+//      to resources/app.asar.unpacked/ with the same relative subpath.
+//   2. this function, which must point the fork at that unpacked copy.
+//      Electron auto-redirects app.asar -> app.asar.unpacked for many APIs,
+//      but NOT for utilityProcess.fork(), so the path is built explicitly.
+//
+// Segment-aware on purpose: a blind `.replace('app.asar', ...)` would also
+// corrupt a user directory that happens to contain that substring, and would
+// double-rewrite a path that is already `.unpacked`. The regex requires
+// `app.asar` to be a whole path segment and rewrites only the first match.
+const toUnpackedPath = (packedPath: string): string | null => {
+  const asarSegment = /([\\/])app\.asar([\\/])/;
+  if (!asarSegment.test(packedPath)) return null;
+  return packedPath.replace(asarSegment, '$1app.asar.unpacked$2');
+};
 
 const resolveWorkerPath = (): string => {
-  const candidates = app.isPackaged
-    ? [path.join(__dirname, PROD_WORKER_BUNDLE)]
-    : [
-        path.join(__dirname, DEV_WORKER_BUNDLE),
-        path.join(app.getAppPath(), '.erb', 'dll', DEV_WORKER_BUNDLE),
-      ];
+  if (app.isPackaged) {
+    // The in-asar path -- still the shape __dirname gives us, still what the
+    // unpacked path is derived FROM, but no longer what we prefer to fork.
+    const packed = path.join(__dirname, PROD_WORKER_BUNDLE);
+    const unpacked = toUnpackedPath(packed);
+
+    if (unpacked && fs.existsSync(unpacked)) {
+      return unpacked;
+    }
+
+    // Deliberately loud rather than silent. Reaching here means the
+    // asarUnpack entry in package.json was renamed, dropped, or stopped
+    // matching (e.g. the emitted filename changed) -- a packaging-config
+    // regression that would otherwise resurface as the same opaque
+    // "parentPort unavailable" crash this whole change exists to remove.
+    console.warn(
+      `[llm] Worker bundle not found at the expected app.asar.unpacked path:\n` +
+        `  ${unpacked ?? '(could not derive -- no "app.asar" path segment)'}\n` +
+        `Falling back to the in-asar path, which utilityProcess.fork() usually ` +
+        `CANNOT launch (it needs a real on-disk file). If the inference worker ` +
+        `dies at startup, fix build.asarUnpack in package.json -- it must list ` +
+        `dist/main/${PROD_WORKER_BUNDLE} and dist/main/llmWorker.js.`,
+    );
+
+    if (fs.existsSync(packed)) {
+      return packed;
+    }
+
+    throw new Error(
+      `[llm] Inference worker bundle not found (packaged=true). Looked in:\n` +
+        `  ${unpacked ?? '(no app.asar segment to derive an unpacked path from)'}\n` +
+        `  ${packed}\n` +
+        `This means the llmWorkerBootstrap entry in webpack.config.main.prod.ts ` +
+        `did not emit, or dist/main was not packed into the app -- check ` +
+        `build.files and build.asarUnpack in package.json.`,
+    );
+  }
+
+  // Dev branch unchanged -- confirmed working, forks a loose file out of
+  // .erb/dll where no asar is involved at all.
+  const candidates = [
+    path.join(__dirname, DEV_WORKER_BUNDLE),
+    path.join(app.getAppPath(), '.erb', 'dll', DEV_WORKER_BUNDLE),
+  ];
 
   const found = candidates.find((candidate) => fs.existsSync(candidate));
   if (!found) {
     const tried = candidates.map((c) => `  ${c}`).join('\n');
     throw new Error(
-      `[llm] Inference worker bundle not found (packaged=${app.isPackaged}). Looked in:\n${tried}\n` +
-        `In dev, re-run the main webpack build (npm run start rebuilds it). In a packaged build, ` +
-        `this means the llmWorker entry in webpack.config.main.prod.ts did not emit, or dist/main ` +
-        `was not packed into the app -- check build.files in package.json.`,
+      `[llm] Inference worker bundle not found (packaged=false). Looked in:\n${tried}\n` +
+        `Re-run the main webpack build (npm run start rebuilds it).`,
     );
   }
 
@@ -187,6 +263,17 @@ let shuttingDown = false;
 // one-off fault while capping a hard-failure loop at ~45s of wasted loads.
 let consecutiveCrashes = 0;
 const MAX_CONSECUTIVE_CRASHES = 3;
+
+// PART 2 of the 2026-08-22 diagnostic pass. How long spawnWorker() waits for
+// the worker's 'ready' handshake before declaring it hung.
+//
+// Generous on purpose: `post({ type: 'ready' })` is the LAST line of
+// llmWorker.ts's module evaluation and fires long before any model load (that
+// is lazy, on first generate()), so a healthy worker answers in well under a
+// second. 10s is therefore a hang detector, not a performance budget -- but it
+// is a named constant precisely so it can be tuned from one place if a slow
+// cold disk on a packaged build ever proves otherwise.
+const WORKER_READY_TIMEOUT_MS = 10_000;
 
 // DEV ONLY. Set when the worker bundle is rewritten on disk while a worker is
 // running -- see watchWorkerBundleInDev() for why this case needs handling at
@@ -462,13 +549,53 @@ const spawnWorker = (): Promise<WorkerHandle> =>
     relay(child.stdout, process.stdout);
     relay(child.stderr, process.stderr);
 
-    watchWorkerBundleInDev(workerPath);
+    // NOT `workerPath` -- that is now the bootstrap bundle, which almost never
+    // changes. The file you actually edit is llmWorker.ts, so the hot-recycle
+    // watcher has to stay pointed at ITS bundle (a sibling of the bootstrap's),
+    // or editing worker code would silently go back to having no effect until
+    // restart -- the exact trap that watcher was written to close.
+    watchWorkerBundleInDev(
+      path.join(path.dirname(workerPath), DEV_WORKER_MODULE_BUNDLE),
+    );
 
     let settled = false;
+
+    // PART 2: the last silent startup failure gets a clock.
+    //
+    // Every OTHER startup failure already settles this promise: a missing
+    // bundle throws in resolveWorkerPath(), and a process that dies is caught
+    // by the 'exit' handler below. A worker that neither throws nor exits --
+    // wedged inside module evaluation, a native load that never returns, a GPU
+    // driver call that blocks -- settles NOTHING, and ensureWorker() awaits it
+    // forever without printing a thing. That is the one shape left that fails
+    // invisibly.
+    const readyTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // Through killWorker(), not child.kill(): otherwise the hung process sits
+      // holding VRAM while the next generate() forks a SECOND one, and its
+      // eventual 'exit' would be booked as a crash. The crash-loop brake counts
+      // crashes; this is a timeout, and killWorker() is the existing, untouched
+      // mechanism for "main killed it on purpose".
+      killWorker(
+        child,
+        `no 'ready' handshake within ${WORKER_READY_TIMEOUT_MS}ms`,
+      );
+      reject(
+        new Error(
+          `[llm] worker did not signal ready within ` +
+            `${WORKER_READY_TIMEOUT_MS / 1000}s -- likely hung during module ` +
+            `evaluation. Check the [llmWorker BOOTSTRAP] lines above: if the ` +
+            `boot line printed but "real worker module loaded" never did, the ` +
+            `hang is inside llmWorker.ts's own top-level code.`,
+        ),
+      );
+    }, WORKER_READY_TIMEOUT_MS);
 
     const onReady = (message: WorkerResponse) => {
       if (settled || !message || message.type !== 'ready') return;
       settled = true;
+      clearTimeout(readyTimer);
       // Recorded only once the handshake completes, so a worker that dies
       // before ever answering is never mistaken for the live one -- the exit
       // handler below keys every decision off `activeWorker === child`.
@@ -487,6 +614,9 @@ const spawnWorker = (): Promise<WorkerHandle> =>
     // SILENT, and every caller's promise hangs forever. Loud failure beats a
     // hang, so every exit path below settles something.
     child.on('exit', (code) => {
+      // The worker is gone; whatever it was going to do, waiting for 'ready' is
+      // no longer one of the outcomes.
+      clearTimeout(readyTimer);
       // Guarded: a late exit from a worker we already replaced must not clear
       // the CURRENT one's handle or promise.
       const wasCurrent = activeWorker === child;

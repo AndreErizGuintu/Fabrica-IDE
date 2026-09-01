@@ -20,6 +20,7 @@ import MenuBuilder from './menu';
 import { generate, shutdownWorker } from './llm';
 import { ensureRequiredImports } from './translateImports';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
+import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
 import { resolveHtmlPath } from './util';
 import {
   startSession,
@@ -171,10 +172,12 @@ function getRunConfig(targetPath: string, language: string, deviceId?: string):
 
 type FlutterTarget = { id: string; name: string; platform: string };
 
-// `flutter devices --machine` schema: each entry has a `platform` field that's
-// arch-qualified (e.g. "windows-x64", "android-arm64") and a separate
-// `platformType` field that's the coarse group ("windows", "android", "ios", "web").
-// We filter on platformType to match the spec's plain "windows" / "android" check.
+// `flutter devices --machine` schema: the platform field is `targetPlatform`,
+// and it is arch-qualified — "android-arm64", "windows-x64", "web-javascript".
+// There is NO `platformType` field in this output (that name belongs to
+// Flutter's internal Device class / daemon protocol, not to `devices
+// --machine`), so reading it yielded undefined for every entry and silently
+// filtered the whole list to empty. Match on prefixes, never on equality.
 ipcMain.handle('flutter:listDevices', async () => {
   return new Promise<{ success: boolean; devices?: FlutterTarget[]; error?: string }>((resolve) => {
     // flutter.bat (like all .bat/.cmd files on Windows) isn't a real PE executable —
@@ -205,13 +208,18 @@ ipcMain.handle('flutter:listDevices', async () => {
         }
         try {
           const raw = JSON.parse(stdout);
-          const devices: FlutterTarget[] = (raw as Array<Record<string, unknown>>)
-            .filter((d) => {
-              const platformType = d.platformType as string | undefined;
-              if (platformType === 'windows') return true;
-              return typeof platformType === 'string' && platformType.startsWith('android') && d.emulator === false;
-            })
-            .map((d) => ({ id: String(d.id), name: String(d.name), platform: String(d.platformType) }));
+          const filtered = (raw as Array<Record<string, unknown>>).filter((d) => {
+            const targetPlatform = d.targetPlatform as string | undefined;
+            if (typeof targetPlatform !== 'string') return false;
+            // Windows desktop ("windows-x64") is always offered. Android is
+            // offered only for physical hardware. Everything else — Edge and
+            // Chrome ("web-javascript"), iOS, Linux — falls through and is
+            // dropped, exactly as before.
+            if (targetPlatform.startsWith('windows')) return true;
+            return targetPlatform.startsWith('android') && d.emulator === false;
+          });
+          const devices: FlutterTarget[] = filtered
+            .map((d) => ({ id: String(d.id), name: String(d.name), platform: String(d.targetPlatform) }));
           resolve({ success: true, devices });
         } catch (err) {
           resolve({ success: false, error: `Failed to parse flutter devices output: ${String(err)}` });
@@ -220,49 +228,6 @@ ipcMain.handle('flutter:listDevices', async () => {
     );
   });
 });
-
-// Best-effort secondary signal for the run-target dropdown: detects raw USB
-// connection events at the OS level so the UI can distinguish "nothing plugged
-// in" from "something's plugged in but Flutter/adb doesn't see it as debug-ready"
-// (missing OEM driver, USB debugging not enabled, etc.).
-//
-// Deliberately implemented via polling `Get-PnpDevice` through child_process
-// rather than a native module (e.g. usb-detection) — see DECISIONS.md's standing
-// node-gyp/VS2022 rebuild-pain note for node-pty; this avoids that risk class
-// entirely at the cost of ~3s detection latency, which is fine for a nicety.
-let knownUsbDeviceIds = new Set<string>();
-let usbWatcherStarted = false;
-
-function startUsbWatcher() {
-  if (usbWatcherStarted || process.platform !== 'win32') return;
-  usbWatcherStarted = true;
-
-  const poll = () => {
-    execFile(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-Command',
-        "Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\\*' } | Select-Object -ExpandProperty InstanceId",
-      ],
-      { timeout: 5000 },
-      (error, stdout) => {
-        if (error) return; // best-effort — silently skip this tick rather than surface noise
-        const current = new Set(
-          stdout.split('\n').map((line) => line.trim()).filter(Boolean),
-        );
-        const added = [...current].filter((id) => !knownUsbDeviceIds.has(id));
-        knownUsbDeviceIds = current;
-        if (added.length > 0) {
-          mainWindow?.webContents.send('usb:connected', added);
-        }
-      },
-    );
-  };
-
-  poll();
-  setInterval(poll, 3000);
-}
 
 class AppUpdater {
   constructor() {
@@ -709,6 +674,15 @@ ipcMain.handle('terminal:stop', async (_event, { sessionId }: { sessionId: strin
   return { success: true };
 });
 
+// Device mirroring. Deliberately NOT following the `{ success, error }` shape
+// the handlers above use: startMirrorServer()'s failures are diagnostic (a
+// missing bundle path, the server's own stderr, a startup timeout) and the
+// renderer should surface that text verbatim in its loading state. Letting the
+// rejection through gives the panel the real message instead of a boolean.
+ipcMain.handle('mirror:start', async () => startMirrorServer());
+
+ipcMain.handle('mirror:stop', async () => stopMirrorServer());
+
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
@@ -756,6 +730,14 @@ const createWindow = async () => {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.erb/dll/preload.js'),
+      // Required for the <webview> that embeds the ws-scrcpy client (device
+      // mirroring). Off by default in Electron and never set here before, so
+      // this turns a default on rather than reversing a deliberate choice --
+      // nothing else in webPreferences is hardened (contextIsolation,
+      // nodeIntegration and sandbox are all left at their secure defaults, and
+      // this does not change any of them). The only page loaded into a webview
+      // is the locally-forked mirror server on 127.0.0.1.
+      webviewTag: true,
     },
   });
 
@@ -788,8 +770,6 @@ const createWindow = async () => {
   // Remove this if your app does not use auto updates
   // eslint-disable-next-line
   new AppUpdater();
-
-  startUsbWatcher();
 };
 
 /**
