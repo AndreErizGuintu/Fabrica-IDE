@@ -1,6 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Mono&display=swap');
 @import "tailwindcss";
 @import "@vscode/codicons/dist/codicon.css";
+@import "devicon/devicon.min.css";
+
+/* Devicon dark-on-dark fixes: five language brand colors are too dark/gray to
+   read on the #2d1b4e panel. Lighten just these; scoped to their .colored class
+   on <i>, so no other devicon icon or codicon fallback is affected. Covers both
+   the sidebar tree and the tab bar (both render <i class="devicon-… colored">). */
+i.devicon-rust-plain.colored        { color: #dea584; } /* black      → Rust tan     */
+i.devicon-markdown-original.colored { color: #e0e0e0; } /* black      → light gray   */
+i.devicon-bash-plain.colored        { color: #89e051; } /* near-black → shell green  */
+i.devicon-powershell-plain.colored  { color: #5391fe; } /* near-black → PS blue      */
+i.devicon-c-plain.colored           { color: #7fa8d4; } /* gray       → lighter blue */
 
 :root {
 	--bg-deep: #0a0b12;

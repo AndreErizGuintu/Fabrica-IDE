@@ -196,7 +196,9 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onClose, onRunning
               background: 'transparent',
             }}
           >
-            ◼ Stop
+            <span className="inline-flex items-center gap-1">
+              <i className="codicon codicon-debug-stop" style={{ fontSize: '11px' }} /> Stop
+            </span>
           </button>
           <button
             type="button"
@@ -213,7 +215,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(({ onClose, onRunning
               className="text-[10px] transition-colors hover:text-white"
               style={{ color: '#52525b' }}
             >
-              ✕
+              <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
             </button>
           )}
         </div>
