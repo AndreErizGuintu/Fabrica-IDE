@@ -4,6 +4,7 @@ import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
+import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
 import { useAIPanelState } from '../components/useAIPanelState';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
@@ -49,10 +50,6 @@ const RUN_LANGUAGE_BY_EXT: Record<string, string> = {
   dart: 'dart',
 };
 
-// Maps the AI panel's Translate-mode target-language display names (see
-// LANGUAGES in AIPanel.tsx) to file extensions, for "Save as file". The
-// existing *_BY_EXT maps above are keyed by extension, not by these display
-// names, so none of them could be reused as-is here.
 const LANGUAGE_NAME_TO_EXT: Record<string, string> = {
   JavaScript: 'js',
   TypeScript: 'ts',
@@ -65,25 +62,12 @@ const LANGUAGE_NAME_TO_EXT: Record<string, string> = {
   Rust: 'rs',
 };
 
-// Reduces a raw AI Translate response to pure source code before it is written
-// to disk. The model sometimes wraps the code in a markdown fence and/or adds an
-// explanation paragraph despite the prompt; saved verbatim, that prose lands
-// inside the .dart/.cs file and shows up as compiler errors when Run echoes the
-// offending source lines. It can also emit the translation twice (a second
-// fenced block), which caused the "'x' is already declared" duplicate-declaration
-// bug. Rule: if the response contains fenced code, keep ONLY the first fenced
-// block (the translated program) and drop everything around/after it; otherwise
-// save the trimmed text as-is. This does not attempt to de-duplicate repetition
-// that occurs *inside* a single unfenced block — that is the separate
-// generation-level EOG/non-terminating-loop issue tracked in DECISIONS.md.
 function extractTranslatedCode(raw: string): string {
   const text = raw.trim();
-  // First complete fenced block: ```lang\n <code> \n```
   const closedFence = /```[^\n]*\n([\s\S]*?)```/.exec(text);
   if (closedFence) {
     return closedFence[1].replace(/^\n+/, '').replace(/\s+$/, '');
   }
-  // Opening fence with no closing fence (truncated stream): drop the marker line.
   const openFence = /^```[^\n]*\n([\s\S]*)$/.exec(text);
   if (openFence) {
     return openFence[1].trim();
@@ -99,11 +83,14 @@ const MIN_RIGHT_PANEL_WIDTH = 280;
 const MAX_RIGHT_PANEL_WIDTH = 600;
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
 
-// Breadcrumb Component
-function Breadcrumb({ currentPath }: { currentPath: string }) {
+// Breadcrumb Component with Codicons
+function Breadcrumb({ currentPath, projectRoot }: { currentPath: string; projectRoot?: string }) {
   if (!currentPath) return null;
-  
-  const parts = currentPath.split(/[\\/]/);
+
+  const relative = projectRoot && currentPath.startsWith(projectRoot)
+    ? currentPath.slice(projectRoot.length).replace(/^[\\/]/, '')
+    : currentPath;
+  const parts = relative.split(/[\\/]/);
   const fileName = parts.pop() || '';
   const folderPath = parts.join(' / ');
 
@@ -137,8 +124,12 @@ function Breadcrumb({ currentPath }: { currentPath: string }) {
         minHeight: '30px',
       }}
     >
-      <span className="text-[#a855f7]">📁</span>
-      <span>{folderPath || 'workspace'}</span>
+      <span className="text-[#a855f7] inline-flex items-center">
+        <i className="codicon codicon-folder" style={{ fontSize: '14px' }} />
+      </span>
+      <span className="truncate" style={{ maxWidth: '280px' }} title={currentPath}>
+        {folderPath || 'workspace'}
+      </span>
       <span style={{ color: '#3d2b5e' }}>›</span>
       {fileName && (
         <span className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ color: '#ffffff' }}>
@@ -146,8 +137,8 @@ function Breadcrumb({ currentPath }: { currentPath: string }) {
           <span style={{ fontWeight: 500 }}>{fileName}</span>
         </span>
       )}
-      <span className="ml-auto text-[10px]" style={{ color: '#3d2b5e' }}>
-        ⎇ main
+      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: '#3d2b5e' }}>
+        <i className="codicon codicon-git-branch" style={{ fontSize: '12px' }} /> main
       </span>
     </div>
   );
@@ -184,8 +175,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   // Floating panel states
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
-  // Single source of truth for AI panel chat state, shared by the docked and
-  // floating <AIPanel> instances so history/prompt survive float<->dock toggles.
   const aiPanelState = useAIPanelState();
   const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
     preview: { x: 100, y: 100 },
@@ -210,9 +199,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (initialFolder) {
       window.stats?.startSession(initialFolder);
     }
-    // Session boundary is one continuous app open->close for the loaded
-    // project; write-on-quit is handled in the main process, not here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFolder]);
 
   const activeTab = tabs[activeTabIndex] ?? null;
@@ -266,7 +252,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     return activeTab.content;
   }, [activeTab]);
 
-  // Sidebar resize handlers
   const handleSidebarResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizingSidebar(true);
@@ -281,7 +266,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     resizeStartWidth.current = rightPanelWidth;
   }, [rightPanelWidth]);
 
-  // Resize effect
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar) {
@@ -481,12 +465,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     });
   }, []);
 
-  // Saves an AI Translate-mode result to a new file in the SAME directory as
-  // the currently active file, deriving the name from the active file's base
-  // name + the target language's extension. Prompts before overwriting, opens
-  // the new file in a tab, and refreshes the sidebar tree. Returns a result the
-  // AI panel surfaces inline. (AI panel = teammate-owned; the file/path/refresh
-  // logic lives here in the editor lane where openFileInTab already lives.)
   const handleSaveTranslatedFile = useCallback(
     async (
       content: string,
@@ -502,9 +480,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         return { success: false, error: `No file extension is known for "${language}".` };
       }
 
-      // Save pure code only — strip any explanation prose / markdown fences the
-      // model added, so the file compiles and Run doesn't echo AI text back into
-      // the terminal. See extractTranslatedCode's note on the duplicate bug.
       const cleaned = extractTranslatedCode(content);
       if (!cleaned.trim()) {
         return { success: false, error: 'Nothing to save — the translation was empty.' };
@@ -519,7 +494,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       const newName = `${base}.${ext}`;
       const targetPath = dir ? `${dir}${sep}${newName}` : newName;
 
-      // Ask before overwriting — never silently clobber, never silently rename.
       const listing = await window.fileSystem.readDir(dir);
       const alreadyExists =
         listing.success && (listing.files ?? []).some((f) => !f.isDirectory && f.name === newName);
@@ -784,16 +758,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
-      {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx */}
       <StatsDebugPanel projectPath={initialFolder} />
       <AdaptiveToast
         currentCode={activeTab?.content ?? ''}
         language={activeTab ? getLanguage(activeTab.filename) : 'plaintext'}
       />
-      {/* Self-contained: watches the editor and offers boilerplate completion
-          on confirmation. Renders only its own small prompt card. */}
       <CodeInferencePrompt />
-      {/* Top Bar - Redesigned */}
+      
+      {/* Top Bar - Logo removed from menu bar */}
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0"
         style={{ 
@@ -814,8 +786,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             </svg>
             Menu
           </button>
+          {/* LOGO REMOVED - only filename shown */}
           <div className="flex items-center gap-2">
-            <img src={icon} alt="Fabrica" className="w-5 h-5" />
             <span className="text-sm font-medium" style={{ color: '#d4d4d4' }}>
               {activeTab?.filename ?? 'No file open'}
             </span>
@@ -899,7 +871,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         </div>
       </div>
 
-      {/* Tabs Bar - Redesigned */}
+      {/* Tabs Bar */}
       <div
         className="flex items-center overflow-x-auto shrink-0"
         style={{ 
@@ -909,7 +881,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           minHeight: '36px',
         }}
       >
-        {tabs.map((tab, index) => (
+        {tabs.map((tab, index) => {
+          const tabIconClass = getFileIcon(tab.filename);
+          return (
           <div
             key={index}
             className="group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm shrink-0 transition-all duration-200"
@@ -923,8 +897,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             }}
             onClick={() => setActiveTabIndex(index)}
           >
-            <span className="truncate max-w-32">{tab.filename}</span>
-            {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a855f7' }} />}
+            <i
+              className={tabIconClass}
+              style={{ fontSize: '14px', flexShrink: 0, color: tabIconClass.startsWith('devicon') ? undefined : '#e8e8f0' }}
+            />
+            <span
+              className="truncate max-w-32"
+              style={tab.isDirty && index !== activeTabIndex ? { fontStyle: 'italic', color: '#a855f7' } : undefined}
+            >
+              {tab.filename}
+            </span>
             <button
               type="button"
               onClick={(event) => {
@@ -934,10 +916,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity text-[10px]"
               style={{ color: '#a7adc5' }}
             >
-              ✕
+              <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
             </button>
           </div>
-        ))}
+          );
+        })}
         {tabs.length === 0 && (
           <div className="text-sm px-4 py-1" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
             No files open
@@ -946,11 +929,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       </div>
 
       {/* Breadcrumb */}
-      <Breadcrumb currentPath={activeTab?.path || ''} />
+      <Breadcrumb currentPath={activeTab?.path || ''} projectRoot={initialFolder} />
 
-      {/* Main Content with Resizable Panels */}
+      {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - Resizable and Collapsible */}
+        {/* Sidebar */}
         <div 
           ref={sidebarRef}
           className="flex shrink-0 relative"
@@ -970,7 +953,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             />
           </div>
           
-          {/* Sidebar Resize Handle */}
           {!isSidebarCollapsed && (
             <div
               className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-purple-500/50 transition-colors z-10"
@@ -996,7 +978,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }}
           title={isSidebarCollapsed ? 'Show Sidebar (Ctrl+B)' : 'Hide Sidebar (Ctrl+B)'}
         >
-          <span className="text-[10px]">{isSidebarCollapsed ? '▶' : '◀'}</span>
+          <i className={`codicon ${isSidebarCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} style={{ fontSize: '12px' }} />
         </button>
 
         {/* Editor Area */}
@@ -1006,7 +988,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               className="flex-1 flex flex-col items-center justify-center gap-4"
               style={{ background: '#1a0a2e' }}
             >
-              <div className="text-6xl opacity-30">📂</div>
+              <div className="opacity-30"><i className="codicon codicon-folder-opened" style={{ fontSize: '64px' }} /></div>
               <div className="text-center" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
                 <div className="text-white font-medium text-lg mb-1.5">No file open</div>
                 <div className="text-sm" style={{ color: '#a7adc5' }}>
@@ -1025,7 +1007,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   boxShadow: '0 4px 15px rgba(168, 85, 247, 0.3)',
                 }}
               >
-                Open File →
+                <span className="inline-flex items-center gap-1.5">
+                  Open File <i className="codicon codicon-arrow-right" style={{ fontSize: '13px' }} />
+                </span>
               </button>
             </div>
           ) : (
@@ -1041,7 +1025,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 />
               </div>
 
-              {/* Right Panel - Resizable and Collapsible */}
+              {/* Right Panel */}
               <div className="flex shrink-0 relative">
                 <button
                   type="button"
@@ -1055,7 +1039,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   }}
                   title={isRightPanelCollapsed ? 'Show preview & AI panel' : 'Hide preview & AI panel'}
                 >
-                  <span className="text-[10px]">{isRightPanelCollapsed ? '◀' : '▶'}</span>
+                  <i className={`codicon ${isRightPanelCollapsed ? 'codicon-chevron-left' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
                 </button>
 
                 <div
@@ -1065,7 +1049,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   }}
                 >
                   <div ref={rightPanelContentRef} className="flex flex-col h-full" style={{ width: rightPanelWidth }}>
-                    {/* Preview Panel - Drag to float - takes 50% of height */}
+                    {/* Preview Panel */}
                     {floatingPanel !== 'preview' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
@@ -1098,7 +1082,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       </div>
                     )}
 
-                    {/* Resize Divider between Preview and AI */}
+                    {/* Resize Divider */}
                     {showAI && floatingPanel !== 'ai' && floatingPanel !== 'preview' && (
                       <div
                         className="h-1.5 shrink-0 transition-all duration-200"
@@ -1110,7 +1094,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       />
                     )}
 
-                    {/* AI Panel - Drag to float - takes 50% of height */}
+                    {/* AI Panel */}
                     {showAI && floatingPanel !== 'ai' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
@@ -1169,7 +1153,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           )}
         </div>
 
-        {/* Git Panel - Redesigned */}
+        {/* Git Panel */}
         {showGit && (
           <div
             className="flex flex-col shrink-0 overflow-hidden border-l"
@@ -1202,7 +1186,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 style={{ color: '#a7adc5' }}
                 title="Refresh"
               >
-                ↻
+                <i className="codicon codicon-refresh" style={{ fontSize: '14px' }} />
               </button>
             </div>
 
@@ -1339,7 +1323,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <span className="text-[8px]">▼</span>
+                      <i className="codicon codicon-chevron-down" style={{ fontSize: '12px' }} />
                       Staged
                       {staged.length > 0 && (
                         <span
@@ -1376,7 +1360,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <span className="text-[8px]">{gitChangesOpen ? '▼' : '▶'}</span>
+                      <i className={`codicon ${gitChangesOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
                       Changes
                       {unstaged.length > 0 && (
                         <span
@@ -1415,7 +1399,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <span className="text-[8px]">{gitHistoryOpen ? '▼' : '▶'}</span>
+                      <i className={`codicon ${gitHistoryOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
                       History
                     </button>
                     {gitHistoryOpen && (
@@ -1605,8 +1589,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         </Rnd>
       )}
 
-      {/* Terminal Panel — always mounted (so the ref is ready before the first Run/Git
-          click), just collapsed to zero height when closed rather than unmounted. */}
+      {/* Terminal Panel */}
       <div
         className="flex flex-col shrink-0 overflow-hidden"
         style={{
