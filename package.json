@@ -113,7 +113,7 @@
     "electron-debug": "^4.1.0",
     "electron-log": "^5.3.2",
     "electron-updater": "^6.3.9",
-    "node-llama-cpp": "^3.19.0",
+    "node-llama-cpp": "3.20.0",
     "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -195,52 +195,21 @@
     "productName": "ElectronReact",
     "appId": "org.erb.ElectronReact",
     "asar": true,
-    "afterSign": ".erb/scripts/notarize.js",
-    "asarUnpack": "**\\*.{node,dll}",
+    "asarUnpack": [
+      "**/*.{node,dll}",
+      "node_modules/**",
+      "dist/main/llmWorker.js",
+      "dist/main/llmWorkerBootstrap.js"
+    ],
     "files": [
       "dist",
       "node_modules",
       "package.json"
     ],
-    "mac": {
-      "notarize": false,
-      "target": {
-        "target": "default",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
-      },
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
     "win": {
       "target": [
         "nsis"
       ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
     },
     "directories": {
       "app": "release/app",
@@ -248,7 +217,15 @@
       "output": "release/build"
     },
     "extraResources": [
-      "./assets/**"
+      "./assets/**",
+      {
+        "from": "resources/models",
+        "to": "models"
+      },
+      {
+        "from": "resources/runtimes",
+        "to": "runtimes"
+      }
     ],
     "publish": {
       "provider": "github",

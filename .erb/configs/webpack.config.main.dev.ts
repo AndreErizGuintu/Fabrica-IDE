@@ -26,6 +26,18 @@ const configuration: webpack.Configuration = {
   entry: {
     main: path.join(webpackPaths.srcMainPath, 'main.ts'),
     preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
+    // FORK TARGET (2026-08-22). This -- not `llmWorker` below -- is what
+    // `utilityProcess.fork()` in llm.ts points at. Emits
+    // `.erb/dll/llmWorkerBootstrap.bundle.dev.js` via `[name].bundle.dev.js`
+    // below, a sibling of the worker bundle, which is what lets the bootstrap
+    // derive the worker's path from its own __filename with no isPackaged
+    // branch. If you rename this entry KEY, change `marker` in
+    // llmWorkerBootstrap.ts and DEV_WORKER_BUNDLE in llm.ts to match.
+    llmWorkerBootstrap: path.join(
+      webpackPaths.srcMainPath,
+      'worker',
+      'llmWorkerBootstrap.ts',
+    ),
     // Inference utility process (PART 1 of the utility-process migration,
     // DECISIONS.md 2026-08-07 section 5, work item 1). Emitted alongside main as
     // `.erb/dll/llmWorker.bundle.dev.js` by the output config below, which is
@@ -49,6 +61,11 @@ const configuration: webpack.Configuration = {
     // `.erb/dll/llmWorker.bundle.dev.js` and resolveWorkerPath() in llm.ts
     // needed no change. Entry key and source path are independent in webpack;
     // only the latter moved.
+    //
+    // STILL BUILT, NO LONGER FORKED (2026-08-22): the bootstrap entry above is
+    // the fork target, and it require()s this bundle at runtime via
+    // __non_webpack_require__. This entry must therefore stay -- dropping it
+    // would leave the bootstrap requiring a file that no longer exists.
     llmWorker: path.join(webpackPaths.srcMainPath, 'worker', 'llmWorker.ts'),
   },
 

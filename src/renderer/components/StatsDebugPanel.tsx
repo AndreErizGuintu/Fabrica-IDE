@@ -4,11 +4,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
-/**
- * TEMPORARY debug-only UI for inspecting the Stats layer (src/main/stats.ts).
- * Not part of the product UI — safe to delete before defense.
- */
-
 type CurrentSession = {
   projectPath: string;
   sessionStart: string;
@@ -33,13 +28,13 @@ type SessionHistoryEntry = {
 };
 
 type StatsSample = { t: number; sessionCalls: number; sessionRuns: number };
-const MAX_SAMPLES = 60; // ~60s rolling window at the existing 1s poll
+const MAX_SAMPLES = 60;
 
 const CHART_GRID = '#333';
 const CHART_AXIS = '#888';
-const COLOR_CALLS = '#a855f7'; // brand purple
-const COLOR_RUNS = '#38bdf8';  // sky, distinct on the dark card
-const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6']; // scenarios 1..4
+const COLOR_CALLS = '#a855f7';
+const COLOR_RUNS = '#38bdf8';
+const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6'];
 const chartTooltip: React.CSSProperties = { background: '#1a1a1a', border: '1px solid #333', color: '#eee', fontSize: 12 };
 
 function formatSeconds(s: number | null): string {
@@ -122,7 +117,11 @@ const tdStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-export default function StatsDebugPanel({ projectPath }: { projectPath?: string }) {
+interface StatsDebugPanelProps {
+  projectPath?: string;
+}
+
+export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
   const [open, setOpen] = useState(false);
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
@@ -155,8 +154,11 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
     loadData();
   };
 
-  // Live-refresh the current session + aggregate while the panel is open,
-  // so idle time / AI call count visibly tick up without manual Refresh.
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  // Live-refresh while open
   useEffect(() => {
     if (!open) return undefined;
     const intervalId = setInterval(() => {
@@ -195,28 +197,38 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
 
   return (
     <>
+      {/* Clickable ⓘ Icon */}
       <button
         type="button"
         onClick={handleOpen}
         style={{
-          position: 'fixed',
-          bottom: 8,
-          right: 8,
-          top: 'auto',
-          left: 'auto',
-          zIndex: 9999,
-          fontSize: 11,
-          padding: '4px 8px',
-          background: '#333',
-          color: '#fff',
-          border: '1px solid #666',
-          borderRadius: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          color: '#6b7280',
           cursor: 'pointer',
+          fontSize: '13px',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          transition: 'all 0.2s ease',
+          fontFamily: 'Segoe UI, sans-serif',
         }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#a78bfa';
+          e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = '#6b7280';
+          e.currentTarget.style.background = 'transparent';
+        }}
+        title="Click to view Stats Debug"
       >
         ⓘ
       </button>
 
+      {/* Stats Dialog */}
       {open && (
         <div
           style={{
@@ -237,7 +249,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           }}
         >
-          {/* Sticky header, always visible — no scrolling needed to see it */}
+          {/* Sticky header */}
           <div
             style={{
               display: 'flex',
@@ -248,7 +260,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               flexShrink: 0,
             }}
           >
-            <strong style={{ fontSize: 14 }}>Stats Debug</strong>
+            <strong style={{ fontSize: 14 }}>ⓘ Stats Debug</strong>
             <div>
               <button
                 type="button"
@@ -267,7 +279,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               </button>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 style={{
                   padding: '4px 10px',
                   background: '#4c1d1d',
@@ -288,9 +300,8 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               <pre style={{ color: '#f87171', whiteSpace: 'pre-wrap' }}>{error}</pre>
             )}
 
-            {/* ── Charts ─────────────────────────────────────────── */}
+            {/* Charts */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
-              {/* Activity Over Time — line, from rolling buffer */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Activity Over Time</h3>
                 <ResponsiveContainer width="100%" height={200}>
@@ -307,7 +318,6 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
                 {samples.length === 0 && <p style={{ color: '#888', margin: '4px 0 0' }}>Collecting… (samples every 1s while open)</p>}
               </div>
 
-              {/* Actions / Events — latest calls vs runs, two bars */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Actions / Events (current)</h3>
                 <ResponsiveContainer width="100%" height={200}>
@@ -323,7 +333,6 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
                 </ResponsiveContainer>
               </div>
 
-              {/* Activity Categories — scenario-fire distribution doughnut */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Activity Categories (scenario fires)</h3>
                 {scenarioTotal > 0 ? (
@@ -341,7 +350,6 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
                 )}
               </div>
 
-              {/* Session Status — badge, not a chart */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Session Status</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
@@ -389,7 +397,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             </div>
 
             <div style={sectionStyle}>
-              <h3 style={headingStyle}>Adaptive Engine (src/main/adaptiveEngine.ts)</h3>
+              <h3 style={headingStyle}>Adaptive Engine</h3>
               {adaptive ? (
                 <>
                   <table style={{ borderCollapse: 'collapse', marginBottom: 10 }}>

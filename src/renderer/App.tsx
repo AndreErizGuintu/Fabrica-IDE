@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import logo from '../assets/log.png';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
+// TEMPORARY: throwaway device-mirroring test UI. Remove this import and its
+// one usage in MainMenu below when the real mirror panel lands.
+import MirrorTest from './components/MirrorTest';
 
 type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates';
 
@@ -579,6 +582,9 @@ function MainMenu({
               <span>🔗</span> Clone Repository
             </button>
           </div>
+
+          {/* TEMPORARY: device-mirroring test UI. Delete with its import. */}
+          <MirrorTest />
 
           {/* Recent Projects */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">

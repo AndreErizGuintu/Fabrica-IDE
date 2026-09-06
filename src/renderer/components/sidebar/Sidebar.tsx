@@ -117,8 +117,6 @@ function TreeNodeRow({
   const indent = depth * 12;
   const badge = !node.entry.isDirectory ? getStatusBadge(gitStatusMap[node.entry.path]) : null;
   const iconClass = getFileIcon(node.entry.name, node.entry.isDirectory);
-  // Icon color: folders fixed yellow; devicon (language) icons keep their own
-  // brand color; codicon monochrome fallbacks go near-white instead of gray.
   const iconColor = node.entry.isDirectory
     ? '#dcb67a'
     : iconClass.startsWith('devicon')
@@ -140,13 +138,13 @@ function TreeNodeRow({
           }
         }}
         onContextMenu={(e) => onContextMenu(e, node.entry)}
-        className="w-full text-left py-0.5 flex items-center gap-1.5 truncate"
+        className="w-full text-left py-0.5 flex items-center gap-1.5 truncate hover:bg-[#a855f7]/10 transition-colors"
         style={{
           paddingLeft: `${indent + 8}px`,
           paddingRight: '8px',
           color: isActive || isSelectedFolder ? '#ffffff' : '#a7adc5',
           borderLeft: isActive || isSelectedFolder ? '2px solid #a855f7' : '2px solid transparent',
-          background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.12)' : 'transparent',
+          background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.15)' : 'transparent',
           fontFamily: 'Segoe UI, sans-serif',
           fontSize: '12px',
           minHeight: '22px',
@@ -183,7 +181,7 @@ function TreeNodeRow({
             className="text-xs px-1 rounded flex-1 min-w-0"
             style={{
               background: '#1a0a2e',
-              color: '#ffffff',
+              color: '#d4d4d4',
               border: '1px solid #a855f7',
               fontFamily: 'Segoe UI, sans-serif',
               outline: 'none',
@@ -234,7 +232,7 @@ function TreeNodeRow({
               style={{
                 paddingLeft: `${(depth + 1) * 12 + 8}px`,
                 fontSize: '11px',
-                color: '#4b5563',
+                color: '#2d1b4e',
                 minHeight: '20px',
                 display: 'flex',
                 alignItems: 'center',
@@ -455,9 +453,9 @@ export default function Sidebar({
     : null;
 
   return (
-    <div className="flex flex-col h-full w-52 overflow-hidden" style={{ background: '#2d1b4e' }}>
-      {/* Header */}
-      <div className="px-3 py-2 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #1a0a2e' }}>
+    <div className="flex flex-col h-full w-52 overflow-hidden" style={{ background: '#1a0a2e' }}>
+      {/* Header - Violet Theme */}
+      <div className="px-3 py-2 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #2d1b4e' }}>
         <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
           Explorer
         </span>
@@ -465,7 +463,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={handleNewFileClick}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
             style={{ color: '#a855f7' }}
             title="New File"
           >
@@ -477,7 +475,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={handleNewFolderClick}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
             style={{ color: '#a855f7' }}
             title="New Folder"
           >
@@ -499,8 +497,8 @@ export default function Sidebar({
 
       {/* Selected folder indicator */}
       <div 
-        className="px-3 py-0.5 text-[10px] truncate shrink-0 cursor-pointer hover:bg-white/5"
-        style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif', borderBottom: '1px solid #1a0a2e' }}
+        className="px-3 py-0.5 text-[10px] truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
+        style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif', borderBottom: '1px solid #2d1b4e' }}
         onClick={() => setSelectedFolder(folderName)}
         title="Click to select root folder"
       >
@@ -510,11 +508,11 @@ export default function Sidebar({
       {/* Folder name */}
       {folderName && (
         <div 
-          className="px-3 py-1 text-xs truncate shrink-0 cursor-pointer hover:bg-white/5"
+          className="px-3 py-1 text-xs truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
           style={{ 
-            color: selectedFolder === folderName ? '#a855f7' : '#ffffff', 
+            color: selectedFolder === folderName ? '#a855f7' : '#d4d4d4', 
             fontFamily: 'Segoe UI, sans-serif', 
-            borderBottom: '1px solid #1a0a2e' 
+            borderBottom: '1px solid #2d1b4e' 
           }}
           onClick={() => setSelectedFolder(folderName)}
         >
@@ -583,7 +581,7 @@ export default function Sidebar({
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 && !folderName && (
-          <div className="px-3 py-4 text-xs text-center" style={{ color: '#6b7280' }}>
+          <div className="px-3 py-4 text-xs text-center" style={{ color: '#2d1b4e' }}>
             Open a folder to start
           </div>
         )}
@@ -614,7 +612,7 @@ export default function Sidebar({
       </div>
 
       {/* Status Bar */}
-      <div className="px-3 py-1.5 shrink-0" style={{ borderTop: '1px solid #1a0a2e', background: '#1a0a2e' }}>
+      <div className="px-3 py-1.5 shrink-0" style={{ borderTop: '1px solid #2d1b4e', background: '#1a0a2e' }}>
         <span
           className="text-[10px] px-1.5 py-0.5 rounded"
           style={{ background: '#2d1b4e', color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
@@ -643,7 +641,7 @@ export default function Sidebar({
                 void handleFileClick(contextMenu.entry);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1 hover:bg-white/5"
+              className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
               style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
             >
               Open
@@ -656,7 +654,7 @@ export default function Sidebar({
                 setSelectedFolder(contextMenu.entry.path);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1 hover:bg-white/5"
+              className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
               style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif' }}
             >
               Select Folder
@@ -669,7 +667,7 @@ export default function Sidebar({
               setRenameValue(contextMenu.entry.name);
               setContextMenu(null);
             }}
-            className="text-left text-xs px-3 py-1 hover:bg-white/5"
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
             Rename
@@ -677,7 +675,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => void handleDelete(contextMenu.entry)}
-            className="text-left text-xs px-3 py-1 hover:bg-white/5"
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
             style={{ color: '#f87171', fontFamily: 'Segoe UI, sans-serif' }}
           >
             Delete

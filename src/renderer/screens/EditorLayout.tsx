@@ -8,10 +8,13 @@ import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
 import { useAIPanelState } from '../components/useAIPanelState';
 import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
-import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
 import CodeInferencePrompt from '../components/inference/CodeInferencePrompt';
-import FlutterTargetSelector, { FlutterTarget } from '../components/flutter/FlutterTargetSelector';
+import log from '../assets/log.png';
+import FlutterTargetSelector, { 
+  FlutterTarget, 
+  WINDOWS_TARGET 
+} from '../components/flutter/FlutterTargetSelector';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -83,8 +86,293 @@ const MIN_RIGHT_PANEL_WIDTH = 280;
 const MAX_RIGHT_PANEL_WIDTH = 600;
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
 
-// Breadcrumb Component with Codicons
-function Breadcrumb({ currentPath, projectRoot }: { currentPath: string; projectRoot?: string }) {
+// ============================================================
+// MENU BAR COMPONENT - Extracted to avoid hook ordering issues
+// ============================================================
+function MenuBarComponent() {
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const menus = {
+    File: {
+      items: [
+        { label: 'New File', shortcut: 'Ctrl+N', action: () => console.log('New File') },
+        { label: 'New Folder', shortcut: 'Ctrl+Shift+N', action: () => console.log('New Folder') },
+        { separator: true },
+        { label: 'Open File', shortcut: 'Ctrl+O', action: () => console.log('Open File') },
+        { label: 'Open Folder', shortcut: 'Ctrl+K Ctrl+O', action: () => console.log('Open Folder') },
+        { label: 'Open Recent', shortcut: '', action: () => console.log('Open Recent') },
+        { separator: true },
+        { label: 'Save', shortcut: 'Ctrl+S', action: () => console.log('Save') },
+        { label: 'Save As', shortcut: 'Ctrl+Shift+S', action: () => console.log('Save As') },
+        { label: 'Save All', shortcut: 'Ctrl+K S', action: () => console.log('Save All') },
+        { separator: true },
+        { label: 'Close Editor', shortcut: 'Ctrl+W', action: () => console.log('Close Editor') },
+        { label: 'Close Folder/Workspace', shortcut: '', action: () => console.log('Close Folder') },
+        { separator: true },
+        { label: 'Exit', shortcut: '', action: () => console.log('Exit') },
+      ]
+    },
+    Edit: {
+      items: [
+        { label: 'Undo', shortcut: 'Ctrl+Z', action: () => console.log('Undo') },
+        { label: 'Redo', shortcut: 'Ctrl+Y', action: () => console.log('Redo') },
+        { separator: true },
+        { label: 'Cut', shortcut: 'Ctrl+X', action: () => console.log('Cut') },
+        { label: 'Copy', shortcut: 'Ctrl+C', action: () => console.log('Copy') },
+        { label: 'Paste', shortcut: 'Ctrl+V', action: () => console.log('Paste') },
+        { separator: true },
+        { label: 'Select All', shortcut: 'Ctrl+A', action: () => console.log('Select All') },
+        { separator: true },
+        { label: 'Find', shortcut: 'Ctrl+F', action: () => console.log('Find') },
+        { label: 'Replace', shortcut: 'Ctrl+H', action: () => console.log('Replace') },
+        { label: 'Find in Files', shortcut: 'Ctrl+Shift+F', action: () => console.log('Find in Files') },
+      ]
+    },
+    View: {
+      items: [
+        { label: 'Explorer', shortcut: 'Ctrl+Shift+E', action: () => console.log('Explorer') },
+        { label: 'Search', shortcut: 'Ctrl+Shift+F', action: () => console.log('Search') },
+        { label: 'Source Control', shortcut: 'Ctrl+Shift+G', action: () => console.log('Source Control') },
+        { label: 'Run & Debug', shortcut: 'Ctrl+Shift+D', action: () => console.log('Run & Debug') },
+        { label: 'AI Assistant', shortcut: 'Ctrl+Shift+A', action: () => console.log('AI Assistant') },
+        { separator: true },
+        { label: 'Toggle Sidebar', shortcut: 'Ctrl+B', action: () => console.log('Toggle Sidebar') },
+        { label: 'Toggle Panel', shortcut: 'Ctrl+J', action: () => console.log('Toggle Panel') },
+        { label: 'Toggle Fullscreen', shortcut: 'F11', action: () => console.log('Toggle Fullscreen') },
+        { separator: true },
+        { label: 'Zoom In', shortcut: 'Ctrl+=', action: () => console.log('Zoom In') },
+        { label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => console.log('Zoom Out') },
+        { label: 'Reset Zoom', shortcut: '', action: () => console.log('Reset Zoom') },
+      ]
+    },
+    Run: {
+      items: [
+        { label: 'Run', shortcut: 'F5', action: () => console.log('Run') },
+        { label: 'Run Without Debugging', shortcut: 'Ctrl+F5', action: () => console.log('Run Without Debugging') },
+        { label: 'Start Debugging', shortcut: 'F5', action: () => console.log('Start Debugging') },
+        { label: 'Stop', shortcut: 'Shift+F5', action: () => console.log('Stop') },
+        { label: 'Restart', shortcut: 'Ctrl+Shift+F5', action: () => console.log('Restart') },
+        { separator: true },
+        { label: 'Configure Run', shortcut: '', action: () => console.log('Configure Run') },
+        { label: 'Run Current File', shortcut: '', action: () => console.log('Run Current File') },
+      ]
+    },
+    Terminal: {
+      items: [
+        { label: 'New Terminal', shortcut: 'Ctrl+`', action: () => console.log('New Terminal') },
+        { label: 'Split Terminal', shortcut: 'Ctrl+Shift+5', action: () => console.log('Split Terminal') },
+        { label: 'Kill Terminal', shortcut: '', action: () => console.log('Kill Terminal') },
+        { label: 'Clear Terminal', shortcut: '', action: () => console.log('Clear Terminal') },
+        { separator: true },
+        { label: 'Run Active File', shortcut: '', action: () => console.log('Run Active File') },
+        { label: 'Terminal Settings', shortcut: '', action: () => console.log('Terminal Settings') },
+      ]
+    },
+    Help: {
+      items: [
+        { label: 'Documentation', shortcut: '', action: () => console.log('Documentation') },
+        { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+K Ctrl+S', action: () => console.log('Keyboard Shortcuts') },
+        { label: 'Command Palette', shortcut: 'Ctrl+Shift+P', action: () => console.log('Command Palette') },
+        { separator: true },
+        { label: 'Report Issue', shortcut: '', action: () => console.log('Report Issue') },
+        { label: 'About Fabrica', shortcut: '', action: () => console.log('About Fabrica') },
+      ]
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.menu-bar-container')) {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const toggleMenu = (menuName: string) => {
+    setOpenMenu(openMenu === menuName ? null : menuName);
+  };
+
+  const renderMenuItem = (item: any, index: number) => {
+    if (item.separator) {
+      return (
+        <div key={`sep-${index}`} className="h-px my-1" style={{ background: '#2d1b4e' }} />
+      );
+    }
+
+    return (
+      <button
+        key={item.label}
+        type="button"
+        className="w-full text-left px-4 py-1 text-xs flex items-center justify-between hover:bg-[#a855f7]/10 transition-colors"
+        style={{ 
+          color: '#d4d4d4', 
+          fontFamily: 'Segoe UI, sans-serif',
+          cursor: 'pointer',
+        }}
+        onClick={() => {
+          item.action();
+          setOpenMenu(null);
+        }}
+      >
+        <span>{item.label}</span>
+        {item.shortcut && (
+          <span className="text-[10px]" style={{ color: '#6b7280' }}>{item.shortcut}</span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div 
+      className="menu-bar-container flex items-center gap-1 px-3 py-0.5 shrink-0"
+      style={{
+        background: '#0a0512',
+        borderBottom: '1px solid #1a0a2e',
+        fontFamily: 'Segoe UI, sans-serif',
+        fontSize: '13px',
+        color: '#a7adc5',
+        minHeight: '28px',
+        userSelect: 'none',
+      }}
+    >
+      {Object.keys(menus).map((menuName) => (
+        <div
+          key={menuName}
+          ref={(el) => { menuRefs.current[menuName] = el; }}
+          className="relative"
+        >
+          <button
+            type="button"
+            className="px-2 py-0.5 rounded transition-colors hover:bg-[#a855f7]/10"
+            style={{
+              color: openMenu === menuName ? '#a855f7' : '#a7adc5',
+            }}
+            onClick={() => toggleMenu(menuName)}
+          >
+            {menuName}
+          </button>
+          {openMenu === menuName && (
+            <div 
+              className="absolute top-full left-0 mt-0.5 rounded shadow-lg z-50 py-1 min-w-[220px]"
+              style={{
+                background: '#12081f',
+                border: '1px solid #2d1b4e',
+              }}
+            >
+              {menus[menuName as keyof typeof menus].items.map((item, index) => renderMenuItem(item, index))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================
+// STATUS BAR COMPONENT
+// ============================================================
+function StatusBarComponent({ 
+  activeTab, 
+  language, 
+  line, 
+  col, 
+  errors = 0, 
+  warnings = 0,
+  branch = 'main',
+}: { 
+  activeTab: Tab | null; 
+  language: string; 
+  line?: number; 
+  col?: number; 
+  errors?: number; 
+  warnings?: number;
+  branch?: string;
+}) {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div
+      className="flex items-center justify-between px-4 py-0.5 shrink-0"
+      style={{
+        background: '#0a0512',
+        borderTop: '1px solid #1a0a2e',
+        fontSize: '11px',
+        color: '#6b7280',
+        fontFamily: 'Segoe UI, sans-serif',
+        minHeight: '24px',
+        userSelect: 'none',
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+          Ready
+        </span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span className="text-[#a7adc5]">{branch}</span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span style={{ color: '#d4d4d4' }}>
+          {activeTab ? language : 'Plain Text'}
+        </span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span style={{ color: '#d4d4d4' }}>Ln {line || 1}, Col {col || 1}</span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span style={{ color: '#6b7280' }}>UTF-8</span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span style={{ color: '#6b7280' }}>LF</span>
+        <span className="text-[#2d1b4e]">|</span>
+        <span style={{ color: '#6b7280' }}>Spaces: 2</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          className="hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: errors > 0 ? '#f87171' : '#6b7280' }}
+        >
+          Errors: {errors}
+        </button>
+        <button
+          type="button"
+          className="hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: warnings > 0 ? '#fbbf24' : '#6b7280' }}
+        >
+          Warnings: {warnings}
+        </button>
+        <span style={{ color: '#a7adc5' }}>
+          {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BREADCRUMB COMPONENT
+// ============================================================
+function BreadcrumbComponent({ currentPath, projectRoot }: { currentPath: string; projectRoot?: string }) {
   if (!currentPath) return null;
 
   const relative = projectRoot && currentPath.startsWith(projectRoot)
@@ -94,58 +382,44 @@ function Breadcrumb({ currentPath, projectRoot }: { currentPath: string; project
   const fileName = parts.pop() || '';
   const folderPath = parts.join(' / ');
 
-  const getLangColor = (filename: string) => {
-    const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-    const colors: Record<string, string> = {
-      '.html': '#e44d26',
-      '.css': '#264de4',
-      '.js': '#f7df1e',
-      '.ts': '#3178c6',
-      '.tsx': '#61dafb',
-      '.jsx': '#61dafb',
-      '.py': '#3776ab',
-      '.php': '#777bb3',
-      '.java': '#b07219',
-      '.json': '#cbcb41',
-      '.md': '#083fa1',
-    };
-    return colors[ext] || '#6b7280';
-  };
+  if (!folderPath && !fileName) return null;
 
   return (
     <div 
-      className="flex items-center gap-2 px-4 py-1.5 shrink-0 overflow-x-auto"
+      className="flex items-center gap-2 px-4 py-1 shrink-0 overflow-x-auto"
       style={{ 
-        background: '#1a0a2e', 
-        borderBottom: '1px solid #2d1b4e',
+        background: '#0a0512', 
+        borderBottom: '1px solid #1a0a2e',
         fontFamily: 'Segoe UI, sans-serif',
         fontSize: '12px',
-        color: '#a7adc5',
-        minHeight: '30px',
+        color: '#6b7280',
+        minHeight: '26px',
       }}
     >
       <span className="text-[#a855f7] inline-flex items-center">
-        <i className="codicon codicon-folder" style={{ fontSize: '14px' }} />
+        <i className="codicon codicon-folder" style={{ fontSize: '13px' }} />
       </span>
       <span className="truncate" style={{ maxWidth: '280px' }} title={currentPath}>
         {folderPath || 'workspace'}
       </span>
-      <span style={{ color: '#3d2b5e' }}>›</span>
       {fileName && (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ color: '#ffffff' }}>
-          <span style={{ color: getLangColor(fileName) }}>●</span>
-          <span style={{ fontWeight: 500 }}>{fileName}</span>
-        </span>
+        <>
+          <span style={{ color: '#2d1b4e' }}>›</span>
+          <span style={{ color: '#d4d4d4' }}>{fileName}</span>
+        </>
       )}
-      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: '#3d2b5e' }}>
+      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: '#2d1b4e' }}>
         <i className="codicon codicon-git-branch" style={{ fontSize: '12px' }} /> main
       </span>
     </div>
   );
 }
 
+// ============================================================
+// MAIN EDITOR LAYOUT COMPONENT
+// ============================================================
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
-  // ===== ALL HOOKS AT TOP LEVEL - UNCONDITIONALLY =====
+  // ===== ALL useState HOOKS - MUST BE FIRST AND IN SAME ORDER =====
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
@@ -161,21 +435,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [isRunning, setIsRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
-  const terminalRef = useRef<TerminalHandle>(null);
-
-  // Resizable panels state
+  const [flutterTarget, setFlutterTarget] = useState<FlutterTarget>(WINDOWS_TARGET);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [rightPanelWidth, setRightPanelWidth] = useState(DEFAULT_RIGHT_PANEL_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
-  const resizeStartX = useRef(0);
-  const resizeStartWidth = useRef(0);
-
-  // Floating panel states
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
-  const aiPanelState = useAIPanelState();
   const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
     preview: { x: 100, y: 100 },
     ai: { x: 140, y: 120 },
@@ -184,27 +451,51 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     preview: { width: 420, height: 350 },
     ai: { width: 420, height: 350 },
   });
-  const sidebarRef = useRef<HTMLDivElement>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
-
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const preFullscreenRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-
   const [armedDetachPanel, setArmedDetachPanel] = useState<FloatingPanel | null>(null);
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
+  const [errors, setErrors] = useState(0);
+  const [warnings, setWarnings] = useState(0);
+  const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
+
+  // ===== ALL useRef HOOKS =====
+  const terminalRef = useRef<TerminalHandle>(null);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const preFullscreenRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const detachStartRef = useRef({ x: 0, y: 0 });
-
   const rightPanelContentRef = useRef<HTMLDivElement>(null);
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    if (initialFolder) {
-      window.stats?.startSession(initialFolder);
-    }
-  }, [initialFolder]);
+  // ===== CUSTOM HOOKS =====
+  const aiPanelState = useAIPanelState();
 
+  // ===== COMPUTED VALUES =====
   const activeTab = tabs[activeTabIndex] ?? null;
   const isHtmlFile = activeTab
     ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
     : false;
+
+  // ===== FUNCTIONS (not hooks) =====
+  const showNotification = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    setNotification({ message, type });
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  }, []);
+
+  // ===== ALL useEffect HOOKS =====
+  useEffect(() => {
+    if (initialFolder) {
+      window.stats?.startSession(initialFolder);
+      showNotification(`Workspace opened: ${initialFolder.split(/[\\/]/).pop()}`, 'success');
+    }
+  }, [initialFolder]);
 
   const previewHtml = useMemo(() => {
     if (!activeTab) return '';
@@ -456,11 +747,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       const existing = prev.findIndex((tab) => tab.path === filePath);
       if (existing !== -1) {
         setActiveTabIndex(existing);
+        showNotification(`Switched to ${filename}`, 'info');
         return prev;
       }
       const newTab: Tab = { filename, path: filePath, content, isDirty: false };
       const newTabs = [...prev, newTab];
       setActiveTabIndex(newTabs.length - 1);
+      showNotification(`Opened ${filename}`, 'success');
       return newTabs;
     });
   }, []);
@@ -511,6 +804,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
       openFileInTab(targetPath, newName, cleaned);
       setSidebarRefreshToken((n) => n + 1);
+      showNotification(`Saved translation to ${newName}`, 'success');
       return { success: true };
     },
     [tabs, activeTabIndex, openFileInTab],
@@ -520,6 +814,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     const result = await window.fileSystem.readFile(filePath);
     if (result.success && result.content !== undefined) {
       openFileInTab(filePath, filename, result.content);
+    } else {
+      showNotification(`Failed to open ${filename}`, 'error');
     }
   }, [openFileInTab]);
 
@@ -544,6 +840,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           index === activeTabIndex ? { ...tab, isDirty: false } : tab,
         ),
       );
+      showNotification(`Saved ${activeTab.filename}`, 'success');
+    } else {
+      showNotification(`Failed to save ${activeTab.filename}`, 'error');
     }
   }, [activeTab, activeTabIndex]);
 
@@ -575,6 +874,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
     setRunError(null);
     setShowOutput(true);
+    showNotification(`Running ${activeTab.filename}...`, 'info');
     await terminalRef.current?.run({ language, path: activeTab.path });
   }, [activeTab]);
 
@@ -582,6 +882,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (!initialFolder) return;
     setRunError(null);
     setShowOutput(true);
+    showNotification(`Running Flutter on ${target.name}...`, 'info');
     await terminalRef.current?.run({ language: 'flutter', path: initialFolder, deviceId: target.id });
   }, [initialFolder]);
 
@@ -592,17 +893,24 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (!initialFolder) {
       setShowOutput(true);
       terminalRef.current?.write('No folder open. Open a folder first.\n');
+      showNotification('No folder open', 'error');
       return;
     }
 
     setGitLoading(true);
     setShowOutput(true);
     terminalRef.current?.write(`⎇ git ${label}...\n`);
+    showNotification(`Git ${label}...`, 'info');
 
     try {
       const result = await fn();
       terminalRef.current?.write(`${result.output || result.error || '(no output)'}\n`);
       terminalRef.current?.write(result.success ? '✓ Done\n' : '✗ Failed\n');
+      if (result.success) {
+        showNotification(`Git ${label} successful`, 'success');
+      } else {
+        showNotification(`Git ${label} failed`, 'error');
+      }
     } finally {
       setGitLoading(false);
     }
@@ -649,10 +957,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (result.success && result.content !== undefined) {
       const filename = filePath.split('\\').pop() ?? filePath;
       openFileInTab(filePath, filename, result.content);
+    } else {
+      showNotification('Failed to open file', 'error');
     }
   }, [openFileInTab]);
 
   const handleCloseTab = useCallback((index: number) => {
+    const tabToClose = tabs[index];
     setTabs((prev) => {
       const newTabs = prev.filter((_, tabIndex) => tabIndex !== index);
       if (newTabs.length === 0) {
@@ -666,7 +977,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       }
       return newTabs;
     });
-  }, [activeTabIndex]);
+    if (tabToClose) {
+      showNotification(`Closed ${tabToClose.filename}`, 'info');
+    }
+  }, [activeTabIndex, tabs]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -677,6 +991,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
         event.preventDefault();
         setIsSidebarCollapsed((prev) => !prev);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === '`') {
+        event.preventDefault();
+        setShowOutput((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -757,112 +1075,143 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
-      <StatsDebugPanel projectPath={initialFolder} />
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#0a0512', color: '#d4d4d4' }}>
       <AdaptiveToast
         currentCode={activeTab?.content ?? ''}
         language={activeTab ? getLanguage(activeTab.filename) : 'plaintext'}
       />
       <CodeInferencePrompt />
       
-      {/* Top Bar - Logo removed from menu bar */}
-      <div
-        className="flex items-center justify-between px-4 py-2 shrink-0"
-        style={{ 
-          background: 'linear-gradient(135deg, #2d1b4e 0%, #1a0a2e 100%)',
-          borderBottom: '1px solid #3d2b5e',
-          minHeight: '44px',
-        }}
-      >
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-all duration-200 hover:bg-white/10"
-            style={{ color: '#a7adc5' }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Menu
-          </button>
-          {/* LOGO REMOVED - only filename shown */}
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          className="fixed top-4 right-4 z-50 px-4 py-2 rounded shadow-lg transition-all duration-200"
+          style={{
+            background: notification.type === 'error' ? '#2d1b1b' :
+                       notification.type === 'success' ? '#1b2d1b' :
+                       notification.type === 'warning' ? '#2d2b1b' : '#1b1b2d',
+            border: `1px solid ${
+              notification.type === 'error' ? '#f87171' :
+              notification.type === 'success' ? '#4ade80' :
+              notification.type === 'warning' ? '#fbbf24' : '#a855f7'
+            }`,
+            color: '#d4d4d4',
+            fontFamily: 'Segoe UI, sans-serif',
+            fontSize: '13px',
+            maxWidth: '400px',
+          }}
+        >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium" style={{ color: '#d4d4d4' }}>
-              {activeTab?.filename ?? 'No file open'}
+            <span>
+              {notification.type === 'error' && '❌ '}
+              {notification.type === 'success' && '✅ '}
+              {notification.type === 'warning' && '⚠️ '}
+              {notification.type === 'info' && 'ℹ️ '}
             </span>
-            {activeTab?.isDirty && (
-              <span className="w-2 h-2 rounded-full" style={{ background: '#a855f7' }} />
-            )}
+            {notification.message}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+      )}
+      
+      {/* Menu Bar */}
+      <MenuBarComponent />
+      
+      {/* Application Toolbar */}
+      <div
+        className="flex items-center justify-between px-4 py-1.5 shrink-0"
+        style={{ 
+          background: '#12081f',
+          borderBottom: '1px solid #1a0a2e',
+          minHeight: '36px',
+        }}
+      >
+       <div className="flex items-center gap-3">
+  <img src={log} alt="Fabrica" className="w-6 h-6 object-contain" />
+  <span className="text-sm font-medium" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+    Fabrica
+  </span>
+
+</div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleOpenFileDialog}
+            className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 hover:text-white flex items-center gap-1.5"
+            style={{ color: '#a7adc5' }}
+            title="Open File (Ctrl+O)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            Open File
+          </button>
+          <div className="w-px h-4" style={{ background: '#1a0a2e' }} />
           <button
             type="button"
             onClick={() => setShowAI((prev) => !prev)}
-            className="text-sm px-4 py-1.5 rounded-lg transition-all duration-200 hover:bg-white/10"
+            className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: showAI ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+              background: showAI ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
               color: showAI ? '#a855f7' : '#a7adc5',
               border: showAI ? '1px solid #a855f7' : 'none',
             }}
+            title="Toggle AI Assistant (Ctrl+Shift+A)"
           >
-            <span className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              AI
-            </span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            AI
           </button>
           <button
             type="button"
             onClick={() => setShowGit((prev) => !prev)}
-            className="text-sm px-4 py-1.5 rounded-lg transition-all duration-200 hover:bg-white/10"
+            className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: showGit ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
+              background: showGit ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
               color: showGit ? '#a855f7' : '#a7adc5',
               border: showGit ? '1px solid #a855f7' : 'none',
             }}
+            title="Toggle Source Control (Ctrl+Shift+G)"
           >
-            <span className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              Git
-            </span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Git
           </button>
+          <div className="w-px h-4" style={{ background: '#1a0a2e' }} />
           <button
             type="button"
             onClick={handleRun}
             disabled={!activeTab}
-            title={isRunning ? 'A process is already running — this will stop it and start a new one' : undefined}
-            className="text-sm px-4 py-1.5 rounded-lg font-medium transition-all duration-200"
+            className="text-xs px-3 py-1 rounded font-medium transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: isRunning ? 'transparent' : 'rgba(168, 85, 247, 0.15)',
-              color: isRunning ? '#a7adc5' : '#a855f7',
-              border: isRunning ? '1px solid #3d2b5e' : '1px solid rgba(168, 85, 247, 0.3)',
+              color: isRunning ? '#6b7280' : '#a855f7',
+              border: isRunning ? '1px solid #1a0a2e' : '1px solid rgba(168, 85, 247, 0.3)',
               cursor: !activeTab ? 'not-allowed' : 'pointer',
               opacity: !activeTab ? 0.4 : 1,
             }}
+            title="Run (F5)"
           >
-            <span className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {isRunning ? 'Running…' : 'Run'}
-            </span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {isRunning ? 'Running' : 'Run'}
           </button>
           <FlutterTargetSelector
             disabled={!initialFolder}
             isRunning={isRunning}
+            selected={flutterTarget}
+            onTargetChange={setFlutterTarget}
             onRun={handleFlutterRun}
           />
           <button
             type="button"
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:bg-white/10"
-            style={{ color: '#a7adc5' }}
+            className="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 hover:bg-[#a855f7]/10"
+            style={{ color: '#6b7280' }}
             aria-label="Settings"
+            title="Settings"
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
               <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm8.5 3.5-.98-.38a7.4 7.4 0 0 0-.66-1.6l.58-.9a1 1 0 0 0-.15-1.24l-1.64-1.64a1 1 0 0 0-1.24-.15l-.9.58a7.4 7.4 0 0 0-1.6-.66L12.5 3.5a1 1 0 0 0-1 0l-1 .39a7.4 7.4 0 0 0-1.6.66l-.9-.58a1 1 0 0 0-1.24.15L4.12 5.76a1 1 0 0 0-.15 1.24l.58.9a7.4 7.4 0 0 0-.66 1.6l-.98.38a1 1 0 0 0-.61.92v2.28a1 1 0 0 0 .61.92l.98.38a7.4 7.4 0 0 0 .66 1.6l-.58.9a1 1 0 0 0 .15 1.24l1.64 1.64a1 1 0 0 0 1.24.15l.9-.58a7.4 7.4 0 0 0 1.6.66l1 .39a1 1 0 0 0 1 0l1-.39a7.4 7.4 0 0 0 1.6-.66l.9.58a1 1 0 0 0 1.24-.15l1.64-1.64a1 1 0 0 0 .15-1.24l-.58-.9a7.4 7.4 0 0 0 .66-1.6l.98-.38a1 1 0 0 0 .61-.92v-2.28a1 1 0 0 0-.61-.92z" />
@@ -871,50 +1220,55 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         </div>
       </div>
 
-      {/* Tabs Bar */}
+      {/* Editor Tabs */}
       <div
         className="flex items-center overflow-x-auto shrink-0"
         style={{ 
-          background: '#12081f', 
-          borderBottom: '1px solid #2d1b4e',
-          padding: '0 8px',
-          minHeight: '36px',
+          background: '#0a0512', 
+          borderBottom: '1px solid #1a0a2e',
+          padding: '0 4px',
+          minHeight: '30px',
         }}
       >
         {tabs.map((tab, index) => {
           const tabIconClass = getFileIcon(tab.filename);
+          const isActive = index === activeTabIndex;
           return (
           <div
             key={index}
-            className="group flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm shrink-0 transition-all duration-200"
+            className="group flex items-center gap-1.5 px-3 py-1 cursor-pointer text-sm shrink-0 transition-all duration-200"
             style={{
-              background: index === activeTabIndex ? '#1a0a2e' : 'transparent',
-              color: index === activeTabIndex ? '#ffffff' : '#a7adc5',
-              borderTop: index === activeTabIndex ? '2px solid #a855f7' : '2px solid transparent',
-              borderRight: '1px solid #2d1b4e',
+              background: isActive ? '#12081f' : 'transparent',
+              color: isActive ? '#ffffff' : '#6b7280',
+              borderBottom: isActive ? '2px solid #a855f7' : '2px solid transparent',
               borderRadius: '4px 4px 0 0',
               fontFamily: 'Segoe UI, sans-serif',
             }}
             onClick={() => setActiveTabIndex(index)}
           >
+            
             <i
               className={tabIconClass}
-              style={{ fontSize: '14px', flexShrink: 0, color: tabIconClass.startsWith('devicon') ? undefined : '#e8e8f0' }}
+              style={{ fontSize: '13px', flexShrink: 0, color: tabIconClass.startsWith('devicon') ? undefined : '#e8e8f0' }}
+              
             />
             <span
-              className="truncate max-w-32"
-              style={tab.isDirty && index !== activeTabIndex ? { fontStyle: 'italic', color: '#a855f7' } : undefined}
+              className="truncate max-w-28"
+              style={tab.isDirty && !isActive ? { fontStyle: 'italic', color: '#a855f7' } : undefined}
             >
               {tab.filename}
             </span>
+            {tab.isDirty && (
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a855f7' }} />
+            )}
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 handleCloseTab(index);
               }}
-              className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity text-[10px]"
-              style={{ color: '#a7adc5' }}
+              className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity text-[10px]"
+              style={{ color: '#6b7280' }}
             >
               <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
             </button>
@@ -922,18 +1276,18 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           );
         })}
         {tabs.length === 0 && (
-          <div className="text-sm px-4 py-1" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
+          <div className="text-sm px-3 py-1" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
             No files open
           </div>
         )}
       </div>
 
       {/* Breadcrumb */}
-      <Breadcrumb currentPath={activeTab?.path || ''} projectRoot={initialFolder} />
+      <BreadcrumbComponent currentPath={activeTab?.path || ''} projectRoot={initialFolder} />
 
-      {/* Main Content */}
+      {/* Main Workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+        {/* Explorer Sidebar */}
         <div 
           ref={sidebarRef}
           className="flex shrink-0 relative"
@@ -955,9 +1309,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           
           {!isSidebarCollapsed && (
             <div
-              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-purple-500/50 transition-colors z-10"
+              className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#a855f7]/40 transition-colors z-10"
               style={{ 
-                background: isResizingSidebar ? 'rgba(168, 85, 247, 0.3)' : 'transparent',
+                background: isResizingSidebar ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
               }}
               onMouseDown={handleSidebarResizeStart}
               title="Drag to resize sidebar"
@@ -969,52 +1323,60 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         <button
           type="button"
           onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-          className="w-4 flex items-center justify-center shrink-0 transition-colors hover:bg-white/10"
+          className="w-3 flex items-center justify-center shrink-0 transition-colors hover:bg-[#a855f7]/10"
           style={{
-            background: '#1a0a2e',
-            borderLeft: '1px solid #2d1b4e',
-            borderRight: isSidebarCollapsed ? 'none' : '1px solid #2d1b4e',
-            color: '#a7adc5',
+            background: '#0a0512',
+            borderLeft: '1px solid #1a0a2e',
+            borderRight: isSidebarCollapsed ? 'none' : '1px solid #1a0a2e',
+            color: '#6b7280',
           }}
           title={isSidebarCollapsed ? 'Show Sidebar (Ctrl+B)' : 'Hide Sidebar (Ctrl+B)'}
         >
-          <i className={`codicon ${isSidebarCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} style={{ fontSize: '12px' }} />
+          <i className={`codicon ${isSidebarCollapsed ? 'codicon-chevron-right' : 'codicon-chevron-left'}`} style={{ fontSize: '11px' }} />
         </button>
 
         {/* Editor Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {tabs.length === 0 ? (
             <div
-              className="flex-1 flex flex-col items-center justify-center gap-4"
-              style={{ background: '#1a0a2e' }}
+              className="flex-1 flex flex-col items-center justify-center gap-3"
+              style={{ background: '#0a0512' }}
             >
-              <div className="opacity-30"><i className="codicon codicon-folder-opened" style={{ fontSize: '64px' }} /></div>
+              <div style={{ 
+                width: '80px', 
+                height: '80px', 
+                borderRadius: '50%', 
+                background: 'rgba(168, 85, 247, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(168, 85, 247, 0.08)',
+              }}>
+                <i className="codicon codicon-folder-opened" style={{ fontSize: '40px', color: 'rgba(168, 85, 247, 0.3)' }} />
+              </div>
               <div className="text-center" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
-                <div className="text-white font-medium text-lg mb-1.5">No file open</div>
-                <div className="text-sm" style={{ color: '#a7adc5' }}>
-                  Open a folder from the sidebar
-                  <br />
-                  or click Open File to get started
+                <div className="text-white font-medium text-lg mb-0.5">No file open</div>
+                <div className="text-sm" style={{ color: '#6b7280' }}>
+                  Open a folder or file to get started
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleOpenFileDialog}
-                className="mt-2 text-sm px-6 py-2.5 rounded-lg transition-all duration-200 hover:scale-105"
+                className="mt-1 text-sm px-5 py-1.5 rounded transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"
                 style={{
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                  background: '#a855f7',
                   color: '#ffffff',
-                  boxShadow: '0 4px 15px rgba(168, 85, 247, 0.3)',
+                  boxShadow: '0 2px 12px rgba(168, 85, 247, 0.15)',
+                  fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
-                <span className="inline-flex items-center gap-1.5">
-                  Open File <i className="codicon codicon-arrow-right" style={{ fontSize: '13px' }} />
-                </span>
+                Open File
               </button>
             </div>
           ) : (
             <div className="flex-1 flex overflow-hidden">
-              {/* Editor */}
+              {/* Code Editor */}
               <div className="flex-1 flex flex-col min-w-0">
                 <Editor
                   language={getLanguage(tabs[activeTabIndex].filename)}
@@ -1030,16 +1392,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 <button
                   type="button"
                   onClick={() => setIsRightPanelCollapsed((prev) => !prev)}
-                  className="w-4 flex items-center justify-center shrink-0 transition-colors hover:bg-white/10"
+                  className="w-3 flex items-center justify-center shrink-0 transition-colors hover:bg-[#a855f7]/10"
                   style={{
-                    background: '#1a0a2e',
-                    borderLeft: '1px solid #2d1b4e',
-                    borderRight: isRightPanelCollapsed ? 'none' : '1px solid #2d1b4e',
-                    color: '#a7adc5',
+                    background: '#0a0512',
+                    borderLeft: '1px solid #1a0a2e',
+                    borderRight: isRightPanelCollapsed ? 'none' : '1px solid #1a0a2e',
+                    color: '#6b7280',
                   }}
-                  title={isRightPanelCollapsed ? 'Show preview & AI panel' : 'Hide preview & AI panel'}
+                  title={isRightPanelCollapsed ? 'Show panels' : 'Hide panels'}
                 >
-                  <i className={`codicon ${isRightPanelCollapsed ? 'codicon-chevron-left' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
+                  <i className={`codicon ${isRightPanelCollapsed ? 'codicon-chevron-left' : 'codicon-chevron-right'}`} style={{ fontSize: '11px' }} />
                 </button>
 
                 <div
@@ -1049,7 +1411,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   }}
                 >
                   <div ref={rightPanelContentRef} className="flex flex-col h-full" style={{ width: rightPanelWidth }}>
-                    {/* Preview Panel */}
+                    {/* Live Preview Panel */}
                     {floatingPanel !== 'preview' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
@@ -1058,20 +1420,66 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                         title="Drag to detach the preview"
                       >
                         <div
-                          className="flex items-center justify-between px-4 py-2 shrink-0"
+                          className="flex items-center justify-between px-3 py-1.5 shrink-0"
                           style={{
-                            background: '#2d1b4e',
-                            borderBottom: '1px solid #3d2b5e',
+                            background: '#12081f',
+                            borderBottom: '1px solid #1a0a2e',
                           }}
                         >
-                          <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-                            <span>🔍</span> Live Preview
-                          </span>
-                          <span className="text-[10px]" style={{ color: '#6b7280' }}>
-                            {isHtmlFile ? 'HTML' : 'Preview'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-medium" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+                              🔍 Live Preview
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1a0a2e', color: '#6b7280' }}>
+                              {isHtmlFile ? 'HTML' : 'Preview'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                              style={{ color: '#6b7280' }}
+                              title="Refresh preview (Ctrl+R)"
+                              onClick={() => showNotification('Preview refreshed', 'success')}
+                            >
+                              ⟳
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                              style={{ color: '#6b7280' }}
+                              title="Open in browser"
+                              onClick={() => showNotification('Opening in browser...', 'info')}
+                            >
+                              ↗
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                              style={{ color: '#6b7280' }}
+                              title="Desktop view"
+                            >
+                              🖥
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                              style={{ color: '#6b7280' }}
+                              title="Tablet view"
+                            >
+                              📱
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                              style={{ color: '#6b7280' }}
+                              title="Mobile view"
+                            >
+                              📱
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
                           <Preview 
                             key={activeTab?.path + previewHtml}
                             html={previewHtml} 
@@ -1082,19 +1490,22 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       </div>
                     )}
 
-                    {/* Resize Divider */}
+                    {/* Draggable Divider */}
                     {showAI && floatingPanel !== 'ai' && floatingPanel !== 'preview' && (
                       <div
-                        className="h-1.5 shrink-0 transition-all duration-200"
+                        className="h-1 shrink-0 cursor-row-resize hover:bg-[#a855f7]/20 transition-colors"
                         style={{
-                          background: '#1a0a2e',
-                          borderTop: '1px solid #2d1b4e',
-                          borderBottom: '1px solid #2d1b4e',
+                          background: '#0a0512',
+                          borderTop: '1px solid #1a0a2e',
+                          borderBottom: '1px solid #1a0a2e',
+                          position: 'relative',
                         }}
-                      />
+                      >
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 rounded-full" style={{ background: '#2d1b4e' }} />
+                      </div>
                     )}
 
-                    {/* AI Panel */}
+                    {/* AI Assistant Panel */}
                     {showAI && floatingPanel !== 'ai' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
@@ -1102,29 +1513,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                         style={{ cursor: armedDetachPanel === 'ai' ? 'grabbing' : 'grab' }}
                         title="Drag to detach the AI assistant"
                       >
-                        <div
-                          className="flex items-center justify-between px-4 py-2 shrink-0"
-                          style={{
-                            background: '#2d1b4e',
-                            borderBottom: '1px solid #3d2b5e',
-                          }}
-                        >
-                          <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-                            <span>✨</span> AI Assistant
-                          </span>
-                          <div className="flex items-center gap-2 float-controls">
-                            <button
-                              type="button"
-                              onClick={() => setShowAI(false)}
-                              className="text-[10px] hover:text-white transition-colors"
-                              style={{ color: '#a7adc5' }}
-                              title="Close AI"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
                           <AIPanel
                             selectedCode={selectedCode}
                             activeFilePath={activeTab?.path}
@@ -1140,9 +1529,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 {/* Right Panel Resize Handle */}
                 {!isRightPanelCollapsed && (
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-purple-500/50 transition-colors z-10"
+                    className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#a855f7]/40 transition-colors z-10"
                     style={{ 
-                      background: isResizingRightPanel ? 'rgba(168, 85, 247, 0.3)' : 'transparent',
+                      background: isResizingRightPanel ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
                     }}
                     onMouseDown={handleRightPanelResizeStart}
                     title="Drag to resize panel"
@@ -1158,23 +1547,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <div
             className="flex flex-col shrink-0 overflow-hidden border-l"
             style={{
-              width: '280px',
-              background: '#1a0a2e',
-              borderColor: '#2d1b4e',
+              width: '260px',
+              background: '#0a0512',
+              borderColor: '#1a0a2e',
             }}
           >
             <div
-              className="px-4 py-2.5 text-xs font-medium tracking-wider shrink-0 flex items-center justify-between"
+              className="px-4 py-2 text-[10px] font-medium tracking-wider shrink-0 flex items-center justify-between"
               style={{
                 color: '#a7adc5',
                 fontFamily: 'Segoe UI, sans-serif',
-                borderBottom: '1px solid #2d1b4e',
+                borderBottom: '1px solid #1a0a2e',
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                letterSpacing: '0.06em',
               }}
             >
               <span className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                 </svg>
                 Source Control
@@ -1183,18 +1572,19 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 type="button"
                 onClick={() => void refreshGitStatus()}
                 className="transition-colors hover:text-white"
-                style={{ color: '#a7adc5' }}
+                style={{ color: '#6b7280' }}
                 title="Refresh"
               >
-                <i className="codicon codicon-refresh" style={{ fontSize: '14px' }} />
+                <i className="codicon codicon-refresh" style={{ fontSize: '13px' }} />
               </button>
             </div>
 
-            <div className="px-4 pt-3 pb-3 shrink-0 flex flex-col gap-2 border-b" style={{ borderColor: '#2d1b4e' }}>
-              <div className="flex gap-2">
+            {/* Commit Section */}
+            <div className="px-4 pt-2 pb-2 shrink-0 flex flex-col gap-1.5 border-b" style={{ borderColor: '#1a0a2e' }}>
+              <div className="flex gap-1.5">
                 <input
                   type="text"
-                  placeholder="Message (Ctrl+Enter)"
+                  placeholder="Commit message (Ctrl+Enter)"
                   value={commitMessage}
                   onChange={(e) => setCommitMessage(e.target.value)}
                   onKeyDown={(e) => {
@@ -1206,11 +1596,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       setTimeout(() => void refreshGitStatus(), 800);
                     }
                   }}
-                  className="flex-1 text-xs px-3 py-2 rounded-lg transition-all duration-200 focus:ring-2 focus:ring-purple-500"
+                  className="flex-1 text-[10px] px-2.5 py-1.5 rounded transition-all duration-200 focus:ring-1 focus:ring-[#a855f7]"
                   style={{
                     background: '#12081f',
                     color: '#d4d4d4',
-                    border: '1px solid #2d1b4e',
+                    border: '1px solid #1a0a2e',
                     fontFamily: 'Segoe UI, sans-serif',
                     outline: 'none',
                   }}
@@ -1225,10 +1615,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     setCommitMessage('');
                     setTimeout(() => void refreshGitStatus(), 800);
                   }}
-                  className="text-xs px-4 py-2 rounded-lg font-medium transition-all duration-200"
+                  className="text-[10px] px-3 py-1.5 rounded font-medium transition-all duration-200 hover:scale-[1.02]"
                   style={{
-                    background: gitLoading || !commitMessage.trim() ? '#2d1b4e' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                    color: gitLoading || !commitMessage.trim() ? '#a7adc5' : '#ffffff',
+                    background: gitLoading || !commitMessage.trim() ? '#1a0a2e' : '#a855f7',
+                    color: gitLoading || !commitMessage.trim() ? '#6b7280' : '#ffffff',
                     cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
                     border: 'none',
                   }}
@@ -1252,11 +1642,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       runGitCommand(label, fn);
                       setTimeout(() => void refreshGitStatus(), 600);
                     }}
-                    className="flex-1 text-[10px] py-1.5 rounded-lg transition-all duration-200 hover:bg-white/5"
+                    className="flex-1 text-[10px] py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10"
                     style={{
                       background: '#12081f',
-                      color: '#a7adc5',
-                      border: '1px solid #2d1b4e',
+                      color: '#6b7280',
+                      border: '1px solid #1a0a2e',
                       opacity: gitLoading ? 0.4 : 1,
                       fontFamily: 'Segoe UI, sans-serif',
                     }}
@@ -1267,6 +1657,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               </div>
             </div>
 
+            {/* Git Status */}
             {(() => {
               const staged: { code: string; filename: string }[] = [];
               const unstaged: { code: string; filename: string }[] = [];
@@ -1294,16 +1685,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 if (code === 'A' || code === '?') return '#4ade80';
                 if (code === 'D') return '#f87171';
                 if (code === 'R') return '#60a5fa';
-                return '#a7adc5';
+                return '#6b7280';
               };
 
               const renderRow = (item: { code: string; filename: string }, i: number) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 px-4 py-1 text-xs truncate transition-colors hover:bg-white/5"
+                  className="flex items-center gap-2 px-4 py-0.5 text-xs truncate transition-colors hover:bg-[#a855f7]/10"
                   style={{ fontFamily: 'Segoe UI, sans-serif', color: codeColor(item.code) }}
                 >
-                  <span className="shrink-0 text-[10px] font-medium w-5">{item.code}</span>
+                  <span className="shrink-0 text-[10px] font-medium w-4">{item.code}</span>
                   <span className="truncate">{item.filename}</span>
                 </div>
               );
@@ -1312,23 +1703,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 <div className="flex-1 overflow-y-auto">
                   <div className="shrink-0">
                     <div
-                      className="w-full flex items-center gap-1 px-4 py-1.5 text-[10px] font-medium"
+                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium"
                       style={{
-                        color: '#a7adc5',
+                        color: '#6b7280',
                         fontFamily: 'Segoe UI, sans-serif',
-                        background: '#12081f',
-                        borderTop: '1px solid #2d1b4e',
-                        borderBottom: '1px solid #2d1b4e',
+                        background: '#0a0512',
+                        borderTop: '1px solid #1a0a2e',
+                        borderBottom: '1px solid #1a0a2e',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <i className="codicon codicon-chevron-down" style={{ fontSize: '12px' }} />
+                      <i className="codicon codicon-chevron-down" style={{ fontSize: '11px' }} />
                       Staged
                       {staged.length > 0 && (
                         <span
-                          className="ml-auto text-[9px] px-2 py-0.5 rounded-full"
-                          style={{ background: '#4ade80', color: '#1a0a2e' }}
+                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: '#4ade80', color: '#0a0512' }}
                         >
                           {staged.length}
                         </span>
@@ -1336,7 +1727,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     </div>
                     <div>
                       {staged.length === 0 ? (
-                        <div className="px-4 py-2 text-xs" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
+                        <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
                           Nothing staged
                         </div>
                       ) : (
@@ -1349,23 +1740,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     <button
                       type="button"
                       onClick={() => setGitChangesOpen((p) => !p)}
-                      className="w-full flex items-center gap-1 px-4 py-1.5 text-[10px] font-medium transition-colors hover:bg-white/5"
+                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium transition-colors hover:bg-[#a855f7]/10"
                       style={{
-                        color: '#a7adc5',
+                        color: '#6b7280',
                         fontFamily: 'Segoe UI, sans-serif',
-                        background: '#12081f',
-                        borderTop: '1px solid #2d1b4e',
-                        borderBottom: gitChangesOpen ? '1px solid #2d1b4e' : 'none',
+                        background: '#0a0512',
+                        borderTop: '1px solid #1a0a2e',
+                        borderBottom: gitChangesOpen ? '1px solid #1a0a2e' : 'none',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <i className={`codicon ${gitChangesOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
+                      <i className={`codicon ${gitChangesOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '11px' }} />
                       Changes
                       {unstaged.length > 0 && (
                         <span
-                          className="ml-auto text-[9px] px-2 py-0.5 rounded-full"
-                          style={{ background: '#a855f7', color: '#1a0a2e' }}
+                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: '#a855f7', color: '#0a0512' }}
                         >
                           {unstaged.length}
                         </span>
@@ -1374,7 +1765,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     {gitChangesOpen && (
                       <div>
                         {unstaged.length === 0 ? (
-                          <div className="px-4 py-2 text-xs" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
+                          <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
                             {initialFolder ? 'No changes' : 'No folder open'}
                           </div>
                         ) : (
@@ -1388,24 +1779,24 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     <button
                       type="button"
                       onClick={() => setGitHistoryOpen((p) => !p)}
-                      className="w-full flex items-center gap-1 px-4 py-1.5 text-[10px] font-medium transition-colors hover:bg-white/5"
+                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium transition-colors hover:bg-[#a855f7]/10"
                       style={{
-                        color: '#a7adc5',
+                        color: '#6b7280',
                         fontFamily: 'Segoe UI, sans-serif',
-                        background: '#12081f',
-                        borderTop: '1px solid #2d1b4e',
-                        borderBottom: gitHistoryOpen ? '1px solid #2d1b4e' : 'none',
+                        background: '#0a0512',
+                        borderTop: '1px solid #1a0a2e',
+                        borderBottom: gitHistoryOpen ? '1px solid #1a0a2e' : 'none',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
                       }}
                     >
-                      <i className={`codicon ${gitHistoryOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '12px' }} />
+                      <i className={`codicon ${gitHistoryOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '11px' }} />
                       History
                     </button>
                     {gitHistoryOpen && (
                       <div>
                         {gitLog.length === 0 ? (
-                          <div className="px-4 py-2 text-xs" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
+                          <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
                             No commits
                           </div>
                         ) : (
@@ -1415,16 +1806,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                             return (
                               <div
                                 key={i}
-                                className="flex items-start gap-2 px-4 py-1 text-xs hover:bg-white/5"
+                                className="flex items-start gap-2 px-4 py-0.5 text-xs hover:bg-[#a855f7]/10"
                                 style={{ fontFamily: 'Segoe UI, sans-serif' }}
                               >
                                 <span
-                                  className="shrink-0 px-2 py-0.5 rounded"
-                                  style={{ background: '#2d1b4e', color: '#a855f7', fontSize: '9px' }}
+                                  className="shrink-0 px-1.5 py-0.5 rounded"
+                                  style={{ background: '#1a0a2e', color: '#a855f7', fontSize: '9px' }}
                                 >
                                   {sha}
                                 </span>
-                                <span className="truncate" style={{ color: '#a7adc5' }}>
+                                <span className="truncate" style={{ color: '#6b7280' }}>
                                   {message}
                                 </span>
                               </div>
@@ -1456,9 +1847,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#1a0a2e',
-            border: '1px solid #3d2b5e',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.15)',
+            backgroundColor: '#12081f',
+            border: '1px solid #1a0a2e',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',
@@ -1467,24 +1858,24 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }}
         >
           <div
-            className="float-drag-handle flex items-center justify-between px-4 py-2 shrink-0 select-none"
+            className="float-drag-handle flex items-center justify-between px-4 py-1.5 shrink-0 select-none"
             style={{
-              background: '#2d1b4e',
-              borderBottom: '1px solid #3d2b5e',
+              background: '#1a0a2e',
+              borderBottom: '1px solid #2d1b4e',
               cursor: isFullscreen ? 'default' : 'move',
             }}
             onDoubleClick={toggleFullscreen}
             title="Drag to move • double-click to toggle fullscreen"
           >
-            <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+            <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
               <span>🔍</span> Live Preview
             </span>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
-                <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#a7adc5' }} title="Zoom Out">➖</button>
-                <span className="text-[10px]" style={{ color: '#a7adc5', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#a7adc5' }} title="Zoom In">➕</button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#a7adc5' }} title="Reset Zoom">⟲</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom Out">➖</button>
+                <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom In">➕</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Reset Zoom">⟲</button>
               </div>
               
               {isFullscreen && (
@@ -1503,7 +1894,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               )}
             </div>
           </div>
-          <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
             <Preview 
               key={activeTab?.path + previewHtml}
               html={previewHtml} 
@@ -1529,9 +1920,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#1a0a2e',
-            border: '1px solid #3d2b5e',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.15)',
+            backgroundColor: '#12081f',
+            border: '1px solid #1a0a2e',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',
@@ -1540,16 +1931,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }}
         >
           <div
-            className="float-drag-handle flex items-center justify-between px-4 py-2 shrink-0 select-none"
+            className="float-drag-handle flex items-center justify-between px-4 py-1.5 shrink-0 select-none"
             style={{
-              background: '#2d1b4e',
-              borderBottom: '1px solid #3d2b5e',
+              background: '#1a0a2e',
+              borderBottom: '1px solid #2d1b4e',
               cursor: isFullscreen ? 'default' : 'move',
             }}
             onDoubleClick={toggleFullscreen}
             title="Drag to move • double-click to toggle fullscreen"
           >
-            <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+            <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
               <span>✨</span> AI Assistant
             </span>
             <div className="flex items-center gap-2 float-controls">
@@ -1571,14 +1962,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 type="button"
                 onClick={() => { dockPanel(); setShowAI(false); }}
                 className="text-[10px] hover:text-white transition-colors"
-                style={{ color: '#a7adc5' }}
+                style={{ color: '#6b7280' }}
                 title="Close AI"
               >
                 ✕
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-hidden" style={{ background: '#12081f' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
             <AIPanel
               selectedCode={selectedCode}
               activeFilePath={activeTab?.path}
@@ -1593,9 +1984,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       <div
         className="flex flex-col shrink-0 overflow-hidden"
         style={{
-          height: showOutput ? '220px' : '0px',
-          background: '#1e1e2e',
-          borderTop: showOutput ? '1px solid #2d2d3a' : 'none',
+          height: showOutput ? '160px' : '0px',
+          background: '#0a0512',
+          borderTop: showOutput ? '1px solid #1a0a2e' : 'none',
         }}
       >
         {runError && (
@@ -1604,7 +1995,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             style={{
               color: '#f87171',
               background: '#2d1b1b',
-              borderBottom: '1px solid #2d2d3a',
+              borderBottom: '1px solid #1a0a2e',
               fontFamily: 'Consolas, monospace',
               whiteSpace: 'pre-wrap',
             }}
@@ -1616,6 +2007,17 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <Terminal ref={terminalRef} onClose={() => setShowOutput(false)} onRunningChange={setIsRunning} />
         </div>
       </div>
+
+      {/* Status Bar */}
+      <StatusBarComponent 
+        activeTab={activeTab} 
+        language={activeTab ? getLanguage(activeTab.filename) : 'Plain Text'}
+        line={cursorPosition.line}
+        col={cursorPosition.col}
+        errors={errors}
+        warnings={warnings}
+        branch="main"
+      />
     </div>
   );
 }

@@ -38,6 +38,7 @@
 // ===========================================================================
 
 import fs from 'fs';
+import os from 'os';
 import modelConfig from '../modelConfig.json';
 import {
   GenerationPriority,
@@ -48,6 +49,14 @@ import {
   WireGenerateOptions,
   serializeError,
 } from './llmProtocol';
+
+// Thread cap for the native inference backend. Left to its default, llama.cpp
+// takes every core, which starves the Electron main + renderer processes during
+// generation. Two cores are held back for them; the Math.max floor keeps this
+// at >= 1 on a low-core machine (a 1- or 2-core box would otherwise compute 0
+// or a negative). Passed as `maxThreads` to getLlama() and `threads` to
+// createContext().
+const MAX_INFERENCE_THREADS = Math.max(1, os.cpus().length - 2);
 
 // ===========================================================================
 // TEMPORARY DIAGNOSTIC: worker boot line -- the FIRST thing this module does.
@@ -120,7 +129,7 @@ const isVramError = (err: unknown): boolean => {
 type LlamaRuntime = {
   llama: unknown;
   model: {
-    createContext: (options?: { contextSize?: number }) => Promise<{
+    createContext: (options?: { contextSize?: number; threads?: number }) => Promise<{
       getSequence: () => unknown;
       dispose: () => Promise<void>;
     }>;
@@ -139,9 +148,13 @@ let runtimePromise: Promise<LlamaRuntime> | null = null;
 const importNodeLlamaCpp = () => {
   const dynamicImport = new Function('moduleName', 'return import(moduleName)') as
     (moduleName: string) => Promise<{
-      getLlama: () => Promise<any>;
+      getLlama: (options?: { maxThreads?: number }) => Promise<any>;
       LlamaChatSession: new (...args: any[]) => any;
       resolveChatWrapper: (model: any) => any;
+      readGgufFileInfo: (
+        pathOrUri: string,
+        options?: { readTensorInfo?: boolean },
+      ) => Promise<any>;
     }>;
   return dynamicImport('node-llama-cpp');
 };
@@ -172,14 +185,73 @@ const readModelPathArg = (): string => {
 };
 
 // ---------------------------------------------------------------------------
+// Total transformer layer count for the loaded model, read from the GGUF's own
+// header rather than hardcoded, so swapping `modelFile` in modelConfig.json
+// needs no code change here. `undefined` = not resolved yet, `null` = resolved
+// and unavailable (see resolveTotalModelLayers).
+let resolvedTotalModelLayers: number | null | undefined;
+
+// readGgufFileInfo() parses only the file header, not the weights -- measured
+// at ~56ms against our 4GB Q4_K_M -- so it is cheap enough to run inline right
+// before the real load. `readTensorInfo: false` skips the per-tensor table,
+// which is the expensive part and is not needed for a layer count.
+//
+// The count lives under the architecture's OWN metadata namespace, so the
+// architecture name is read out of the file rather than assumed: our current
+// DeepSeek-Coder build reports general.architecture = "llama", making the real
+// key `llama.block_count` (NOT `deepseek2.block_count`). Reading the arch name
+// dynamically means a model swap keeps working either way.
+//
+// Never throws: a failure here must not block model load, so it degrades to
+// null and the caller falls back to an uncapped gpuLayers "auto".
+const resolveTotalModelLayers = async (modelPath: string): Promise<number | null> => {
+  if (resolvedTotalModelLayers !== undefined) return resolvedTotalModelLayers;
+
+  try {
+    const { readGgufFileInfo } = await importNodeLlamaCpp();
+    const info = await readGgufFileInfo(modelPath, { readTensorInfo: false });
+    const architecture: string | undefined = info?.metadata?.general?.architecture;
+    const blockCount =
+      (architecture ? info?.metadata?.[architecture]?.block_count : undefined) ??
+      info?.architectureMetadata?.block_count;
+
+    if (typeof blockCount !== 'number' || !Number.isInteger(blockCount) || blockCount <= 0) {
+      console.warn(
+        `[llm] GGUF metadata read, but no usable block_count found (architecture=${String(architecture)}, ` +
+          `block_count=${String(blockCount)}). Falling back to an UNCAPPED gpuLayers="auto" primary attempt.`,
+      );
+      resolvedTotalModelLayers = null;
+      return resolvedTotalModelLayers;
+    }
+
+    console.log(
+      `[llm] GGUF metadata: architecture=${architecture}, block_count=${blockCount}.`,
+    );
+    resolvedTotalModelLayers = blockCount;
+    return resolvedTotalModelLayers;
+  } catch (err) {
+    console.warn(
+      `[llm] readGgufFileInfo() failed: ${(err as Error).message}. ` +
+        'Falling back to an UNCAPPED gpuLayers="auto" primary attempt.',
+    );
+    resolvedTotalModelLayers = null;
+    return resolvedTotalModelLayers;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// A single entry in the load ladder: node-llama-cpp accepts a fixed count or
+// "auto".
+type GpuLayersAttempt = number | 'auto';
+
 // gpuLayers step-down retry: a safety net under GPU device isolation (see
 // gpuIsolation.ts, run at app startup before this module is ever used), in
 // case isolation was skipped (ambiguous/no GPU) or the isolated device still
 // doesn't have enough VRAM for the requested/auto-resolved layer count.
-const buildLayerAttempts = (): (number | 'auto')[] => {
+const buildLayerAttempts = (): GpuLayersAttempt[] => {
   const start = GPU_LAYERS;
   const ladder = GPU_LAYERS_FALLBACK_LADDER.filter((n) => start === 'auto' || n < start);
-  const attempts: (number | 'auto')[] = [start, ...ladder];
+  const attempts: GpuLayersAttempt[] = [start, ...ladder];
   return attempts.slice(0, MAX_LOAD_ATTEMPTS);
 };
 
@@ -207,7 +279,7 @@ const loadModelWithFallback = async (llama: any, modelPath: string) => {
     try {
       const probeContext = await model.createContext();
       await probeContext.dispose();
-      console.log(`[llm] Model loaded successfully with gpuLayers=${gpuLayers}.`);
+      console.log(`[llm] Model loaded successfully with gpuLayers=${gpuLayers} -> resolved ${model.gpuLayers} layers.`);
       return model;
     } catch (err) {
       lastError = err;
@@ -228,7 +300,8 @@ const loadModelWithFallback = async (llama: any, modelPath: string) => {
 // NOTE: this instruments runGeneration() itself, so it logs EVERY caller
 // (Ask/Plan/Translate/Explain/Hint as well as Code Inference), not just Code
 // Inference. Each line carries its priority so callers can be told apart:
-// 'opportunistic' is Code Inference, 'explicit' is everything else.
+// 'opportunistic' is the startup warmup in main.ts (it was Code Inference until
+// the 08-07 pivot -- see the lock policy below), 'explicit' is everything else.
 // ===========================================================================
 const LOCK_DEBUG = true;
 let generationSeq = 0;
@@ -288,7 +361,7 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
       console.log('[llm] DIAGNOSTIC: process.env.GGML_VK_VISIBLE_DEVICES immediately before real getLlama() =', JSON.stringify(process.env.GGML_VK_VISIBLE_DEVICES));
       const getLlamaStartHr = process.hrtime.bigint();
       const getLlamaStartMs = Date.now();
-      const llama = await getLlama();
+      const llama = await getLlama({ maxThreads: MAX_INFERENCE_THREADS });
       phaseLog('init', 'getLlama()', getLlamaStartHr, process.hrtime.bigint(), getLlamaStartMs, Date.now());
       // TEMPORARY DIAGNOSTIC: does the REAL, in-process native Vulkan backend
       // actually honor the filter, or does it still see both devices despite
@@ -299,6 +372,17 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
       console.log('[llm] DIAGNOSTIC: llama.getGpuDeviceNames() after real getLlama() =', await llama.getGpuDeviceNames());
       console.log('[llm] DIAGNOSTIC: llama.getVramState() after real getLlama() =', await llama.getVramState());
       phaseLog('init', 'diagnostics (getGpuDeviceNames+getVramState)', diagnosticsStartHr, process.hrtime.bigint(), diagnosticsStartMs, Date.now());
+      // Resolve the model's real layer count once, here, and reuse it for the
+      // rest of the process -- same "resolve once, cache" shape as the
+      // resolveChatWrapper() fix below. No longer used to cap gpuLayers (see
+      // buildLayerAttempts()); kept purely for its architecture/block_count
+      // diagnostic log line -- an A/B test (capped 28 vs full offload 33 layers)
+      // showed the cap was a large net negative (prompt() total 12928ms ->
+      // 1515ms uncapped, zero VRAM errors), so it was removed 2026-08-26.
+      const resolveLayersStartHr = process.hrtime.bigint();
+      const resolveLayersStartMs = Date.now();
+      await resolveTotalModelLayers(modelPath);
+      phaseLog('init', 'resolveTotalModelLayers() (cached for the rest of the process)', resolveLayersStartHr, process.hrtime.bigint(), resolveLayersStartMs, Date.now());
       const loadModelStartHr = process.hrtime.bigint();
       const loadModelStartMs = Date.now();
       const model = await loadModelWithFallback(llama, modelPath);
@@ -384,6 +468,19 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
 // is on the correct side of the boundary: the process that owns the model owns
 // its lock (DECISIONS.md section 4). `isModelBusy()` intentionally did NOT come
 // along; main cannot answer it synchronously any more, and it had zero callers.
+//
+// UPDATE 2026-08-19: THE 08-07 "NO CALLERS" NOTE ABOVE IS OUT OF DATE -- a
+// passive caller came back. Startup warmup in `main.ts` (fire-and-forget
+// generate() with maxTokens: 1, right after createWindow() in app.whenReady())
+// runs as 'opportunistic', and that is the whole point of choosing it: it is
+// the only priority that guarantees a background warmup never blocks a real
+// user request. Under the default 'explicit' a student clicking Ask mid-warmup
+// would QUEUE BEHIND it; under 'opportunistic' the explicit request cancels the
+// warmup and proceeds at once. ModelBusyError and GenerationAbortedError are
+// therefore REACHABLE AGAIN, and this branch is load-bearing rather than the
+// removable dead weight the 08-07 note flagged it as. Note that a warmup
+// cancelled this way still did its job: initLlama()'s cached runtimePromise is
+// shared, so only the throwaway generation is dropped, never the model load.
 type InFlightGeneration = {
   priority: GenerationPriority;
   abort: () => void;
@@ -501,8 +598,8 @@ const runGeneration = async (
     const createContextStartHr = process.hrtime.bigint();
     const createContextStartMs = Date.now();
     context = options?.contextSize
-      ? await model.createContext({ contextSize: options.contextSize })
-      : await model.createContext();
+      ? await model.createContext({ contextSize: options.contextSize, threads: MAX_INFERENCE_THREADS })
+      : await model.createContext({ threads: MAX_INFERENCE_THREADS });
     phaseLog(id, 'createContext()', createContextStartHr, process.hrtime.bigint(), createContextStartMs, Date.now());
 
     const sessionConstructStartHr = process.hrtime.bigint();

@@ -25,6 +25,15 @@ const configuration: webpack.Configuration = {
   entry: {
     main: path.join(webpackPaths.srcMainPath, 'main.ts'),
     preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
+    // FORK TARGET (2026-08-22) -- packaged counterpart of the dev entry.
+    // Emits dist/main/llmWorkerBootstrap.js via `[name].js` below, a sibling of
+    // both main.js and llmWorker.js, so resolveWorkerPath()'s packaged branch
+    // needs only its filename constant changed, not its shape.
+    llmWorkerBootstrap: path.join(
+      webpackPaths.srcMainPath,
+      'worker',
+      'llmWorkerBootstrap.ts',
+    ),
     // Inference utility process -- the packaged counterpart of the dev entry in
     // webpack.config.main.dev.ts (PART 2 of the utility-process migration,
     // DECISIONS.md §9). Same source file, same reasoning for sharing this
@@ -42,6 +51,9 @@ const configuration: webpack.Configuration = {
     // dev config, the entry KEY stays `llmWorker` -- that is what `[name]`
     // resolves to -- so this still emits dist/main/llmWorker.js and
     // resolveWorkerPath()'s packaged branch is untouched.
+    //
+    // STILL BUILT, NO LONGER FORKED (2026-08-22): required at runtime by the
+    // bootstrap entry above via __non_webpack_require__, not forked directly.
     llmWorker: path.join(webpackPaths.srcMainPath, 'worker', 'llmWorker.ts'),
   },
 

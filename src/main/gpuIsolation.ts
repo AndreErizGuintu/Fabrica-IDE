@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import path from 'path';
 import { app } from 'electron';
 
 // ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ const probeGpuDeviceNamesOnce = (): Promise<string[]> => new Promise((resolve, r
     process.execPath,
     ['-e', probeScript],
     {
-      cwd: app.getAppPath(),
+      cwd: path.dirname(process.execPath),
       timeout: PROBE_TIMEOUT_MS,
       env: { ...probeEnv, ELECTRON_RUN_AS_NODE: '1' },
     },

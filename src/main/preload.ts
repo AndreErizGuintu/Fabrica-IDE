@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit' | 'usb:connected' | 'adaptive:suggest';
+export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit' | 'adaptive:suggest';
 
 const electronHandler = {
   ipcRenderer: {
@@ -111,11 +111,11 @@ contextBridge.exposeInMainWorld('terminal', {
 
 contextBridge.exposeInMainWorld('flutter', {
   listDevices: () => ipcRenderer.invoke('flutter:listDevices'),
-  onUsbConnected: (cb: (deviceIds: string[]) => void) => {
-    const handler = (_event: IpcRendererEvent, deviceIds: string[]) => cb(deviceIds);
-    ipcRenderer.on('usb:connected', handler);
-    return () => ipcRenderer.removeListener('usb:connected', handler);
-  },
+});
+
+contextBridge.exposeInMainWorld('mirror', {
+  start: () => ipcRenderer.invoke('mirror:start'),
+  stop: () => ipcRenderer.invoke('mirror:stop'),
 });
 
 contextBridge.exposeInMainWorld('git', {
