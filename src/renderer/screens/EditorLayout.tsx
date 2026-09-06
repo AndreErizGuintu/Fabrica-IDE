@@ -164,6 +164,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
+  const flutterHotReloadTimerRef = useRef<number | null>(null);
   const [showAI, setShowAI] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -490,6 +491,19 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     });
   }, []);
 
+  const triggerFlutterHotReload = useCallback((filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext !== 'dart') return;
+
+    if (flutterHotReloadTimerRef.current !== null) {
+      window.clearTimeout(flutterHotReloadTimerRef.current);
+    }
+
+    flutterHotReloadTimerRef.current = window.setTimeout(() => {
+      void window.terminal.hotReload();
+    }, 400);
+  }, []);
+
   // Saves an AI Translate-mode result to a new file in the SAME directory as
   // the currently active file, deriving the name from the active file's base
   // name + the target language's extension. Prompts before overwriting, opens
@@ -544,11 +558,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         return { success: false, error: result.error || 'Failed to write file.' };
       }
 
+      triggerFlutterHotReload(targetPath);
       openFileInTab(targetPath, newName, cleaned);
       setSidebarRefreshToken((n) => n + 1);
       return { success: true };
     },
-    [tabs, activeTabIndex, openFileInTab],
+    [tabs, activeTabIndex, openFileInTab, triggerFlutterHotReload],
   );
 
   const handleFileOpen = useCallback(async (filePath: string, filename: string) => {
@@ -574,13 +589,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (!activeTab || !activeTab.path) return;
     const result = await window.fileSystem.writeFile(activeTab.path, activeTab.content);
     if (result.success) {
+      triggerFlutterHotReload(activeTab.path);
       setTabs((prev) =>
         prev.map((tab, index) =>
           index === activeTabIndex ? { ...tab, isDirty: false } : tab,
         ),
       );
     }
-  }, [activeTab, activeTabIndex]);
+  }, [activeTab, activeTabIndex, triggerFlutterHotReload]);
 
   const handleRun = useCallback(async () => {
     if (!activeTab?.path) {

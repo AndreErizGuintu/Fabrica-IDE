@@ -587,6 +587,7 @@ ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
 // code:run child_process paths and the Flutter-only shell:true spawn. ConPTY (used
 // on Windows) doesn't open a separate visible console window the way shell:true did.
 const ptySessions = new Map<string, pty.IPty>();
+let activeFlutterSessionId: string | null = null;
 
 // Wraps an arg in double quotes for cmd.exe if it contains whitespace or a
 // quote, escaping any embedded quotes — so paths like "C:\My Project\file.js"
@@ -643,11 +644,18 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
 
     ptySessions.set(sessionId, ptyProcess);
 
+    if (language === 'flutter') {
+      activeFlutterSessionId = sessionId;
+    }
+
     ptyProcess.onData((data) => {
       event.sender.send('terminal:output', { sessionId, data });
     });
 
     ptyProcess.onExit(({ exitCode }) => {
+      if (activeFlutterSessionId === sessionId) {
+        activeFlutterSessionId = null;
+      }
       ptySessions.delete(sessionId);
       event.sender.send('terminal:exit', { sessionId, exitCode });
     });
@@ -658,6 +666,20 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
   } catch (err) {
     return { success: false, error: String(err) };
   }
+});
+
+ipcMain.handle('terminal:hotReload', async () => {
+  if (!activeFlutterSessionId) {
+    return { success: true };
+  }
+
+  const session = ptySessions.get(activeFlutterSessionId);
+  if (!session) {
+    return { success: true };
+  }
+
+  session.write('r');
+  return { success: true };
 });
 
 ipcMain.on('terminal:input', (_event, { sessionId, data }: { sessionId: string; data: string }) => {
