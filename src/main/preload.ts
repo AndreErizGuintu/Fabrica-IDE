@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('codeInference', {
 
 contextBridge.exposeInMainWorld('terminal', {
   run: (payload: { language: string; path: string; deviceId?: string }) => ipcRenderer.invoke('terminal:run', payload),
+  hotReload: () => ipcRenderer.invoke('terminal:hotReload'),
   input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),
   stop: (sessionId: string) => ipcRenderer.invoke('terminal:stop', { sessionId }),
   onOutput: (cb: (sessionId: string, data: string) => void) => {
