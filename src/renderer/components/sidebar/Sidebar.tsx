@@ -1,16 +1,15 @@
 import type React from 'react';
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import { FileEntry } from '../../types/index';
 import './sidebar.css';
+import { getFileIcon } from '../../utils/fileIcons';
 
 interface SidebarProps {
   onFileOpen: (path: string, filename: string) => void;
   initialFolder?: string;
   activeFilePath?: string;
   gitStatusFiles?: string[];
-  // Bumped by the parent whenever a file is created outside the sidebar (e.g.
-  // AI Translate "Save as file") so the tree re-reads from disk and shows it.
   refreshSignal?: number;
 }
 
@@ -19,71 +18,6 @@ interface TreeNode {
   children?: TreeNode[];
   isOpen?: boolean;
   isLoading?: boolean;
-}
-
-// Simple emoji icons
-function getFileIcon(filename: string, isDirectory?: boolean): string {
-  if (isDirectory) return '📁';
-  const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
-  const icons: Record<string, string> = {
-    '.html': '🌐',
-    '.htm': '🌐',
-    '.css': '🎨',
-    '.scss': '🎨',
-    '.sass': '🎨',
-    '.less': '🎨',
-    '.js': '📜',
-    '.mjs': '📜',
-    '.cjs': '📜',
-    '.ts': '📘',
-    '.tsx': '⚛️',
-    '.jsx': '⚛️',
-    '.py': '🐍',
-    '.json': '📋',
-    '.jsonc': '📋',
-    '.php': '🐘',
-    '.java': '☕',
-    '.cs': '🔷',
-    '.dart': '🎯',
-    '.md': '📝',
-    '.txt': '📄',
-    '.xml': '📄',
-    '.svg': '🖼️',
-    '.png': '🖼️',
-    '.jpg': '🖼️',
-    '.jpeg': '🖼️',
-    '.gif': '🖼️',
-    '.ico': '🖼️',
-    '.gitignore': '📄',
-    '.env': '📄',
-    '.yml': '📄',
-    '.yaml': '📄',
-    '.toml': '📄',
-    '.sql': '🗄️',
-    '.db': '🗄️',
-    '.sqlite': '🗄️',
-    '.sh': '💻',
-    '.bash': '💻',
-    '.zsh': '💻',
-    '.ps1': '💻',
-    '.dockerfile': '🐳',
-    '.dockerignore': '🐳',
-    '.tf': '📄',
-    '.tfvars': '📄',
-    '.lock': '🔒',
-    '.vue': '🟢',
-    '.svelte': '🟠',
-    '.go': '🔵',
-    '.rb': '❤️',
-    '.rs': '🦀',
-    '.kt': '📱',
-    '.swift': '🦅',
-    '.c': '⚙️',
-    '.cpp': '⚙️',
-    '.h': '⚙️',
-    '.hpp': '⚙️',
-  };
-  return icons[ext] ?? '📄';
 }
 
 function getLanguageTag(filename: string): string {
@@ -131,13 +65,7 @@ function getStatusBadge(code: string | undefined): { letter: string; color: stri
   return null;
 }
 
-// Guard: if the preload bridge isn't ready yet, don't throw mid-render.
-function hasFileSystemBridge(): boolean {
-  return typeof window !== 'undefined' && !!window.fileSystem;
-}
-
 async function loadChildren(dirPath: string): Promise<TreeNode[]> {
-  if (!hasFileSystemBridge()) return [];
   const result = await window.fileSystem.readDir(dirPath);
   if (!result.success || !result.files) return [];
   const filtered = result.files.filter((f) => !f.name.startsWith('.') && f.name !== 'node_modules');
@@ -147,118 +75,6 @@ async function loadChildren(dirPath: string): Promise<TreeNode[]> {
     return a.name.localeCompare(b.name);
   });
   return sorted.map((entry) => ({ entry }));
-}
-
-// Opens a specific folder node (loading its children if needed) without
-// touching the open/closed state of any of its siblings or ancestors.
-async function ensureNodeOpen(targetPath: string, nodes: TreeNode[]): Promise<TreeNode[]> {
-  return Promise.all(
-    nodes.map(async (node) => {
-      if (node.entry.path === targetPath) {
-        if (node.isOpen) return node;
-        const children = node.children ?? (await loadChildren(node.entry.path));
-        return { ...node, isOpen: true, children };
-      }
-      if (node.children) {
-        return { ...node, children: await ensureNodeOpen(targetPath, node.children) };
-      }
-      return node;
-    })
-  );
-}
-
-// Re-reads a single open node's children from disk while preserving the
-// open/closed state (and cached children) of anything nested inside it.
-async function refreshNode(node: TreeNode): Promise<TreeNode> {
-  if (!node.entry.isDirectory || !node.isOpen) return node;
-  const freshChildren = await loadChildren(node.entry.path);
-  const withState = await Promise.all(
-    freshChildren.map(async (fresh) => {
-      const prev = node.children?.find((c) => c.entry.path === fresh.entry.path);
-      if (prev?.isOpen) {
-        return refreshNode({ ...fresh, isOpen: true, children: prev.children });
-      }
-      return fresh;
-    })
-  );
-  return { ...node, isOpen: true, children: withState };
-}
-
-// Re-reads the whole tree from disk (e.g. after create/rename/delete) but
-// keeps every currently-expanded folder expanded, VS Code style.
-async function refreshTree(rootPath: string, currentTree: TreeNode[]): Promise<TreeNode[]> {
-  const freshRoot = await loadChildren(rootPath);
-  return Promise.all(
-    freshRoot.map(async (fresh) => {
-      const prev = currentTree.find((c) => c.entry.path === fresh.entry.path);
-      if (prev?.isOpen) {
-        return refreshNode({ ...fresh, isOpen: true, children: prev.children });
-      }
-      return fresh;
-    })
-  );
-}
-
-interface NewEntryState {
-  parentPath: string;
-  type: 'file' | 'folder';
-}
-
-interface NewEntryRowProps {
-  depth: number;
-  type: 'file' | 'folder';
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-}
-
-// Inline "type a name" row rendered directly inside the tree, at the same
-// indentation as a sibling of whatever folder is currently selected — this
-// is the piece that makes it feel like VS Code's explorer instead of a
-// separate text box floating above the tree.
-function NewEntryRow({ depth, type, value, onChange, onSubmit, onCancel }: NewEntryRowProps) {
-  const indent = depth * 16;
-  return (
-    <div
-      className="w-full flex items-center gap-2"
-      style={{
-        paddingLeft: `${indent + 12}px`,
-        paddingRight: '12px',
-        minHeight: '28px',
-      }}
-    >
-      <span style={{ fontSize: '16px', flexShrink: 0, width: '22px', textAlign: 'center' }}>
-        {type === 'file' ? '📄' : '📁'}
-      </span>
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            onSubmit();
-          }
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
-        onBlur={onSubmit}
-        className="text-xs px-1 rounded flex-1 min-w-0"
-        style={{
-          background: '#1a0a2e',
-          color: '#ffffff',
-          border: '1px solid #a855f7',
-          fontFamily: 'Space Mono, monospace',
-          outline: 'none',
-        }}
-      />
-    </div>
-  );
 }
 
 interface TreeNodeRowProps {
@@ -277,11 +93,6 @@ interface TreeNodeRowProps {
   onRenameCancel: () => void;
   selectedFolderPath?: string | null;
   onSelectFolder?: (path: string | null) => void;
-  newEntry: NewEntryState | null;
-  newEntryValue: string;
-  onNewEntryChange: (value: string) => void;
-  onNewEntrySubmit: () => void;
-  onNewEntryCancel: () => void;
 }
 
 function TreeNodeRow({
@@ -300,18 +111,17 @@ function TreeNodeRow({
   onRenameCancel,
   selectedFolderPath,
   onSelectFolder,
-  newEntry,
-  newEntryValue,
-  onNewEntryChange,
-  onNewEntrySubmit,
-  onNewEntryCancel,
 }: TreeNodeRowProps) {
   const isActive = !node.entry.isDirectory && activeFilePath === node.entry.path;
   const isSelectedFolder = node.entry.isDirectory && selectedFolderPath === node.entry.path;
-  const indent = depth * 16;
+  const indent = depth * 12;
   const badge = !node.entry.isDirectory ? getStatusBadge(gitStatusMap[node.entry.path]) : null;
-  const icon = getFileIcon(node.entry.name, node.entry.isDirectory);
-  const isCreatingHere = node.entry.isDirectory && newEntry?.parentPath === node.entry.path;
+  const iconClass = getFileIcon(node.entry.name, node.entry.isDirectory);
+  const iconColor = node.entry.isDirectory
+    ? '#dcb67a'
+    : iconClass.startsWith('devicon')
+      ? undefined
+      : '#e8e8f0';
 
   return (
     <>
@@ -328,26 +138,34 @@ function TreeNodeRow({
           }
         }}
         onContextMenu={(e) => onContextMenu(e, node.entry)}
-        className="w-full text-left py-1 flex items-center gap-2 hover:bg-white/5 transition-colors group"
+        className="w-full text-left py-0.5 flex items-center gap-1.5 truncate hover:bg-[#a855f7]/10 transition-colors"
         style={{
-          paddingLeft: `${indent + 12}px`,
-          paddingRight: '12px',
+          paddingLeft: `${indent + 8}px`,
+          paddingRight: '8px',
           color: isActive || isSelectedFolder ? '#ffffff' : '#a7adc5',
           borderLeft: isActive || isSelectedFolder ? '2px solid #a855f7' : '2px solid transparent',
-          background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.12)' : 'transparent',
-          fontFamily: 'Space Mono, monospace',
-          fontSize: '13px',
-          minHeight: '28px',
+          background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.15)' : 'transparent',
+          fontFamily: 'Segoe UI, sans-serif',
+          fontSize: '12px',
+          minHeight: '22px',
         }}
       >
         {node.entry.isDirectory && (
-          <span style={{ fontSize: '10px', color: '#6b7280', flexShrink: 0 }}>
-            {node.isOpen ? '▼' : '▶'}
+          <span style={{ color: '#6b7280', flexShrink: 0, display: 'inline-flex' }}>
+            <i className={`codicon ${node.isOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '14px' }} />
           </span>
         )}
-        <span style={{ fontSize: '16px', flexShrink: 0, width: '22px', textAlign: 'center' }}>
-          {icon}
-        </span>
+        <i
+          className={iconClass}
+          style={{
+            fontSize: '16px',
+            lineHeight: '1',
+            flexShrink: 0,
+            width: '18px',
+            textAlign: 'center',
+            color: iconColor,
+          }}
+        />
         {renamingPath === node.entry.path ? (
           <input
             autoFocus
@@ -363,25 +181,16 @@ function TreeNodeRow({
             className="text-xs px-1 rounded flex-1 min-w-0"
             style={{
               background: '#1a0a2e',
-              color: '#ffffff',
+              color: '#d4d4d4',
               border: '1px solid #a855f7',
-              fontFamily: 'Space Mono, monospace',
+              fontFamily: 'Segoe UI, sans-serif',
               outline: 'none',
             }}
           />
         ) : (
-          // FIXED: Properly truncate with ellipsis - wrapped in div with min-w-0
-          <div className="flex-1 min-w-0">
-            <span 
-              className="block truncate"
-              style={{ 
-                color: badge ? badge.color : '#a7adc5',
-              }}
-              title={node.entry.name}
-            >
-              {node.entry.name}
-            </span>
-          </div>
+          <span className="truncate" style={{ color: badge ? badge.color : '#a7adc5' }}>
+            {node.entry.name}
+          </span>
         )}
         {badge && (
           <span
@@ -416,35 +225,18 @@ function TreeNodeRow({
               onRenameCancel={onRenameCancel}
               selectedFolderPath={selectedFolderPath}
               onSelectFolder={onSelectFolder}
-              newEntry={newEntry}
-              newEntryValue={newEntryValue}
-              onNewEntryChange={onNewEntryChange}
-              onNewEntrySubmit={onNewEntrySubmit}
-              onNewEntryCancel={onNewEntryCancel}
             />
           ))}
-
-          {isCreatingHere && (
-            <NewEntryRow
-              depth={depth + 1}
-              type={newEntry!.type}
-              value={newEntryValue}
-              onChange={onNewEntryChange}
-              onSubmit={onNewEntrySubmit}
-              onCancel={onNewEntryCancel}
-            />
-          )}
-
-          {node.children.length === 0 && !isCreatingHere && (
+          {node.children.length === 0 && (
             <div
               style={{
-                paddingLeft: `${(depth + 1) * 16 + 12}px`,
-                fontSize: '12px',
-                color: '#4b5563',
-                minHeight: '24px',
+                paddingLeft: `${(depth + 1) * 12 + 8}px`,
+                fontSize: '11px',
+                color: '#2d1b4e',
+                minHeight: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                fontFamily: 'Space Mono, monospace',
+                fontFamily: 'Segoe UI, sans-serif',
               }}
             >
               empty
@@ -456,11 +248,19 @@ function TreeNodeRow({
   );
 }
 
-export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, gitStatusFiles, refreshSignal }: SidebarProps) {
+export default function Sidebar({ 
+  onFileOpen, 
+  initialFolder, 
+  activeFilePath, 
+  gitStatusFiles,
+  refreshSignal 
+}: SidebarProps) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const [newEntry, setNewEntry] = useState<NewEntryState | null>(null);
-  const [newEntryValue, setNewEntryValue] = useState('');
+  const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -469,27 +269,29 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const gitStatusMap = buildGitStatusMap(gitStatusFiles ?? [], folderName ?? undefined);
 
-  const gitStatusMap = useMemo(
-    () => buildGitStatusMap(gitStatusFiles ?? [], folderName ?? undefined),
-    [gitStatusFiles, folderName]
-  );
+  const fileInputRef = useRef<HTMLDivElement>(null);
+  const folderInputRef = useRef<HTMLDivElement>(null);
 
-  const treeRef = useRef(tree);
-  treeRef.current = tree;
-
-  const loadFolder = useCallback(async (folderPath: string) => {
+  const loadFolder = async (folderPath: string) => {
     setFolderName(folderPath);
     const nodes = await loadChildren(folderPath);
     setTree(nodes);
-  }, []);
+  };
 
   useEffect(() => {
     if (initialFolder) {
       void loadFolder(initialFolder);
       setSelectedFolder(initialFolder);
     }
-  }, [initialFolder, loadFolder]);
+  }, [initialFolder]);
+
+  useEffect(() => {
+    if (folderName && refreshSignal !== undefined) {
+      void loadFolder(folderName);
+    }
+  }, [refreshSignal]);
 
   useEffect(() => {
     if (!contextMenu) return undefined;
@@ -498,8 +300,28 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     return () => window.removeEventListener('click', close);
   }, [contextMenu]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      if (isCreatingFile && fileInputRef.current && !fileInputRef.current.contains(target)) {
+        setIsCreatingFile(false);
+        setNewFileName('');
+      }
+      
+      if (isCreatingFolder && folderInputRef.current && !folderInputRef.current.contains(target)) {
+        setIsCreatingFolder(false);
+        setNewFolderName('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCreatingFile, isCreatingFolder]);
+
   const handleOpenFolder = async () => {
-    if (!hasFileSystemBridge()) return;
     const folderPath = await window.fileSystem.openFolder();
     if (!folderPath) return;
     await loadFolder(folderPath);
@@ -507,7 +329,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   };
 
   const handleFileClick = async (entry: FileEntry) => {
-    if (!hasFileSystemBridge()) return;
     const result = await window.fileSystem.readFile(entry.path);
     if (result.success && result.content !== undefined) {
       onFileOpen(entry.path, entry.name);
@@ -533,67 +354,42 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   };
 
   const handleToggle = async (_node: TreeNode, _nodePath: string[]) => {
-    const updated = await toggleNode(_node.entry.path, treeRef.current);
+    const updated = await toggleNode(_node.entry.path, tree);
     setTree(updated);
   };
 
-  const refreshTreeKeepingOpen = async () => {
-    if (!folderName) return;
-    const updated = await refreshTree(folderName, treeRef.current);
-    setTree(updated);
-  };
-
-  const reloadAfterChange = async () => {
-    await refreshTreeKeepingOpen();
-  };
-
-  // Re-read the tree when the parent bumps refreshSignal (e.g. a file created
-  // by AI Translate "Save as file"). Skips the initial 0 so mount is untouched.
-  useEffect(() => {
-    if (!refreshSignal) return;
-    void refreshTreeKeepingOpen();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshSignal]);
-
-  const handleNewEntryClick = async (type: 'file' | 'folder') => {
-    const target = selectedFolder || folderName;
-    if (!target) return;
-
-    if (target !== folderName) {
-      const updated = await ensureNodeOpen(target, treeRef.current);
-      setTree(updated);
-    }
-
-    setNewEntry({ parentPath: target, type });
-    setNewEntryValue('');
-  };
-
-  const handleSubmitNewEntry = async () => {
-    if (!newEntry) return;
-    const { parentPath, type } = newEntry;
-    const trimmed = newEntryValue.trim();
-
-    setNewEntry(null);
-    setNewEntryValue('');
-
-    if (!trimmed || !hasFileSystemBridge()) return;
-
-    const sep = parentPath.includes('\\') ? '\\' : '/';
-    const fullPath = `${parentPath}${sep}${trimmed}`;
-    const result =
-      type === 'file'
-        ? await window.fileSystem.createFile(fullPath)
-        : await window.fileSystem.createFolder(fullPath);
-
+  const handleCreateFile = async () => {
+    if (!newFileName.trim()) return;
+    
+    const targetFolder = selectedFolder || folderName;
+    if (!targetFolder) return;
+    
+    const sep = targetFolder.includes('\\') ? '\\' : '/';
+    const filePath = `${targetFolder}${sep}${newFileName.trim()}`;
+    const result = await window.fileSystem.createFile(filePath);
     if (result.success) {
-      await refreshTreeKeepingOpen();
-      setSelectedFolder(parentPath);
+      setNewFileName('');
+      setIsCreatingFile(false);
+      await loadFolder(folderName!);
+      setSelectedFolder(targetFolder);
     }
   };
 
-  const handleCancelNewEntry = () => {
-    setNewEntry(null);
-    setNewEntryValue('');
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    
+    const targetFolder = selectedFolder || folderName;
+    if (!targetFolder) return;
+    
+    const sep = targetFolder.includes('\\') ? '\\' : '/';
+    const folderPath = `${targetFolder}${sep}${newFolderName.trim()}`;
+    const result = await window.fileSystem.createFolder(folderPath);
+    if (result.success) {
+      await loadFolder(folderName!);
+      setSelectedFolder(folderPath);
+    }
+    setIsCreatingFolder(false);
+    setNewFolderName('');
   };
 
   const findParentDir = (entryPath: string): string => {
@@ -603,12 +399,14 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     return parts.join(sep);
   };
 
+  const reloadAfterChange = async () => {
+    if (folderName) {
+      await loadFolder(folderName);
+    }
+  };
+
   const handleRenameSubmit = async (entry: FileEntry) => {
     if (!renameValue.trim() || renameValue.trim() === entry.name) {
-      setRenamingPath(null);
-      return;
-    }
-    if (!hasFileSystemBridge()) {
       setRenamingPath(null);
       return;
     }
@@ -623,7 +421,6 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
   };
 
   const handleDelete = async (entry: FileEntry) => {
-    if (!hasFileSystemBridge()) return;
     const confirmed = window.confirm(
       `Delete "${entry.name}"? This cannot be undone.`
     );
@@ -635,6 +432,18 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     }
   };
 
+  const handleNewFileClick = () => {
+    setIsCreatingFolder(false);
+    setNewFolderName('');
+    setIsCreatingFile(true);
+  };
+
+  const handleNewFolderClick = () => {
+    setIsCreatingFile(false);
+    setNewFileName('');
+    setIsCreatingFolder(true);
+  };
+
   const activeFilename = activeFilePath
     ? activeFilePath.split(/[\\/]/).pop() ?? ''
     : '';
@@ -643,52 +452,53 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
     ? selectedFolder.split(/[\\/]/).pop() ?? selectedFolder
     : null;
 
-  const isCreatingAtRoot = !!(newEntry && folderName && newEntry.parentPath === folderName);
-
   return (
-    <div className="flex flex-col h-full w-64 overflow-hidden" style={{ background: '#2d1b4e' }}>
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #1a0a2e' }}>
-        <span
-          className="text-xs font-bold tracking-widest uppercase"
-          style={{ color: '#6b7280', fontFamily: 'Space Mono, monospace' }}
-        >
-          EXPLORER
+    <div className="flex flex-col h-full w-52 overflow-hidden" style={{ background: '#1a0a2e' }}>
+      {/* Header - Violet Theme */}
+      <div className="px-3 py-2 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #2d1b4e' }}>
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+          Explorer
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={handleNewFileClick}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
+            style={{ color: '#a855f7' }}
+            title="New File"
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+              <path d="M14 5.5V14c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1V2c0-.6.4-1 1-1h6.5L14 5.5z"/>
+              <path d="M9.5 2v3.5H13" stroke="currentColor" strokeWidth="1" fill="none"/>
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleNewFolderClick}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
+            style={{ color: '#a855f7' }}
+            title="New Folder"
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+              <path d="M13.5 2.5H8.5L6.7.7c-.2-.2-.4-.2-.6-.2H2.5C1.7.5 1 1.2 1 2v12c0 .8.7 1.5 1.5 1.5h11c.8 0 1.5-.7 1.5-1.5V4c0-.8-.7-1.5-1.5-1.5z"/>
+            </svg>
+          </button>
           <button
             type="button"
             onClick={handleOpenFolder}
-            className="text-xs px-3 py-1 rounded transition-colors hover:opacity-80"
-            style={{ background: '#a855f7', color: '#ffffff' }}
+            className="ml-0.5 px-2.5 py-1 rounded text-[11px] font-medium transition-opacity hover:opacity-80"
+            style={{ background: '#a855f7', color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}
+            title="Open Folder"
           >
             Open
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleNewEntryClick('file')}
-            className="w-7 h-7 flex items-center justify-center rounded transition-colors hover:bg-white/10"
-            style={{ color: '#a855f7' }}
-            title={`New File in ${selectedFolderName || 'root'}`}
-          >
-            📄
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleNewEntryClick('folder')}
-            className="w-7 h-7 flex items-center justify-center rounded transition-colors hover:bg-white/10"
-            style={{ color: '#a855f7' }}
-            title={`New Folder in ${selectedFolderName || 'root'}`}
-          >
-            📁
           </button>
         </div>
       </div>
 
-      {/* Show which folder is selected */}
-      <div
-        className="px-4 py-1 text-[10px] truncate shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
-        style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #1a0a2e' }}
+      {/* Selected folder indicator */}
+      <div 
+        className="px-3 py-0.5 text-[10px] truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
+        style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif', borderBottom: '1px solid #2d1b4e' }}
         onClick={() => setSelectedFolder(folderName)}
         title="Click to select root folder"
       >
@@ -697,12 +507,12 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
 
       {/* Folder name */}
       {folderName && (
-        <div
-          className="px-4 py-1.5 text-xs font-bold truncate shrink-0 cursor-pointer hover:bg-white/5 transition-colors"
-          style={{
-            color: selectedFolder === folderName ? '#a855f7' : '#ffffff',
-            fontFamily: 'Space Mono, monospace',
-            borderBottom: '1px solid #1a0a2e'
+        <div 
+          className="px-3 py-1 text-xs truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
+          style={{ 
+            color: selectedFolder === folderName ? '#a855f7' : '#d4d4d4', 
+            fontFamily: 'Segoe UI, sans-serif', 
+            borderBottom: '1px solid #2d1b4e' 
           }}
           onClick={() => setSelectedFolder(folderName)}
         >
@@ -710,25 +520,71 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
         </div>
       )}
 
+      {/* Create File Input */}
+      {isCreatingFile && (
+        <div ref={fileInputRef} className="px-3 py-1 flex gap-1 shrink-0 items-center">
+          <i className="codicon codicon-file" style={{ fontSize: '14px', opacity: 0.7 }} />
+          <input
+            autoFocus
+            value={newFileName}
+            onChange={(e) => setNewFileName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleCreateFile();
+              }
+              if (e.key === 'Escape') {
+                setIsCreatingFile(false);
+                setNewFileName('');
+              }
+            }}
+            placeholder={`file in ${selectedFolderName || 'root'}`}
+            className="flex-1 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
+            style={{ 
+              color: '#a7adc5', 
+              border: '1px solid #a855f7',
+              fontFamily: 'Segoe UI, sans-serif',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Create Folder Input */}
+      {isCreatingFolder && (
+        <div ref={folderInputRef} className="px-3 py-1 flex gap-1 shrink-0 items-center">
+          <i className="codicon codicon-folder" style={{ fontSize: '14px', opacity: 0.7 }} />
+          <input
+            autoFocus
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleCreateFolder();
+              }
+              if (e.key === 'Escape') {
+                setIsCreatingFolder(false);
+                setNewFolderName('');
+              }
+            }}
+            placeholder={`folder in ${selectedFolderName || 'root'}`}
+            className="flex-1 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
+            style={{ 
+              color: '#a7adc5', 
+              border: '1px solid #a855f7',
+              fontFamily: 'Segoe UI, sans-serif',
+            }}
+          />
+        </div>
+      )}
+
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 && !folderName && (
-          <div className="px-4 py-4 text-xs text-center" style={{ color: '#4b5563' }}>
+          <div className="px-3 py-4 text-xs text-center" style={{ color: '#2d1b4e' }}>
             Open a folder to start
           </div>
         )}
-
-        {isCreatingAtRoot && (
-          <NewEntryRow
-            depth={0}
-            type={newEntry!.type}
-            value={newEntryValue}
-            onChange={setNewEntryValue}
-            onSubmit={handleSubmitNewEntry}
-            onCancel={handleCancelNewEntry}
-          />
-        )}
-
         {tree.map((node) => (
           <TreeNodeRow
             key={node.entry.path}
@@ -751,20 +607,15 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
             onRenameCancel={() => setRenamingPath(null)}
             selectedFolderPath={selectedFolder}
             onSelectFolder={setSelectedFolder}
-            newEntry={newEntry}
-            newEntryValue={newEntryValue}
-            onNewEntryChange={setNewEntryValue}
-            onNewEntrySubmit={handleSubmitNewEntry}
-            onNewEntryCancel={handleCancelNewEntry}
           />
         ))}
       </div>
 
       {/* Status Bar */}
-      <div className="px-4 py-2 shrink-0" style={{ borderTop: '1px solid #1a0a2e' }}>
+      <div className="px-3 py-1.5 shrink-0" style={{ borderTop: '1px solid #2d1b4e', background: '#1a0a2e' }}>
         <span
-          className="text-xs px-2 py-1 rounded-full"
-          style={{ background: '#1a0a2e', color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
+          className="text-[10px] px-1.5 py-0.5 rounded"
+          style={{ background: '#2d1b4e', color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
         >
           {activeFilename ? getLanguageTag(activeFilename) : 'No file open'}
         </span>
@@ -779,7 +630,7 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
             left: `${contextMenu.x}px`,
             top: `${contextMenu.y}px`,
             background: '#1a0a2e',
-            border: '1px solid #3d2b5e',
+            border: '1px solid #2d1b4e',
             minWidth: '160px',
           }}
         >
@@ -790,8 +641,8 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
                 void handleFileClick(contextMenu.entry);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
-              style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
+              className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+              style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
             >
               Open
             </button>
@@ -803,8 +654,8 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
                 setSelectedFolder(contextMenu.entry.path);
                 setContextMenu(null);
               }}
-              className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
-              style={{ color: '#a855f7', fontFamily: 'Space Mono, monospace' }}
+              className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+              style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif' }}
             >
               Select Folder
             </button>
@@ -816,16 +667,16 @@ export default function Sidebar({ onFileOpen, initialFolder, activeFilePath, git
               setRenameValue(contextMenu.entry.name);
               setContextMenu(null);
             }}
-            className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
-            style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
             Rename
           </button>
           <button
             type="button"
             onClick={() => void handleDelete(contextMenu.entry)}
-            className="text-left text-xs px-3 py-1.5 hover:bg-white/5 transition-colors"
-            style={{ color: '#f87171', fontFamily: 'Space Mono, monospace' }}
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+            style={{ color: '#f87171', fontFamily: 'Segoe UI, sans-serif' }}
           >
             Delete
           </button>

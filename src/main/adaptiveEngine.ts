@@ -36,6 +36,9 @@ type EngineState = {
   suggestionActive: Suggestion | null;
   // Debug-only — not read by any trigger logic, purely for getDebugState().
   lastFiredSuggestion: { scenario: Scenario; firedAt: number } | null;
+  // Debug-only — cumulative per-scenario fire tally for this session, for the
+  // Stats Debug doughnut. Not read by any trigger logic.
+  scenarioFireCounts: Record<Scenario, number>;
 };
 
 const state: EngineState = {
@@ -49,6 +52,7 @@ const state: EngineState = {
   cooldownUntil: 0,
   suggestionActive: null,
   lastFiredSuggestion: null,
+  scenarioFireCounts: { 1: 0, 2: 0, 3: 0, 4: 0 },
 };
 
 let pushSuggestion: ((suggestion: Suggestion) => void) | null = null;
@@ -100,6 +104,7 @@ function tryFire(scenario: Scenario) {
   };
   state.suggestionActive = suggestion;
   state.lastFiredSuggestion = { scenario, firedAt };
+  state.scenarioFireCounts[scenario] += 1;
   pushSuggestion?.(suggestion);
 }
 
@@ -210,6 +215,7 @@ export function startEngineSession() {
   state.cooldownUntil = 0;
   state.suggestionActive = null;
   state.lastFiredSuggestion = null;
+  state.scenarioFireCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
   scheduleIdleTimer();
 }
 
@@ -341,6 +347,7 @@ export function getDebugState(): AdaptiveDebugState {
     },
     suggestionActive: state.suggestionActive,
     priorityWinner,
+    scenarioFireCounts: { ...state.scenarioFireCounts },
   };
 }
 

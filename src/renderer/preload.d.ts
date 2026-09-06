@@ -56,6 +56,7 @@ type AdaptiveDebugState = {
   };
   suggestionActive: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number } | null;
   priorityWinner: 1 | 2 | 3 | 4 | null;
+  scenarioFireCounts: Record<1 | 2 | 3 | 4, number>;
 };
 
 type FlutterBridge = {

@@ -1,19 +1,13 @@
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
+import StatsDebugPanel from '../StatsDebugPanel';
 
 interface AIPanelProps {
   selectedCode: string;
-  // Absolute path of the currently active editor file; the "Save as file"
-  // button in Translate mode derives the new filename from this. Optional so
-  // the panel still renders when no file is open.
   activeFilePath?: string;
-  // Delegated to the editor lane (EditorLayout), which owns file writes, the
-  // overwrite prompt, opening the result in a tab, and refreshing the sidebar.
   onSaveTranslatedFile?: (
     content: string,
     language: string,
   ) => Promise<{ success: boolean; error?: string; skipped?: boolean }>;
-  // Chat/session state, owned by EditorLayout via useAIPanelState and shared
-  // across the docked and floating instances so it survives the swap.
   panelState: AIPanelState;
 }
 
@@ -63,11 +57,11 @@ function renderResponseContent(response: string) {
       {sections.map((section, index) => {
         if (section.type === 'code') {
           return (
-            <div key={`${section.language}-${index}`} className="overflow-hidden rounded border border-[#7c3aed] bg-[#12081f]">
-              <div className="border-b border-[#2d1b4e] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace' }}>
+            <div key={`${section.language}-${index}`} className="overflow-hidden rounded border border-[#7c3aed] bg-[#1e1e2e]">
+              <div className="border-b border-[#2d2d3a] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[#a78bfa]" style={{ fontFamily: 'Space Mono, monospace' }}>
                 {section.language}
               </div>
-              <pre className="m-0 overflow-x-auto p-2 text-[10px] text-[#f8fafc]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
+              <pre className="m-0 overflow-x-auto p-2 text-[10px] text-[#d4d4d4]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
                 <code>{section.content}</code>
               </pre>
             </div>
@@ -96,10 +90,10 @@ function renderChatThread(messages: ChatMessage[]) {
               <div
                 className="max-w-[85%] rounded border px-2 py-1.5 text-xs leading-4"
                 style={{
-                  background: isUser ? '#4c1d95' : '#12081f',
-                  borderColor: isUser ? '#a855f7' : '#2d1b4e',
-                  color: '#ffffff',
-                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  background: isUser ? '#4c1d95' : '#1e1e2e',
+                  borderColor: isUser ? '#a78bfa' : '#2d2d3a',
+                  color: '#d4d4d4',
+                  fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
                 {isUser ? message.content : renderResponseContent(message.content)}
@@ -108,7 +102,7 @@ function renderChatThread(messages: ChatMessage[]) {
           );
         })
       ) : (
-        <div className="text-xs text-[#a7adc5]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+        <div className="text-xs text-[#6b7280]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
           Start a conversation to get help with code, reasoning, or planning.
         </div>
       )}
@@ -287,19 +281,6 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       if (!completion?.success) {
         setResponse(getCompletionErrorText(completion?.error));
       } else if (completion.result) {
-        // Adopt the FINAL returned string in place of the streamed
-        // accumulation. Translate is the one mode whose result is
-        // post-processed in the main process: `ensureRequiredImports()` may
-        // prepend a missing import (e.g. `import 'dart:math' as math;`) once
-        // the whole output is known, which cannot be expressed as a token in
-        // the stream because it belongs at the TOP of code already streamed.
-        // Without this line the repaired string is discarded and both the
-        // panel and the saved file keep the broken, import-less version.
-        // See DECISIONS.md, "MISSING-IMPORT SAGA CLOSED" (2026-08-10).
-        //
-        // Streaming is unaffected -- tokens still render live as they arrive;
-        // this only replaces the text once, at completion, and is a no-op
-        // whenever the repair did not fire.
         setResponse(completion.result);
       }
     } catch (err) {
@@ -367,13 +348,37 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1a0a2e] border-l border-[#2d1b4e] overflow-hidden">
-      {/* Header */}
-      <div className="px-3 py-1.5 text-[10px] font-bold tracking-widest text-[#a855f7] shrink-0" style={{ fontFamily: 'Space Mono, monospace', borderBottom: '1px solid #2d1b4e' }}>
-        AI ASSISTANT
+    <div className="flex flex-col h-full bg-[#1e1e2e] border-l border-[#2d2d3a] overflow-hidden">
+      {/* Header with Stats Debug - ⓘ Icon is clickable */}
+      <div 
+        className="flex items-center justify-between px-4 py-1.5 shrink-0"
+        style={{ 
+          background: '#252535', 
+          borderBottom: '1px solid #2d2d3a',
+        }}
+      >
+        <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#6b7280', fontFamily: 'Segoe UI, sans-serif' }}>
+          ✨ AI Assistant
+        </span>
+        <div className="flex items-center gap-3">
+          {/* ⓘ Clickable Icon - Opens Stats Debug Dialog */}
+          <StatsDebugPanel projectPath={activeFilePath} />
+          <span className="text-[10px]" style={{ color: '#6b7280' }}>
+            Lines: {selectedCode.split('\n').length}
+          </span>
+          <span>|</span>
+          <span className="text-[10px]" style={{ color: '#6b7280' }}>
+            Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}
+          </span>
+          <span>|</span>
+          <span className="text-[10px]" style={{ color: '#6b7280' }}>
+            Issues: 0
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: '1px solid #2d1b4e' }}>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: '1px solid #2d2d3a' }}>
         {(['ask', 'plan', 'translate', 'explain'] as TabKey[]).map((tab) => {
           const isActive = activeTab === tab;
           return (
@@ -381,13 +386,13 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className="text-[10px] px-3 py-1 rounded-t font-semibold tracking-widest transition-colors"
+              className="text-[10px] px-3 py-1 rounded-t font-medium tracking-widest transition-colors"
               style={{
-                background: isActive ? '#2d1b4e' : 'transparent',
-                color: isActive ? '#ffffff' : '#a7adc5',
-                border: '1px solid #2d1b4e',
-                borderBottomColor: isActive ? '#2d1b4e' : 'transparent',
-                fontFamily: 'Space Mono, monospace',
+                background: isActive ? '#252535' : 'transparent',
+                color: isActive ? '#d4d4d4' : '#6b7280',
+                border: '1px solid #2d2d3a',
+                borderBottomColor: isActive ? '#252535' : 'transparent',
+                fontFamily: 'Segoe UI, sans-serif',
               }}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -400,12 +405,10 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       <div className="flex-1 flex flex-col gap-1.5 px-3 py-2 overflow-hidden min-h-0">
         {activeTab === 'ask' && (
           <>
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2 min-h-0">
+            <div className="flex-1 overflow-y-auto rounded bg-[#1e1e2e] p-2 min-h-0" style={{ border: '1px solid #2d2d3a' }}>
               {renderChatThread(askMessages)}
             </div>
 
-            {/* Input Area */}
             <div className="shrink-0 flex flex-col gap-1.5">
               <textarea
                 value={askPrompt}
@@ -413,12 +416,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Ask for help with code, concepts, debugging, or explanation..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#2d1b4e',
-                  color: '#ffffff',
-                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  background: '#252535',
+                  color: '#d4d4d4',
+                  fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid #4c1d95',
+                  border: '1px solid #2d2d3a',
                 }}
               />
 
@@ -429,7 +432,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={askLoading || !askPrompt.trim()}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
                   style={{
-                    background: askLoading || !askPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                    background: askLoading || !askPrompt.trim() ? '#2d2d3a' : '#a78bfa',
                     color: '#ffffff',
                     cursor: askLoading || !askPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
@@ -443,11 +446,11 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
 
         {activeTab === 'plan' && (
           <>
-            <div className="shrink-0 rounded border border-[#2d1b4e] bg-[#12081f] px-3 py-1 text-[10px] text-[#a7adc5]" style={{ fontFamily: 'Space Mono, monospace' }}>
+            <div className="shrink-0 rounded border border-[#2d2d3a] bg-[#1e1e2e] px-3 py-1 text-[10px] text-[#6b7280]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
               Plan mode — outlines steps only, does not make changes.
             </div>
 
-            <div className="flex-1 overflow-y-auto rounded bg-[#2d1b4e] p-2 min-h-0">
+            <div className="flex-1 overflow-y-auto rounded bg-[#1e1e2e] p-2 min-h-0" style={{ border: '1px solid #2d2d3a' }}>
               {renderChatThread(planMessages)}
             </div>
 
@@ -458,12 +461,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Describe what you want to plan..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#2d1b4e',
-                  color: '#ffffff',
-                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  background: '#252535',
+                  color: '#d4d4d4',
+                  fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid #4c1d95',
+                  border: '1px solid #2d2d3a',
                 }}
               />
 
@@ -474,7 +477,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={planLoading || !planPrompt.trim()}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
                   style={{
-                    background: planLoading || !planPrompt.trim() ? '#2d1b4e' : '#a855f7',
+                    background: planLoading || !planPrompt.trim() ? '#2d2d3a' : '#a78bfa',
                     color: '#ffffff',
                     cursor: planLoading || !planPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
@@ -495,25 +498,26 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Ask the AI to complete, explain, refactor, or generate code..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#2d1b4e',
-                  color: '#ffffff',
-                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  background: '#252535',
+                  color: '#d4d4d4',
+                  fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid #4c1d95',
+                  border: '1px solid #2d2d3a',
                 }}
               />
 
               <div
                 className="text-[10px] p-1.5 rounded overflow-y-auto shrink-0"
                 style={{
-                  background: '#2d1b4e',
-                  color: '#a7adc5',
+                  background: '#252535',
+                  color: '#6b7280',
                   fontFamily: 'Space Mono, monospace',
                   minHeight: '30px',
                   maxHeight: '50px',
                   whiteSpace: 'pre',
                   overflowX: 'hidden',
+                  border: '1px solid #2d2d3a',
                 }}
               >
                 {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to translate'}
@@ -523,11 +527,11 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="text-[10px] px-2 py-1 rounded bg-[#2d1b4e] text-[#ffffff] flex-1"
-                  style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+                  className="text-[10px] px-2 py-1 rounded bg-[#252535] text-[#d4d4d4] flex-1"
+                  style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid #2d2d3a' }}
                 >
                   {LANGUAGES.map((ln) => (
-                    <option key={ln} value={ln} className="bg-[#2d1b4e]">
+                    <option key={ln} value={ln} className="bg-[#252535]">
                       {ln}
                     </option>
                   ))}
@@ -539,7 +543,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={loading || (!prompt.trim() && !selectedCode.trim())}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors shrink-0"
                   style={{
-                    background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
+                    background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#2d2d3a' : '#a78bfa',
                     color: '#ffffff',
                     cursor: loading || (!prompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
                   }}
@@ -570,10 +574,10 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   title={activeFilePath ? 'Save the translated code to a new file' : 'Open a file first'}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-1.5 transition-colors shrink-0"
                   style={{
-                    background: saving || !activeFilePath ? '#2d1b4e' : '#7c3aed',
+                    background: saving || !activeFilePath ? '#2d2d3a' : '#7c3aed',
                     color: '#ffffff',
                     cursor: saving || !activeFilePath ? 'not-allowed' : 'pointer',
-                    fontFamily: 'Space Mono, monospace',
+                    fontFamily: 'Segoe UI, sans-serif',
                   }}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -583,14 +587,14 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   {saving ? 'Saving...' : 'Save as file'}
                 </button>
                 {saveMessage && (
-                  <span className="text-[9px] leading-3 truncate" style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}>
+                  <span className="text-[9px] leading-3 truncate" style={{ color: '#6b7280', fontFamily: 'Segoe UI, sans-serif' }}>
                     {saveMessage}
                   </span>
                 )}
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#2d1b4e] text-[#ffffff] min-h-0" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+            <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#252535] text-[#d4d4d4] min-h-0" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid #2d2d3a' }}>
               {response ? renderResponseContent(response) : 'AI response will appear here...'}
             </div>
           </>
@@ -604,24 +608,25 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               placeholder="Ask a specific question about the code, or leave blank for a general explanation..."
               className="text-xs p-2 rounded resize-none outline-none"
               style={{
-                background: '#2d1b4e',
-                color: '#ffffff',
-                fontFamily: 'IBM Plex Sans, sans-serif',
+                background: '#252535',
+                color: '#d4d4d4',
+                fontFamily: 'Segoe UI, sans-serif',
                 minHeight: '92px',
-                border: '1px solid #4c1d95',
+                border: '1px solid #2d2d3a',
               }}
             />
 
             <div
               className="text-xs p-2 rounded overflow-y-auto"
               style={{
-                background: '#2d1b4e',
-                color: '#a7adc5',
+                background: '#252535',
+                color: '#6b7280',
                 fontFamily: 'Space Mono, monospace',
                 minHeight: '60px',
                 maxHeight: '120px',
                 whiteSpace: 'pre',
                 overflowX: 'hidden',
+                border: '1px solid #2d2d3a',
               }}
             >
               {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to explain'}
@@ -634,7 +639,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 disabled={explainLoading || (!explainPrompt.trim() && !selectedCode.trim())}
                 className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
                 style={{
-                  background: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? '#2d1b4e' : '#a855f7',
+                  background: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? '#2d2d3a' : '#a78bfa',
                   color: '#ffffff',
                   cursor: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
                 }}
@@ -643,7 +648,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#2d1b4e] text-[#ffffff]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+            <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#252535] text-[#d4d4d4]" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid #2d2d3a' }}>
               {explainResponse ? renderResponseContent(explainResponse) : 'AI response will appear here...'}
             </div>
           </>

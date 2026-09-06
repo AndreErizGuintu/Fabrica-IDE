@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-
-/**
- * TEMPORARY debug-only UI for inspecting the Stats layer (src/main/stats.ts).
- * Not part of the product UI — safe to delete before defense.
- */
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
 
 type CurrentSession = {
   projectPath: string;
@@ -28,6 +27,16 @@ type SessionHistoryEntry = {
   aiCallCount: number;
 };
 
+type StatsSample = { t: number; sessionCalls: number; sessionRuns: number };
+const MAX_SAMPLES = 60;
+
+const CHART_GRID = '#333';
+const CHART_AXIS = '#888';
+const COLOR_CALLS = '#a855f7';
+const COLOR_RUNS = '#38bdf8';
+const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6'];
+const chartTooltip: React.CSSProperties = { background: '#1a1a1a', border: '1px solid #333', color: '#eee', fontSize: 12 };
+
 function formatSeconds(s: number | null): string {
   if (s === null) return '—';
   return `${s.toFixed(1)}s`;
@@ -38,6 +47,25 @@ function Indicator({ on }: { on: boolean }) {
     <span style={{ color: on ? '#86efac' : '#666', fontWeight: 700 }}>
       {on ? 'YES' : 'no'}
     </span>
+  );
+}
+
+function StatusBadge({ label, active, text, activeColor = '#86efac' }:
+  { label: string; active: boolean; text: string; activeColor?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: '#888', minWidth: 90 }}>{label}</span>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px',
+        borderRadius: 999, fontSize: 12, fontWeight: 700,
+        background: active ? 'rgba(255,255,255,0.06)' : '#222',
+        color: active ? activeColor : '#666',
+        border: `1px solid ${active ? activeColor : '#333'}`,
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: active ? activeColor : '#666' }} />
+        {text}
+      </span>
+    </div>
   );
 }
 
@@ -89,13 +117,18 @@ const tdStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-export default function StatsDebugPanel({ projectPath }: { projectPath?: string }) {
+interface StatsDebugPanelProps {
+  projectPath?: string;
+}
+
+export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
   const [open, setOpen] = useState(false);
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
   const [history, setHistory] = useState<SessionHistoryEntry[]>([]);
   const [adaptive, setAdaptive] = useState<Awaited<ReturnType<typeof window.adaptive.getDebugState>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [samples, setSamples] = useState<StatsSample[]>([]);
 
   const loadData = async () => {
     setError(null);
@@ -117,11 +150,15 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
 
   const handleOpen = () => {
     setOpen(true);
+    setSamples([]);
     loadData();
   };
 
-  // Live-refresh the current session + aggregate while the panel is open,
-  // so idle time / AI call count visibly tick up without manual Refresh.
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  // Live-refresh while open
   useEffect(() => {
     if (!open) return undefined;
     const intervalId = setInterval(() => {
@@ -130,34 +167,68 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
           setCurrentSession(current);
           setAggregate(agg);
           setAdaptive(adaptiveState);
+          setSamples((prev) => [
+            ...prev,
+            {
+              t: Date.now(),
+              sessionCalls: adaptiveState.scenario4.sessionCallCount,
+              sessionRuns: adaptiveState.scenario4.sessionRunCount,
+            },
+          ].slice(-MAX_SAMPLES));
         })
         .catch((err) => setError(String(err)));
     }, 1000);
     return () => clearInterval(intervalId);
   }, [open]);
 
+  const t0 = samples.length ? samples[0].t : 0;
+  const activityData = samples.map((s) => ({
+    elapsed: Math.round((s.t - t0) / 1000),
+    sessionCalls: s.sessionCalls,
+    sessionRuns: s.sessionRuns,
+  }));
+  const eventsData = [
+    { name: 'AI calls', value: adaptive?.scenario4.sessionCallCount ?? 0 },
+    { name: 'Runs', value: adaptive?.scenario4.sessionRunCount ?? 0 },
+  ];
+  const fireCounts = adaptive?.scenarioFireCounts ?? { 1: 0, 2: 0, 3: 0, 4: 0 };
+  const scenarioData = ([1, 2, 3, 4] as const).map((n) => ({ name: `Scenario ${n}`, value: fireCounts[n] }));
+  const scenarioTotal = scenarioData.reduce((sum, d) => sum + d.value, 0);
+
   return (
     <>
+      {/* Clickable ⓘ Icon */}
       <button
         type="button"
         onClick={handleOpen}
         style={{
-          position: 'fixed',
-          bottom: 8,
-          right: 8,
-          zIndex: 9999,
-          fontSize: 11,
-          padding: '4px 8px',
-          background: '#333',
-          color: '#fff',
-          border: '1px solid #666',
-          borderRadius: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          color: '#6b7280',
           cursor: 'pointer',
+          fontSize: '13px',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          transition: 'all 0.2s ease',
+          fontFamily: 'Segoe UI, sans-serif',
         }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#a78bfa';
+          e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = '#6b7280';
+          e.currentTarget.style.background = 'transparent';
+        }}
+        title="Click to view Stats Debug"
       >
-        Stats Debug
+        ⓘ
       </button>
 
+      {/* Stats Dialog */}
       {open && (
         <div
           style={{
@@ -178,7 +249,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           }}
         >
-          {/* Sticky header, always visible — no scrolling needed to see it */}
+          {/* Sticky header */}
           <div
             style={{
               display: 'flex',
@@ -189,7 +260,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               flexShrink: 0,
             }}
           >
-            <strong style={{ fontSize: 14 }}>Stats Debug</strong>
+            <strong style={{ fontSize: 14 }}>ⓘ Stats Debug</strong>
             <div>
               <button
                 type="button"
@@ -208,7 +279,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               </button>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 style={{
                   padding: '4px 10px',
                   background: '#4c1d1d',
@@ -228,6 +299,74 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             {error && (
               <pre style={{ color: '#f87171', whiteSpace: 'pre-wrap' }}>{error}</pre>
             )}
+
+            {/* Charts */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
+              <div style={sectionStyle}>
+                <h3 style={headingStyle}>Activity Over Time</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={activityData} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+                    <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" />
+                    <XAxis dataKey="elapsed" unit="s" stroke={CHART_AXIS} tick={{ fontSize: 11 }} />
+                    <YAxis stroke={CHART_AXIS} tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip contentStyle={chartTooltip} labelStyle={{ color: '#a78bfa' }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="sessionCalls" name="AI calls" stroke={COLOR_CALLS} strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="sessionRuns" name="Runs" stroke={COLOR_RUNS} strokeWidth={2} dot={false} isAnimationActive={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                {samples.length === 0 && <p style={{ color: '#888', margin: '4px 0 0' }}>Collecting… (samples every 1s while open)</p>}
+              </div>
+
+              <div style={sectionStyle}>
+                <h3 style={headingStyle}>Actions / Events (current)</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={eventsData} margin={{ top: 8, right: 12, bottom: 4, left: -12 }}>
+                    <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" />
+                    <XAxis dataKey="name" stroke={CHART_AXIS} tick={{ fontSize: 11 }} />
+                    <YAxis stroke={CHART_AXIS} tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip contentStyle={chartTooltip} cursor={{ fill: 'rgba(168,85,247,0.1)' }} />
+                    <Bar dataKey="value" isAnimationActive={false}>
+                      {eventsData.map((_, i) => <Cell key={i} fill={i === 0 ? COLOR_CALLS : COLOR_RUNS} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div style={sectionStyle}>
+                <h3 style={headingStyle}>Activity Categories (scenario fires)</h3>
+                {scenarioTotal > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={scenarioData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2} isAnimationActive={false}>
+                        {scenarioData.map((_, i) => <Cell key={i} fill={SCENARIO_COLORS[i]} stroke="#1a1a1a" />)}
+                      </Pie>
+                      <Tooltip contentStyle={chartTooltip} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p style={{ color: '#888', margin: 0 }}>No scenarios fired yet this session.</p>
+                )}
+              </div>
+
+              <div style={sectionStyle}>
+                <h3 style={headingStyle}>Session Status</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  <StatusBadge
+                    label="Suggestion"
+                    active={!!adaptive?.suggestionActive}
+                    text={adaptive?.suggestionActive ? `Active — Scenario ${adaptive.suggestionActive.scenario}` : 'Idle'}
+                  />
+                  <StatusBadge
+                    label="Cooldown"
+                    active={!!adaptive?.cooldown.active}
+                    activeColor="#fbbf24"
+                    text={adaptive?.cooldown.active ? `Cooling — ${formatSeconds(adaptive.cooldown.remainingSeconds)}` : 'Ready'}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div style={sectionStyle}>
               <h3 style={headingStyle}>Current Session (in-memory)</h3>
@@ -258,7 +397,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             </div>
 
             <div style={sectionStyle}>
-              <h3 style={headingStyle}>Adaptive Engine (src/main/adaptiveEngine.ts)</h3>
+              <h3 style={headingStyle}>Adaptive Engine</h3>
               {adaptive ? (
                 <>
                   <table style={{ borderCollapse: 'collapse', marginBottom: 10 }}>

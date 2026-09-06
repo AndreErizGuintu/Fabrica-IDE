@@ -595,7 +595,9 @@ export default function CodeInferencePrompt() {
       }}
     >
       <div className="flex items-start gap-2 px-3 py-2.5">
-        <span className="text-base leading-none">✨</span>
+        <span className="text-base leading-none inline-flex" style={{ color: '#a855f7' }}>
+          <i className="codicon codicon-sparkle" style={{ fontSize: '16px' }} />
+        </span>
         <div className="flex-1 min-w-0">
           <p className="text-xs leading-snug" style={{ color: '#e5e7eb' }}>
             {error ??
@@ -645,7 +647,7 @@ export default function CodeInferencePrompt() {
             style={{ color: '#a7adc5' }}
             title="Dismiss"
           >
-            ✕
+            <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
           </button>
         )}
       </div>

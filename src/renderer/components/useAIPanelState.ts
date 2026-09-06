@@ -9,11 +9,6 @@ export type ChatMessage = {
   content: string;
 };
 
-// All chat/session state for the AI panel, lifted out of AIPanel so a single
-// source of truth survives the docked <-> floating swap in EditorLayout (each
-// mode renders its own <AIPanel> instance; without this, toggling remounts the
-// component and wipes local state). Owned by EditorLayout, passed to both
-// instances via the `panelState` prop.
 export interface AIPanelState {
   activeTab: TabKey;
   setActiveTab: Dispatch<SetStateAction<TabKey>>;
