@@ -122,7 +122,11 @@ const tdStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-export default function StatsDebugPanel({ projectPath }: { projectPath?: string }) {
+interface StatsDebugPanelProps {
+  projectPath?: string;
+}
+
+export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
   const [open, setOpen] = useState(false);
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
@@ -155,8 +159,11 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
     loadData();
   };
 
-  // Live-refresh the current session + aggregate while the panel is open,
-  // so idle time / AI call count visibly tick up without manual Refresh.
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+  // Live-refresh while open
   useEffect(() => {
     if (!open) return undefined;
     const intervalId = setInterval(() => {
@@ -195,6 +202,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
 
   return (
     <>
+      {/* Clickable ⓘ Icon */}
       <button
         type="button"
         onClick={handleOpen}
@@ -212,11 +220,26 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
           border: '1px solid #666',
           borderRadius: 4,
           cursor: 'pointer',
+          fontSize: '13px',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          transition: 'all 0.2s ease',
+          fontFamily: 'Segoe UI, sans-serif',
         }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#a78bfa';
+          e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = '#6b7280';
+          e.currentTarget.style.background = 'transparent';
+        }}
+        title="Click to view Stats Debug"
       >
         ⓘ
       </button>
 
+      {/* Stats Dialog */}
       {open && (
         <div
           style={{
@@ -237,7 +260,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           }}
         >
-          {/* Sticky header, always visible — no scrolling needed to see it */}
+          {/* Sticky header */}
           <div
             style={{
               display: 'flex',
@@ -248,7 +271,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               flexShrink: 0,
             }}
           >
-            <strong style={{ fontSize: 14 }}>Stats Debug</strong>
+            <strong style={{ fontSize: 14 }}>ⓘ Stats Debug</strong>
             <div>
               <button
                 type="button"
@@ -267,7 +290,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
               </button>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 style={{
                   padding: '4px 10px',
                   background: '#4c1d1d',
@@ -389,7 +412,7 @@ export default function StatsDebugPanel({ projectPath }: { projectPath?: string 
             </div>
 
             <div style={sectionStyle}>
-              <h3 style={headingStyle}>Adaptive Engine (src/main/adaptiveEngine.ts)</h3>
+              <h3 style={headingStyle}>Adaptive Engine</h3>
               {adaptive ? (
                 <>
                   <table style={{ borderCollapse: 'collapse', marginBottom: 10 }}>
