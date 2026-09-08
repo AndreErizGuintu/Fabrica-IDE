@@ -477,15 +477,15 @@ function ToolWindowHeader({
     <div
       className={`flex items-center justify-between px-3 py-1.5 shrink-0 select-none ${dragHandleClassName ?? ''}`}
       style={{
-        background: mode === 'floating' ? '#1a0a2e' : '#12081f',
-        borderBottom: `1px solid ${mode === 'floating' ? '#2d1b4e' : '#1a0a2e'}`,
+        background: '#170D27',
+        borderBottom: '1px solid #2A183D',
         cursor: mode === 'floating' ? 'move' : 'default',
       }}
       onDoubleClick={onHeaderDoubleClick}
       title={mode === 'floating' ? 'Drag to move • double-click to toggle fullscreen' : undefined}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+        <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#9CA3AF', fontFamily: 'Segoe UI, sans-serif' }}>
           <span>{icon}</span> {title}
         </span>
         {leftExtra}
@@ -497,7 +497,7 @@ function ToolWindowHeader({
             type="button"
             onClick={(e) => { e.stopPropagation(); onMinimize(); }}
             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-            style={{ color: '#6b7280' }}
+            style={{ color: '#9CA3AF' }}
             title="Minimize"
           >
             −
@@ -507,7 +507,7 @@ function ToolWindowHeader({
           type="button"
           onClick={(e) => { e.stopPropagation(); onDockToggle(); }}
           className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: '#6b7280' }}
+          style={{ color: '#9CA3AF' }}
           title={mode === 'floating' ? 'Re-dock' : 'Detach to floating window'}
         >
           ↗
@@ -516,7 +516,7 @@ function ToolWindowHeader({
           type="button"
           onClick={(e) => { e.stopPropagation(); onMaximizeFullscreen(); }}
           className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: '#6b7280' }}
+          style={{ color: '#9CA3AF' }}
           title={mode === 'floating' ? 'Toggle fullscreen' : 'Detach and maximize'}
         >
           ⛶
@@ -525,7 +525,7 @@ function ToolWindowHeader({
           type="button"
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: '#6b7280' }}
+          style={{ color: '#9CA3AF' }}
           title="Close"
         >
           ✕
@@ -1614,7 +1614,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           onMaximizeFullscreen={() => { detachToFloat('preview'); toggleFullscreen('preview'); }}
                           onClose={() => setShowPreview(false)}
                           leftExtra={
-                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1a0a2e', color: '#6b7280' }}>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#2A183D', color: '#9CA3AF' }}>
                               {isHtmlFile ? 'HTML' : 'Preview'}
                             </span>
                           }
@@ -1622,14 +1622,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           <button
                             type="button"
                             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                            style={{ color: '#6b7280' }}
+                            style={{ color: '#9CA3AF' }}
                             title="Refresh preview (Ctrl+R)"
                             onClick={() => { setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }}
                           >
                             ⟳
                           </button>
                         </ToolWindowHeader>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
                           <Preview
                             key={activeTab?.path + previewHtml}
                             html={previewHtml}
@@ -1646,13 +1646,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       <div
                         className="h-1 shrink-0 cursor-row-resize hover:bg-[#a855f7]/20 transition-colors"
                         style={{
-                          background: '#0a0512',
-                          borderTop: '1px solid #1a0a2e',
-                          borderBottom: '1px solid #1a0a2e',
+                          background: '#120A1F',
+                          borderTop: '1px solid #2A183D',
+                          borderBottom: '1px solid #2A183D',
                           position: 'relative',
                         }}
                       >
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 rounded-full" style={{ background: '#2d1b4e' }} />
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 rounded-full" style={{ background: '#2A183D' }} />
                       </div>
                     )}
 
@@ -1673,22 +1673,22 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           onMaximizeFullscreen={() => { detachToFloat('ai'); toggleFullscreen('ai'); }}
                           onClose={() => setShowAI(false)}
                         >
-                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
-                          <span style={{ color: '#3d2b5e' }}>|</span>
-                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
-                          <span style={{ color: '#3d2b5e' }}>|</span>
-                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Issues: 0</span>
+                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Lines: {selectedCode.split('\n').length}</span>
+                          <span style={{ color: '#9CA3AF' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+                          <span style={{ color: '#9CA3AF' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Issues: 0</span>
                           <button
                             type="button"
                             onClick={() => setStatsOpen(true)}
                             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                            style={{ color: '#6b7280' }}
+                            style={{ color: '#9CA3AF' }}
                             title="Stats Debug"
                           >
                             ⓘ
                           </button>
                         </ToolWindowHeader>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
                           <AIPanel
                             selectedCode={selectedCode}
                             activeFilePath={activeTab?.path}
@@ -2022,8 +2022,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#12081f',
-            border: '1px solid #1a0a2e',
+            backgroundColor: '#120A1F',
+            border: '1px solid #2A183D',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
@@ -2043,15 +2043,15 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowPreview(false); }}
           >
-            <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Refresh preview (Ctrl+R)">⟳</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#9CA3AF' }} title="Refresh preview (Ctrl+R)">⟳</button>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom Out">➖</button>
-              <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
-              <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom In">➕</button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Reset Zoom">⟲</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#9CA3AF' }} title="Zoom Out">➖</button>
+              <span className="text-[10px]" style={{ color: '#9CA3AF', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#9CA3AF' }} title="Zoom In">➕</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#9CA3AF' }} title="Reset Zoom">⟲</button>
             </div>
           </ToolWindowHeader>
-          <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
             <Preview
               key={activeTab?.path + previewHtml}
               html={previewHtml}
@@ -2078,8 +2078,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#12081f',
-            border: '1px solid #1a0a2e',
+            backgroundColor: '#120A1F',
+            border: '1px solid #2A183D',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
@@ -2099,22 +2099,22 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowAI(false); }}
           >
-            <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
-            <span style={{ color: '#3d2b5e' }}>|</span>
-            <span className="text-[10px]" style={{ color: '#6b7280' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
-            <span style={{ color: '#3d2b5e' }}>|</span>
-            <span className="text-[10px]" style={{ color: '#6b7280' }}>Issues: 0</span>
+            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Lines: {selectedCode.split('\n').length}</span>
+            <span style={{ color: '#9CA3AF' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+            <span style={{ color: '#9CA3AF' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Issues: 0</span>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setStatsOpen(true); }}
               className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-              style={{ color: '#6b7280' }}
+              style={{ color: '#9CA3AF' }}
               title="Stats Debug"
             >
               ⓘ
             </button>
           </ToolWindowHeader>
-          <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
             <AIPanel
               selectedCode={selectedCode}
               activeFilePath={activeTab?.path}

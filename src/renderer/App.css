@@ -17,8 +17,28 @@ i.devicon-c-plain.colored           { color: #7fa8d4; } /* gray       → lighte
 	--bg-deep: #0a0b12;
 	--panel: rgba(24, 27, 45, 0.9);
 	--panel-border: rgba(120, 130, 170, 0.25);
-	--accent: #a855f7;
-	--text-muted: #a7adc5;
+
+	/* Neutral surface/border/text tokens -- reuses the existing #a855f7 accent
+	   (no accent change), used to migrate Explorer/Preview-chrome/AI-chrome off
+	   the violet-black palette (#1a0a2e/#2d1b4e/#12081f) onto true neutrals.
+	   Supersedes the old unused --accent/--text-muted declarations above (both
+	   were dead: never consumed via var() anywhere in the codebase). */
+	--bg-app: #0D0D0F;
+	--bg-surface: #121214;
+	--bg-surface-2: #18181B;
+	--bg-surface-3: #1E1E22;
+
+	--border-subtle: #202024;
+	--border-normal: #29292F;
+	--border-strong: #36363D;
+
+	--text-primary: #F2F2F3;
+	--text-secondary: #A1A1AA;
+	--text-muted: #71717A;
+
+	--accent: #A855F7;
+	--accent-hover: #B565FF;
+	--accent-soft: rgba(168,85,247,.12);
 }
 
 * { box-sizing: border-box; }

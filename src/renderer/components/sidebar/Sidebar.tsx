@@ -288,7 +288,22 @@ function TreeNodeRow({
       </button>
 
       {node.entry.isDirectory && node.isOpen && node.children && (
-        <>
+        <div style={{ position: 'relative' }}>
+          {/* Indent guide: spans this folder's rendered children (wrapper
+              height is just their natural stacked height), positioned to sit
+              roughly centered under this folder's own disclosure chevron --
+              chevron center is approx this row's own indent (depth*12+8) plus
+              half its glyph width (~7px), i.e. depth*12+15 == (depth+1)*12+3. */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: `${(depth + 1) * 12 + 3}px`,
+              width: '1px',
+              background: 'rgba(255,255,255,0.08)',
+            }}
+          />
           {node.children.map((child) => (
             <TreeNodeRow
               key={child.entry.path}
@@ -361,7 +376,7 @@ function TreeNodeRow({
               empty
             </div>
           )}
-        </>
+        </div>
       )}
     </>
   );
@@ -397,6 +412,31 @@ export default function Sidebar({
 
   const fileInputRef = useRef<HTMLDivElement>(null);
   const folderInputRef = useRef<HTMLDivElement>(null);
+
+  // Explorer scrollbar auto-hide: visible on hover (pure CSS, see sidebar.css)
+  // or while actively scrolling (this timer), fading back out ~900ms after the
+  // last scroll event. Purely presentational -- doesn't touch scroll position.
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const [isTreeScrolling, setIsTreeScrolling] = useState(false);
+  const scrollIdleTimerRef = useRef<number | null>(null);
+
+  const handleTreeScroll = () => {
+    setIsTreeScrolling(true);
+    if (scrollIdleTimerRef.current !== null) {
+      window.clearTimeout(scrollIdleTimerRef.current);
+    }
+    scrollIdleTimerRef.current = window.setTimeout(() => {
+      setIsTreeScrolling(false);
+    }, 900);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (scrollIdleTimerRef.current !== null) {
+        window.clearTimeout(scrollIdleTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadFolder = async (folderPath: string) => {
     setFolderName(folderPath);
@@ -674,7 +714,7 @@ export default function Sidebar({
             type="button"
             onClick={() => void handleNewFileClick()}
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
-            style={{ color: '#a855f7' }}
+            style={{ color: '#e8e8f0' }}
             title="New File"
           >
             <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
@@ -686,7 +726,7 @@ export default function Sidebar({
             type="button"
             onClick={() => void handleNewFolderClick()}
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
-            style={{ color: '#a855f7' }}
+            style={{ color: '#dcb67a' }}
             title="New Folder"
           >
             <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
@@ -731,7 +771,11 @@ export default function Sidebar({
       )}
 
       {/* File Tree */}
-      <div className="flex-1 overflow-y-auto py-1">
+      <div
+        ref={treeScrollRef}
+        className={`flex-1 overflow-y-auto py-1 explorer-scroll${isTreeScrolling ? ' is-scrolling' : ''}`}
+        onScroll={handleTreeScroll}
+      >
         {tree.length === 0 && !folderName && (
           <div className="px-3 py-4 text-xs text-center" style={{ color: '#2d1b4e' }}>
             Open a folder to start
