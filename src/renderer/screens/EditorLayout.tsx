@@ -428,6 +428,7 @@ function ToolWindowHeader({
   mode,
   onMinimize,
   onDockToggle,
+  onMaximizeFullscreen,
   onClose,
   dragHandleClassName,
   onHeaderDoubleClick,
@@ -439,6 +440,7 @@ function ToolWindowHeader({
   mode: 'docked' | 'floating';
   onMinimize?: () => void;
   onDockToggle: () => void;
+  onMaximizeFullscreen: () => void;
   onClose: () => void;
   dragHandleClassName?: string;
   onHeaderDoubleClick?: () => void;
@@ -483,6 +485,15 @@ function ToolWindowHeader({
           title={mode === 'floating' ? 'Re-dock' : 'Detach to floating window'}
         >
           ↗
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMaximizeFullscreen(); }}
+          className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: '#6b7280' }}
+          title={mode === 'floating' ? 'Toggle fullscreen' : 'Detach and maximize'}
+        >
+          ⛶
         </button>
         <button
           type="button"
@@ -749,9 +760,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     setArmedDetachPanel(panel);
   }, [floatingPanel]);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!floatingPanel) return;
-    const panel = floatingPanel;
+  const toggleFullscreen = useCallback((explicitPanel?: FloatingPanel) => {
+    const panel = explicitPanel ?? floatingPanel;
+    if (!panel) return;
     setIsFullscreen((prev) => {
       const next = !prev;
       if (next) {
@@ -1561,7 +1572,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           icon="🔍"
                           title="Live Preview"
                           mode="docked"
+                          onMinimize={() => setShowPreview(false)}
                           onDockToggle={() => detachToFloat('preview')}
+                          onMaximizeFullscreen={() => { detachToFloat('preview'); toggleFullscreen('preview'); }}
                           onClose={() => setShowPreview(false)}
                           leftExtra={
                             <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1a0a2e', color: '#6b7280' }}>
@@ -1620,6 +1633,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           mode="docked"
                           onMinimize={() => setShowAI(false)}
                           onDockToggle={() => detachToFloat('ai')}
+                          onMaximizeFullscreen={() => { detachToFloat('ai'); toggleFullscreen('ai'); }}
                           onClose={() => setShowAI(false)}
                         >
                           <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
@@ -1986,8 +2000,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             title="Live Preview"
             mode="floating"
             dragHandleClassName="float-drag-handle"
-            onHeaderDoubleClick={toggleFullscreen}
+            onHeaderDoubleClick={() => toggleFullscreen()}
+            onMinimize={dockPanel}
             onDockToggle={dockPanel}
+            onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowPreview(false); }}
           >
             <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Refresh preview (Ctrl+R)">⟳</button>
@@ -2040,9 +2056,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             title="AI Assistant"
             mode="floating"
             dragHandleClassName="float-drag-handle"
-            onHeaderDoubleClick={toggleFullscreen}
-            onMinimize={() => setIsFloatMinimized(true)}
+            onHeaderDoubleClick={() => toggleFullscreen()}
+            onMinimize={dockPanel}
             onDockToggle={dockPanel}
+            onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowAI(false); }}
           >
             <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
