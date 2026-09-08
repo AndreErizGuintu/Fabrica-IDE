@@ -92,28 +92,35 @@ const DEFAULT_RIGHT_PANEL_WIDTH = 380;
 // ============================================================
 // MENU BAR COMPONENT - Extracted to avoid hook ordering issues
 // ============================================================
-function MenuBarComponent() {
+interface MenuBarProps {
+  onOpenFile: () => void;
+  onSave: () => void;
+  onCloseEditor: () => void;
+  onCloseFolder: () => void;
+}
+
+function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const menus = {
     File: {
       items: [
-        { label: 'New File', shortcut: 'Ctrl+N', action: () => console.log('New File') },
-        { label: 'New Folder', shortcut: 'Ctrl+Shift+N', action: () => console.log('New Folder') },
+        { label: 'New File', shortcut: 'Ctrl+N', disabled: true },
+        { label: 'New Folder', shortcut: 'Ctrl+Shift+N', disabled: true },
         { separator: true },
-        { label: 'Open File', shortcut: 'Ctrl+O', action: () => console.log('Open File') },
-        { label: 'Open Folder', shortcut: 'Ctrl+K Ctrl+O', action: () => console.log('Open Folder') },
-        { label: 'Open Recent', shortcut: '', action: () => console.log('Open Recent') },
+        { label: 'Open File', shortcut: 'Ctrl+O', action: onOpenFile },
+        { label: 'Open Folder', shortcut: 'Ctrl+K Ctrl+O', disabled: true },
+        { label: 'Open Recent', shortcut: '', disabled: true },
         { separator: true },
-        { label: 'Save', shortcut: 'Ctrl+S', action: () => console.log('Save') },
-        { label: 'Save As', shortcut: 'Ctrl+Shift+S', action: () => console.log('Save As') },
-        { label: 'Save All', shortcut: 'Ctrl+K S', action: () => console.log('Save All') },
+        { label: 'Save', shortcut: 'Ctrl+S', action: onSave },
+        { label: 'Save As', shortcut: 'Ctrl+Shift+S', disabled: true },
+        { label: 'Save All', shortcut: 'Ctrl+K S', disabled: true },
         { separator: true },
-        { label: 'Close Editor', shortcut: 'Ctrl+W', action: () => console.log('Close Editor') },
-        { label: 'Close Folder/Workspace', shortcut: '', action: () => console.log('Close Folder') },
+        { label: 'Close Editor', shortcut: 'Ctrl+W', action: onCloseEditor },
+        { label: 'Close Folder/Workspace', shortcut: '', action: onCloseFolder },
         { separator: true },
-        { label: 'Exit', shortcut: '', action: () => console.log('Exit') },
+        { label: 'Exit', shortcut: '', disabled: true },
       ]
     },
     Edit: {
@@ -215,6 +222,25 @@ function MenuBarComponent() {
     if (item.separator) {
       return (
         <div key={`sep-${index}`} className="h-px my-1" style={{ background: '#2d1b4e' }} />
+      );
+    }
+
+    if (item.disabled) {
+      return (
+        <div
+          key={item.label}
+          className="w-full text-left px-4 py-1 text-xs flex items-center justify-between"
+          style={{
+            color: '#4b5563',
+            fontFamily: 'Segoe UI, sans-serif',
+            cursor: 'default',
+          }}
+        >
+          <span>{item.label}</span>
+          {item.shortcut && (
+            <span className="text-[10px]" style={{ color: '#3d2b5e' }}>{item.shortcut}</span>
+          )}
+        </div>
       );
     }
 
@@ -1265,7 +1291,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       )}
       
       {/* Menu Bar */}
-      <MenuBarComponent />
+      <MenuBarComponent
+        onOpenFile={handleOpenFileDialog}
+        onSave={handleSave}
+        onCloseEditor={() => {
+          if (activeTab) handleCloseTab(activeTabIndex);
+        }}
+        onCloseFolder={onBack}
+      />
       
       {/* Application Toolbar */}
       <div
