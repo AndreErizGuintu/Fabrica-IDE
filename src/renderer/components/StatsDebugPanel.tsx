@@ -124,10 +124,11 @@ const tdStyle: React.CSSProperties = {
 
 interface StatsDebugPanelProps {
   projectPath?: string;
+  open: boolean;
+  onClose: () => void;
 }
 
-export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
-  const [open, setOpen] = useState(false);
+export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDebugPanelProps) {
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
   const [history, setHistory] = useState<SessionHistoryEntry[]>([]);
@@ -153,15 +154,12 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
     }
   };
 
-  const handleOpen = () => {
-    setOpen(true);
-    setSamples([]);
-    loadData();
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-  };
+  useEffect(() => {
+    if (open) {
+      setSamples([]);
+      loadData();
+    }
+  }, [open]);
 
   // Live-refresh while open
   useEffect(() => {
@@ -200,47 +198,9 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
   const scenarioData = ([1, 2, 3, 4] as const).map((n) => ({ name: `Scenario ${n}`, value: fireCounts[n] }));
   const scenarioTotal = scenarioData.reduce((sum, d) => sum + d.value, 0);
 
-  return (
-    <>
-      {/* Clickable ⓘ Icon */}
-      <button
-        type="button"
-        onClick={handleOpen}
-        style={{
-          position: 'fixed',
-          bottom: 8,
-          right: 8,
-          top: 'auto',
-          left: 'auto',
-          zIndex: 9999,
-          fontSize: 11,
-          padding: '4px 8px',
-          background: '#333',
-          color: '#fff',
-          border: '1px solid #666',
-          borderRadius: 4,
-          cursor: 'pointer',
-          fontSize: '13px',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          transition: 'all 0.2s ease',
-          fontFamily: 'Segoe UI, sans-serif',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = '#a78bfa';
-          e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = '#6b7280';
-          e.currentTarget.style.background = 'transparent';
-        }}
-        title="Click to view Stats Debug"
-      >
-        ⓘ
-      </button>
+  if (!open) return null;
 
-      {/* Stats Dialog */}
-      {open && (
+  return (
         <div
           style={{
             position: 'fixed',
@@ -290,7 +250,7 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
               </button>
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={onClose}
                 style={{
                   padding: '4px 10px',
                   background: '#4c1d1d',
@@ -567,7 +527,5 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
             </div>
           </div>
         </div>
-      )}
-    </>
   );
 }

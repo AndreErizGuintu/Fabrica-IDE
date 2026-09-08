@@ -130,12 +130,6 @@ function TemplatesScreen({ onBack }: { onBack: () => void }) {
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
-            <span>🌐</span> Remote
-          </button>
-          <button
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
-          >
             <span>⚙️</span> Settings
           </button>
         </nav>
@@ -259,12 +253,6 @@ function NewProjectScreen({
           >
             <span>📋</span> Templates
           </div>
-          <button
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
-          >
-            <span>🌐</span> Remote
-          </button>
           <button
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
@@ -495,12 +483,6 @@ function MainMenu({
           >
             <span>📋</span> Templates
           </div>
-          <button
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
-          >
-            <span>🌐</span> Remote
-          </button>
           <button
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}

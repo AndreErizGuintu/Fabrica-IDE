@@ -1,5 +1,4 @@
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
-import StatsDebugPanel from '../StatsDebugPanel';
 
 interface AIPanelProps {
   selectedCode: string;
@@ -349,34 +348,6 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e2e] border-l border-[#2d2d3a] overflow-hidden">
-      {/* Header with Stats Debug - ⓘ Icon is clickable */}
-      <div 
-        className="flex items-center justify-between px-4 py-1.5 shrink-0"
-        style={{ 
-          background: '#252535', 
-          borderBottom: '1px solid #2d2d3a',
-        }}
-      >
-        <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#6b7280', fontFamily: 'Segoe UI, sans-serif' }}>
-          ✨ AI Assistant
-        </span>
-        <div className="flex items-center gap-3">
-          {/* ⓘ Clickable Icon - Opens Stats Debug Dialog */}
-          <StatsDebugPanel projectPath={activeFilePath} />
-          <span className="text-[10px]" style={{ color: '#6b7280' }}>
-            Lines: {selectedCode.split('\n').length}
-          </span>
-          <span>|</span>
-          <span className="text-[10px]" style={{ color: '#6b7280' }}>
-            Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}
-          </span>
-          <span>|</span>
-          <span className="text-[10px]" style={{ color: '#6b7280' }}>
-            Issues: 0
-          </span>
-        </div>
-      </div>
-
       {/* Tabs */}
       <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: '1px solid #2d2d3a' }}>
         {(['ask', 'plan', 'translate', 'explain'] as TabKey[]).map((tab) => {

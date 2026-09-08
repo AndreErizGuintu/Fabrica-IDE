@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Rnd } from 'react-rnd';
 import icon from '../../../assets/icon.svg';
 import Editor from '../components/editor/Editor';
-import Preview from '../components/preview/Preview';
+import Preview, { DeviceType } from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
@@ -419,6 +419,86 @@ function BreadcrumbComponent({ currentPath, projectRoot }: { currentPath: string
 }
 
 // ============================================================
+// TOOL WINDOW HEADER - shared docked/floating header for
+// Live Preview and AI Assistant (minimize / maximize / close)
+// ============================================================
+function ToolWindowHeader({
+  icon,
+  title,
+  mode,
+  isExpanded,
+  onMinimize,
+  onMaximize,
+  onClose,
+  dragHandleClassName,
+  onHeaderDoubleClick,
+  leftExtra,
+  children,
+}: {
+  icon: string;
+  title: string;
+  mode: 'docked' | 'floating';
+  isExpanded: boolean;
+  onMinimize: () => void;
+  onMaximize: () => void;
+  onClose: () => void;
+  dragHandleClassName?: string;
+  onHeaderDoubleClick?: () => void;
+  leftExtra?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between px-3 py-1.5 shrink-0 select-none ${dragHandleClassName ?? ''}`}
+      style={{
+        background: mode === 'floating' ? '#1a0a2e' : '#12081f',
+        borderBottom: `1px solid ${mode === 'floating' ? '#2d1b4e' : '#1a0a2e'}`,
+        cursor: mode === 'floating' ? 'move' : 'default',
+      }}
+      onDoubleClick={onHeaderDoubleClick}
+      title={mode === 'floating' ? 'Drag to move • double-click to toggle fullscreen' : undefined}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+          <span>{icon}</span> {title}
+        </span>
+        {leftExtra}
+      </div>
+      <div className="flex items-center gap-1 float-controls">
+        {children}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMinimize(); }}
+          className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: '#6b7280' }}
+          title="Minimize"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMaximize(); }}
+          className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: isExpanded ? '#a855f7' : '#6b7280' }}
+          title={isExpanded ? 'Restore' : 'Maximize'}
+        >
+          {isExpanded ? '❐' : '□'}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+          style={{ color: '#6b7280' }}
+          title="Close"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN EDITOR LAYOUT COMPONENT
 // ============================================================
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
@@ -429,6 +509,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
   const flutterHotReloadTimerRef = useRef<number | null>(null);
   const [showAI, setShowAI] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [gitStatusFiles, setGitStatusFiles] = useState<string[]>([]);
@@ -456,7 +538,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     ai: { width: 420, height: 350 },
   });
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewDevice, setPreviewDevice] = useState<DeviceType>('desktop');
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [maximizedPanel, setMaximizedPanel] = useState<FloatingPanel | null>(null);
+  const [isFloatMinimized, setIsFloatMinimized] = useState(false);
   const [armedDetachPanel, setArmedDetachPanel] = useState<FloatingPanel | null>(null);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
   const [errors, setErrors] = useState(0);
@@ -633,14 +719,36 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     setIsFullscreen(false);
     preFullscreenRef.current = null;
     setPreviewZoom(1);
+    setIsFloatMinimized(false);
   }, []);
+
+  const toggleMaximize = useCallback((panel: FloatingPanel) => {
+    setMaximizedPanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
+  const handleToggleAI = useCallback(() => {
+    if (floatingPanel === 'ai' && isFloatMinimized) {
+      setIsFloatMinimized(false);
+      return;
+    }
+    setShowAI((prev) => !prev);
+  }, [floatingPanel, isFloatMinimized]);
+
+  const handleTogglePreview = useCallback(() => {
+    if (floatingPanel === 'preview' && isFloatMinimized) {
+      setIsFloatMinimized(false);
+      return;
+    }
+    setShowPreview((prev) => !prev);
+  }, [floatingPanel, isFloatMinimized]);
 
   const handleDetachMouseDown = useCallback((panel: FloatingPanel) => (e: React.MouseEvent) => {
     if (floatingPanel === panel) return;
+    if (maximizedPanel === panel) return;
     if ((e.target as HTMLElement).closest('.float-controls')) return;
     detachStartRef.current = { x: e.clientX, y: e.clientY };
     setArmedDetachPanel(panel);
-  }, [floatingPanel]);
+  }, [floatingPanel, maximizedPanel]);
 
   const toggleFullscreen = useCallback(() => {
     if (!floatingPanel) return;
@@ -656,13 +764,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         };
         return true;
       } else if (preFullscreenRef.current) {
+        const restored = preFullscreenRef.current;
         setFloatPosition((prevPos) => ({
           ...prevPos,
-          [panel]: { x: preFullscreenRef.current!.x, y: preFullscreenRef.current!.y },
+          [panel]: { x: restored.x, y: restored.y },
         }));
         setFloatSize((prevSize) => ({
           ...prevSize,
-          [panel]: { width: preFullscreenRef.current!.width, height: preFullscreenRef.current!.height },
+          [panel]: { width: restored.width, height: restored.height },
         }));
         preFullscreenRef.current = null;
         return false;
@@ -726,6 +835,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           }));
           setFloatingPanel(panel);
           if (panel === 'preview') setPreviewZoom(1);
+          setIsFloatMinimized(false);
           setArmedDetachPanel(null);
         }
       }
@@ -1028,7 +1138,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (floatingPanel !== 'preview') return;
+      if (floatingPanel !== 'preview' || isFloatMinimized) return;
       if (event.ctrlKey || event.metaKey) {
         if (event.key === '=' || event.key === '+') {
           event.preventDefault();
@@ -1045,12 +1155,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [floatingPanel, zoomIn, zoomOut, resetZoom]);
+  }, [floatingPanel, isFloatMinimized, zoomIn, zoomOut, resetZoom]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!floatingPanel) return;
-      
+      if (!floatingPanel || isFloatMinimized) return;
+
       if (event.key === 'Escape' && !isFullscreen) {
         event.preventDefault();
         dockPanel();
@@ -1064,7 +1174,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [floatingPanel, isFullscreen, dockPanel, toggleFullscreen]);
+  }, [floatingPanel, isFullscreen, isFloatMinimized, dockPanel, toggleFullscreen]);
 
   useEffect(() => {
     if (!floatingPanel) {
@@ -1101,8 +1211,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#0a0512', color: '#d4d4d4' }}>
-      {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx */}
-      <StatsDebugPanel projectPath={initialFolder} />
+      {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx — triggered from the AI Assistant header's ⓘ button */}
+      <StatsDebugPanel projectPath={initialFolder} open={statsOpen} onClose={() => setStatsOpen(false)} />
       <AdaptiveToast
         currentCode={activeTab?.content ?? ''}
         language={activeTab ? getLanguage(activeTab.filename) : 'plaintext'}
@@ -1160,29 +1270,34 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
 </div>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleOpenFileDialog}
-            className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 hover:text-white flex items-center gap-1.5"
-            style={{ color: '#a7adc5' }}
-            title="Open File (Ctrl+O)"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-            </svg>
-            Open File
-          </button>
           <div className="w-px h-4" style={{ background: '#1a0a2e' }} />
           <button
             type="button"
-            onClick={() => setShowAI((prev) => !prev)}
+            onClick={handleTogglePreview}
+            className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
+            style={{
+              background: showPreview ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+              color: showPreview ? '#a855f7' : '#a7adc5',
+              border: showPreview ? '1px solid #a855f7' : 'none',
+            }}
+            title={floatingPanel === 'preview' && isFloatMinimized ? 'Restore floating Live Preview' : 'Toggle Live Preview'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleAI}
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: showAI ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
               color: showAI ? '#a855f7' : '#a7adc5',
               border: showAI ? '1px solid #a855f7' : 'none',
             }}
-            title="Toggle AI Assistant (Ctrl+Shift+A)"
+            title={floatingPanel === 'ai' && isFloatMinimized ? 'Restore floating AI Assistant' : 'Toggle AI Assistant (Ctrl+Shift+A)'}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -1369,7 +1484,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         </button>
 
         {/* Editor Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden relative">
           {tabs.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-3"
@@ -1393,19 +1508,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   Open a folder or file to get started
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleOpenFileDialog}
-                className="mt-1 text-sm px-5 py-1.5 rounded transition-all duration-200 hover:scale-105 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]"
-                style={{
-                  background: '#a855f7',
-                  color: '#ffffff',
-                  boxShadow: '0 2px 12px rgba(168, 85, 247, 0.15)',
-                  fontFamily: 'Segoe UI, sans-serif',
-                }}
-              >
-                Open File
-              </button>
             </div>
           ) : (
             <div className="flex-1 flex overflow-hidden">
@@ -1445,86 +1547,76 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 >
                   <div ref={rightPanelContentRef} className="flex flex-col h-full" style={{ width: rightPanelWidth }}>
                     {/* Live Preview Panel */}
-                    {floatingPanel !== 'preview' && (
+                    {showPreview && floatingPanel !== 'preview' && maximizedPanel !== 'preview' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
                         onMouseDown={handleDetachMouseDown('preview')}
                         style={{ cursor: armedDetachPanel === 'preview' ? 'grabbing' : 'grab' }}
                         title="Drag to detach the preview"
                       >
-                        <div
-                          className="flex items-center justify-between px-3 py-1.5 shrink-0"
-                          style={{
-                            background: '#12081f',
-                            borderBottom: '1px solid #1a0a2e',
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-medium" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-                              🔍 Live Preview
-                            </span>
+                        <ToolWindowHeader
+                          icon="🔍"
+                          title="Live Preview"
+                          mode="docked"
+                          isExpanded={false}
+                          onMinimize={() => setShowPreview(false)}
+                          onMaximize={() => toggleMaximize('preview')}
+                          onClose={() => setShowPreview(false)}
+                          leftExtra={
                             <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1a0a2e', color: '#6b7280' }}>
                               {isHtmlFile ? 'HTML' : 'Preview'}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-1">
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                            style={{ color: '#6b7280' }}
+                            title="Refresh preview (Ctrl+R)"
+                            onClick={() => { setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }}
+                          >
+                            ⟳
+                          </button>
+                          <button
+                            type="button"
+                            className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                            style={{ color: '#6b7280' }}
+                            title="Open in browser"
+                            onClick={() => showNotification('Opening in browser...', 'info')}
+                          >
+                            ↗
+                          </button>
+                          {(['desktop', 'tablet', 'mobile'] as DeviceType[]).map((d) => (
                             <button
+                              key={d}
                               type="button"
-                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                              style={{ color: '#6b7280' }}
-                              title="Refresh preview (Ctrl+R)"
-                              onClick={() => showNotification('Preview refreshed', 'success')}
+                              className="text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                              style={{
+                                background: previewDevice === d ? '#a78bfa' : 'transparent',
+                                color: previewDevice === d ? '#ffffff' : '#6b7280',
+                              }}
+                              title={`${d.charAt(0).toUpperCase()}${d.slice(1)} view`}
+                              onClick={() => setPreviewDevice(d)}
                             >
-                              ⟳
+                              {d === 'desktop' ? '🖥' : '📱'}
                             </button>
-                            <button
-                              type="button"
-                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                              style={{ color: '#6b7280' }}
-                              title="Open in browser"
-                              onClick={() => showNotification('Opening in browser...', 'info')}
-                            >
-                              ↗
-                            </button>
-                            <button
-                              type="button"
-                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                              style={{ color: '#6b7280' }}
-                              title="Desktop view"
-                            >
-                              🖥
-                            </button>
-                            <button
-                              type="button"
-                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                              style={{ color: '#6b7280' }}
-                              title="Tablet view"
-                            >
-                              📱
-                            </button>
-                            <button
-                              type="button"
-                              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                              style={{ color: '#6b7280' }}
-                              title="Mobile view"
-                            >
-                              📱
-                            </button>
-                          </div>
-                        </div>
+                          ))}
+                        </ToolWindowHeader>
                         <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
-                          <Preview 
+                          <Preview
                             key={activeTab?.path + previewHtml}
-                            html={previewHtml} 
-                            isHtmlFile={isHtmlFile} 
-                            zoom={1} 
+                            html={previewHtml}
+                            isHtmlFile={isHtmlFile}
+                            zoom={1}
+                            device={previewDevice}
+                            refreshKey={previewRefreshKey}
                           />
                         </div>
                       </div>
                     )}
 
                     {/* Draggable Divider */}
-                    {showAI && floatingPanel !== 'ai' && floatingPanel !== 'preview' && (
+                    {showAI && showPreview && floatingPanel !== 'ai' && floatingPanel !== 'preview' && maximizedPanel === null && (
                       <div
                         className="h-1 shrink-0 cursor-row-resize hover:bg-[#a855f7]/20 transition-colors"
                         style={{
@@ -1539,13 +1631,37 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     )}
 
                     {/* AI Assistant Panel */}
-                    {showAI && floatingPanel !== 'ai' && (
+                    {showAI && floatingPanel !== 'ai' && maximizedPanel !== 'ai' && (
                       <div
                         className="flex-1 flex flex-col min-h-0"
                         onMouseDown={handleDetachMouseDown('ai')}
                         style={{ cursor: armedDetachPanel === 'ai' ? 'grabbing' : 'grab' }}
                         title="Drag to detach the AI assistant"
                       >
+                        <ToolWindowHeader
+                          icon="✨"
+                          title="AI Assistant"
+                          mode="docked"
+                          isExpanded={false}
+                          onMinimize={() => setShowAI(false)}
+                          onMaximize={() => toggleMaximize('ai')}
+                          onClose={() => setShowAI(false)}
+                        >
+                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
+                          <span style={{ color: '#3d2b5e' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+                          <span style={{ color: '#3d2b5e' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#6b7280' }}>Issues: 0</span>
+                          <button
+                            type="button"
+                            onClick={() => setStatsOpen(true)}
+                            className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                            style={{ color: '#6b7280' }}
+                            title="Stats Debug"
+                          >
+                            ⓘ
+                          </button>
+                        </ToolWindowHeader>
                         <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
                           <AIPanel
                             selectedCode={selectedCode}
@@ -1563,7 +1679,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 {!isRightPanelCollapsed && (
                   <div
                     className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#a855f7]/40 transition-colors z-10"
-                    style={{ 
+                    style={{
                       background: isResizingRightPanel ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
                     }}
                     onMouseDown={handleRightPanelResizeStart}
@@ -1571,6 +1687,110 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   />
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Maximized Panel Overlay — full-bleeds over the editor + right column only;
+              sidebar, toolbar and the Git panel are siblings of this element and stay visible. */}
+          {maximizedPanel && (
+            <div className="absolute inset-0 flex flex-col z-50" style={{ background: '#0a0512' }}>
+              {maximizedPanel === 'preview' ? (
+                <>
+                  <ToolWindowHeader
+                    icon="🔍"
+                    title="Live Preview"
+                    mode="docked"
+                    isExpanded
+                    onMinimize={() => setShowPreview(false)}
+                    onMaximize={() => toggleMaximize('preview')}
+                    onClose={() => setShowPreview(false)}
+                    leftExtra={
+                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1a0a2e', color: '#6b7280' }}>
+                        {isHtmlFile ? 'HTML' : 'Preview'}
+                      </span>
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                      style={{ color: '#6b7280' }}
+                      title="Refresh preview (Ctrl+R)"
+                      onClick={() => { setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }}
+                    >
+                      ⟳
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                      style={{ color: '#6b7280' }}
+                      title="Open in browser"
+                      onClick={() => showNotification('Opening in browser...', 'info')}
+                    >
+                      ↗
+                    </button>
+                    {(['desktop', 'tablet', 'mobile'] as DeviceType[]).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        className="text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                        style={{
+                          background: previewDevice === d ? '#a78bfa' : 'transparent',
+                          color: previewDevice === d ? '#ffffff' : '#6b7280',
+                        }}
+                        title={`${d.charAt(0).toUpperCase()}${d.slice(1)} view`}
+                        onClick={() => setPreviewDevice(d)}
+                      >
+                        {d === 'desktop' ? '🖥' : '📱'}
+                      </button>
+                    ))}
+                  </ToolWindowHeader>
+                  <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+                    <Preview
+                      key={activeTab?.path + previewHtml}
+                      html={previewHtml}
+                      isHtmlFile={isHtmlFile}
+                      zoom={1}
+                      device={previewDevice}
+                      refreshKey={previewRefreshKey}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ToolWindowHeader
+                    icon="✨"
+                    title="AI Assistant"
+                    mode="docked"
+                    isExpanded
+                    onMinimize={() => setShowAI(false)}
+                    onMaximize={() => toggleMaximize('ai')}
+                    onClose={() => setShowAI(false)}
+                  >
+                    <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
+                    <span style={{ color: '#3d2b5e' }}>|</span>
+                    <span className="text-[10px]" style={{ color: '#6b7280' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+                    <span style={{ color: '#3d2b5e' }}>|</span>
+                    <span className="text-[10px]" style={{ color: '#6b7280' }}>Issues: 0</span>
+                    <button
+                      type="button"
+                      onClick={() => setStatsOpen(true)}
+                      className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+                      style={{ color: '#6b7280' }}
+                      title="Stats Debug"
+                    >
+                      ⓘ
+                    </button>
+                  </ToolWindowHeader>
+                  <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
+                    <AIPanel
+                      selectedCode={selectedCode}
+                      activeFilePath={activeTab?.path}
+                      onSaveTranslatedFile={handleSaveTranslatedFile}
+                      panelState={aiPanelState}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1866,7 +2086,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       </div>
 
       {/* Floating Preview */}
-      {floatingPanel === 'preview' && (
+      {floatingPanel === 'preview' && !isFloatMinimized && (
         <Rnd
           size={{ width: floatStyle.width, height: floatStyle.height }}
           position={{ x: floatStyle.x, y: floatStyle.y }}
@@ -1890,56 +2110,55 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             userSelect: 'none',
           }}
         >
-          <div
-            className="float-drag-handle flex items-center justify-between px-4 py-1.5 shrink-0 select-none"
-            style={{
-              background: '#1a0a2e',
-              borderBottom: '1px solid #2d1b4e',
-              cursor: isFullscreen ? 'default' : 'move',
-            }}
-            onDoubleClick={toggleFullscreen}
-            title="Drag to move • double-click to toggle fullscreen"
+          <ToolWindowHeader
+            icon="🔍"
+            title="Live Preview"
+            mode="floating"
+            isExpanded={isFullscreen}
+            dragHandleClassName="float-drag-handle"
+            onHeaderDoubleClick={toggleFullscreen}
+            onMinimize={() => setIsFloatMinimized(true)}
+            onMaximize={toggleFullscreen}
+            onClose={() => { dockPanel(); setShowPreview(false); }}
           >
-            <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-              <span>🔍</span> Live Preview
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom Out">➖</button>
-                <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom In">➕</button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Reset Zoom">⟲</button>
-              </div>
-              
-              {isFullscreen && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFullscreen();
-                  }}
-                  className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded"
-                  style={{ color: '#a855f7' }}
-                  title="Exit Fullscreen (F11 or Escape)"
-                >
-                  ⛶ Exit
-                </button>
-              )}
+            <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Refresh preview (Ctrl+R)">⟳</button>
+            {(['desktop', 'tablet', 'mobile'] as DeviceType[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPreviewDevice(d); }}
+                className="text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                style={{
+                  background: previewDevice === d ? '#a78bfa' : 'transparent',
+                  color: previewDevice === d ? '#ffffff' : '#6b7280',
+                }}
+                title={`${d.charAt(0).toUpperCase()}${d.slice(1)} view`}
+              >
+                {d === 'desktop' ? '🖥' : '📱'}
+              </button>
+            ))}
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomOut(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom Out">➖</button>
+              <span className="text-[10px]" style={{ color: '#6b7280', minWidth: '35px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); zoomIn(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Zoom In">➕</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); resetZoom(); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#6b7280' }} title="Reset Zoom">⟲</button>
             </div>
-          </div>
+          </ToolWindowHeader>
           <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
-            <Preview 
+            <Preview
               key={activeTab?.path + previewHtml}
-              html={previewHtml} 
-              isHtmlFile={isHtmlFile} 
-              zoom={previewZoom} 
+              html={previewHtml}
+              isHtmlFile={isHtmlFile}
+              zoom={previewZoom}
+              device={previewDevice}
+              refreshKey={previewRefreshKey}
             />
           </div>
         </Rnd>
       )}
 
       {/* Floating AI */}
-      {floatingPanel === 'ai' && (
+      {floatingPanel === 'ai' && !isFloatMinimized && (
         <Rnd
           size={{ width: floatStyle.width, height: floatStyle.height }}
           position={{ x: floatStyle.x, y: floatStyle.y }}
@@ -1963,45 +2182,32 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             userSelect: 'none',
           }}
         >
-          <div
-            className="float-drag-handle flex items-center justify-between px-4 py-1.5 shrink-0 select-none"
-            style={{
-              background: '#1a0a2e',
-              borderBottom: '1px solid #2d1b4e',
-              cursor: isFullscreen ? 'default' : 'move',
-            }}
-            onDoubleClick={toggleFullscreen}
-            title="Drag to move • double-click to toggle fullscreen"
+          <ToolWindowHeader
+            icon="✨"
+            title="AI Assistant"
+            mode="floating"
+            isExpanded={isFullscreen}
+            dragHandleClassName="float-drag-handle"
+            onHeaderDoubleClick={toggleFullscreen}
+            onMinimize={() => setIsFloatMinimized(true)}
+            onMaximize={toggleFullscreen}
+            onClose={() => { dockPanel(); setShowAI(false); }}
           >
-            <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-              <span>✨</span> AI Assistant
-            </span>
-            <div className="flex items-center gap-2 float-controls">
-              {isFullscreen && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFullscreen();
-                  }}
-                  className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded"
-                  style={{ color: '#a855f7' }}
-                  title="Exit Fullscreen (F11 or Escape)"
-                >
-                  ⛶ Exit
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => { dockPanel(); setShowAI(false); }}
-                className="text-[10px] hover:text-white transition-colors"
-                style={{ color: '#6b7280' }}
-                title="Close AI"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+            <span className="text-[10px]" style={{ color: '#6b7280' }}>Lines: {selectedCode.split('\n').length}</span>
+            <span style={{ color: '#3d2b5e' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#6b7280' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+            <span style={{ color: '#3d2b5e' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#6b7280' }}>Issues: 0</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setStatsOpen(true); }}
+              className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
+              style={{ color: '#6b7280' }}
+              title="Stats Debug"
+            >
+              ⓘ
+            </button>
+          </ToolWindowHeader>
           <div className="flex-1 overflow-hidden" style={{ background: '#0a0512' }}>
             <AIPanel
               selectedCode={selectedCode}
