@@ -1323,9 +1323,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onClick={handleTogglePreview}
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: showPreview ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+              background: showPreview ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
               color: showPreview ? '#a855f7' : '#a7adc5',
-              border: showPreview ? '1px solid #a855f7' : 'none',
+              border: showPreview ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title={floatingPanel === 'preview' && isFloatMinimized ? 'Restore floating Live Preview' : 'Toggle Live Preview'}
           >
@@ -1340,9 +1340,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onClick={handleToggleAI}
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: showAI ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+              background: showAI ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
               color: showAI ? '#a855f7' : '#a7adc5',
-              border: showAI ? '1px solid #a855f7' : 'none',
+              border: showAI ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title={floatingPanel === 'ai' && isFloatMinimized ? 'Restore floating AI Assistant' : 'Toggle AI Assistant (Ctrl+Shift+A)'}
           >
@@ -1356,9 +1356,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onClick={() => setShowGit((prev) => !prev)}
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: showGit ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+              background: showGit ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
               color: showGit ? '#a855f7' : '#a7adc5',
-              border: showGit ? '1px solid #a855f7' : 'none',
+              border: showGit ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title="Toggle Source Control (Ctrl+Shift+G)"
           >
@@ -1374,9 +1374,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             disabled={!activeTab}
             className="text-xs px-3 py-1 rounded font-medium transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
-              background: isRunning ? 'transparent' : 'rgba(168, 85, 247, 0.15)',
+              background: isRunning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(168, 85, 247, 0.15)',
               color: isRunning ? '#6b7280' : '#a855f7',
-              border: isRunning ? '1px solid #1a0a2e' : '1px solid rgba(168, 85, 247, 0.3)',
+              border: isRunning ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(168, 85, 247, 0.3)',
               cursor: !activeTab ? 'not-allowed' : 'pointer',
               opacity: !activeTab ? 0.4 : 1,
             }}
@@ -1404,7 +1404,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           <button
             type="button"
             className="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 hover:bg-[#a855f7]/10"
-            style={{ color: '#6b7280' }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              color: '#a7adc5',
+            }}
             aria-label="Settings"
             title="Settings"
           >

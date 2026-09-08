@@ -77,6 +77,60 @@ async function loadChildren(dirPath: string): Promise<TreeNode[]> {
   return sorted.map((entry) => ({ entry }));
 }
 
+// Inline "new file"/"new folder" name input, rendered as a row at a given
+// tree depth -- used both nested inside a folder's own children (TreeNodeRow)
+// and, for root-level creation, directly in Sidebar's top-level list.
+function CreateInputRow({
+  depth,
+  icon,
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  placeholder,
+  inputRef,
+}: {
+  depth: number;
+  icon: 'file' | 'folder';
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  placeholder: string;
+  inputRef: React.RefObject<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={inputRef}
+      className="flex items-center gap-1.5"
+      style={{ paddingLeft: `${depth * 12 + 8}px`, paddingRight: '8px', minHeight: '22px' }}
+    >
+      <i className={`codicon codicon-${icon}`} style={{ fontSize: '14px', opacity: 0.7, flexShrink: 0 }} />
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmit();
+          }
+          if (e.key === 'Escape') {
+            onCancel();
+          }
+        }}
+        placeholder={placeholder}
+        className="flex-1 min-w-0 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
+        style={{
+          color: '#a7adc5',
+          border: '1px solid #a855f7',
+          fontFamily: 'Segoe UI, sans-serif',
+        }}
+      />
+    </div>
+  );
+}
+
 interface TreeNodeRowProps {
   node: TreeNode;
   depth: number;
@@ -93,6 +147,19 @@ interface TreeNodeRowProps {
   onRenameCancel: () => void;
   selectedFolderPath?: string | null;
   onSelectFolder?: (path: string | null) => void;
+  creationTarget: string | null;
+  isCreatingFile: boolean;
+  isCreatingFolder: boolean;
+  newFileName: string;
+  newFolderName: string;
+  onNewFileNameChange: (value: string) => void;
+  onNewFolderNameChange: (value: string) => void;
+  onCreateFileSubmit: () => void;
+  onCreateFolderSubmit: () => void;
+  onCreateFileCancel: () => void;
+  onCreateFolderCancel: () => void;
+  fileInputRef: React.RefObject<HTMLDivElement>;
+  folderInputRef: React.RefObject<HTMLDivElement>;
 }
 
 function TreeNodeRow({
@@ -111,6 +178,19 @@ function TreeNodeRow({
   onRenameCancel,
   selectedFolderPath,
   onSelectFolder,
+  creationTarget,
+  isCreatingFile,
+  isCreatingFolder,
+  newFileName,
+  newFolderName,
+  onNewFileNameChange,
+  onNewFolderNameChange,
+  onCreateFileSubmit,
+  onCreateFolderSubmit,
+  onCreateFileCancel,
+  onCreateFolderCancel,
+  fileInputRef,
+  folderInputRef,
 }: TreeNodeRowProps) {
   const isActive = !node.entry.isDirectory && activeFilePath === node.entry.path;
   const isSelectedFolder = node.entry.isDirectory && selectedFolderPath === node.entry.path;
@@ -227,9 +307,46 @@ function TreeNodeRow({
               onRenameCancel={onRenameCancel}
               selectedFolderPath={selectedFolderPath}
               onSelectFolder={onSelectFolder}
+              creationTarget={creationTarget}
+              isCreatingFile={isCreatingFile}
+              isCreatingFolder={isCreatingFolder}
+              newFileName={newFileName}
+              newFolderName={newFolderName}
+              onNewFileNameChange={onNewFileNameChange}
+              onNewFolderNameChange={onNewFolderNameChange}
+              onCreateFileSubmit={onCreateFileSubmit}
+              onCreateFolderSubmit={onCreateFolderSubmit}
+              onCreateFileCancel={onCreateFileCancel}
+              onCreateFolderCancel={onCreateFolderCancel}
+              fileInputRef={fileInputRef}
+              folderInputRef={folderInputRef}
             />
           ))}
-          {node.children.length === 0 && (
+          {creationTarget === node.entry.path && isCreatingFile && (
+            <CreateInputRow
+              depth={depth + 1}
+              icon="file"
+              value={newFileName}
+              onChange={onNewFileNameChange}
+              onSubmit={onCreateFileSubmit}
+              onCancel={onCreateFileCancel}
+              placeholder={`file in ${node.entry.name}`}
+              inputRef={fileInputRef}
+            />
+          )}
+          {creationTarget === node.entry.path && isCreatingFolder && (
+            <CreateInputRow
+              depth={depth + 1}
+              icon="folder"
+              value={newFolderName}
+              onChange={onNewFolderNameChange}
+              onSubmit={onCreateFolderSubmit}
+              onCancel={onCreateFolderCancel}
+              placeholder={`folder in ${node.entry.name}`}
+              inputRef={folderInputRef}
+            />
+          )}
+          {node.children.length === 0 && !(creationTarget === node.entry.path && (isCreatingFile || isCreatingFolder)) && (
             <div
               style={{
                 paddingLeft: `${(depth + 1) * 12 + 8}px`,
@@ -271,6 +388,11 @@ export default function Sidebar({
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  // Captured explicitly at the moment New File/New Folder is triggered (toolbar
+  // or context menu) so the later Enter-keypress creation call doesn't have to
+  // re-read selectedFolder -- which can be stale if a setSelectedFolder from the
+  // same click hasn't flushed yet.
+  const [creationTarget, setCreationTarget] = useState<string | null>(null);
   const gitStatusMap = buildGitStatusMap(gitStatusFiles ?? [], folderName ?? undefined);
 
   const fileInputRef = useRef<HTMLDivElement>(null);
@@ -360,34 +482,98 @@ export default function Sidebar({
     setTree(updated);
   };
 
-  const handleCreateFile = async () => {
+  // Forces a node open (loading its children if needed) rather than toggling
+  // it, so re-expanding an ancestor chain after a reload never accidentally
+  // collapses a folder that was already open.
+  const openNode = async (targetPath: string, nodes: TreeNode[]): Promise<TreeNode[]> => {
+    return Promise.all(
+      nodes.map(async (node) => {
+        if (node.entry.path === targetPath) {
+          const children = node.children ?? await loadChildren(node.entry.path);
+          return { ...node, isOpen: true, children };
+        }
+        if (node.children) {
+          return { ...node, children: await openNode(targetPath, node.children) };
+        }
+        return node;
+      })
+    );
+  };
+
+  // Absolute paths of every directory between root and target, root-nearest
+  // first, e.g. root=C:\proj target=C:\proj\src\ui -> [C:\proj\src, C:\proj\src\ui].
+  const getAncestorChain = (root: string, target: string): string[] => {
+    if (target === root || !target.startsWith(root)) return [];
+    const sep = target.includes('\\') ? '\\' : '/';
+    const rest = target.slice(root.length).replace(/^[\\/]/, '');
+    if (!rest) return [];
+    const chain: string[] = [];
+    let current = root;
+    rest.split(sep).filter(Boolean).forEach((segment) => {
+      current = `${current}${sep}${segment}`;
+      chain.push(current);
+    });
+    return chain;
+  };
+
+  // Reloads the tree from root (loadFolder always collapses everything back to
+  // root-level, discarding prior isOpen state) and re-expands every ancestor
+  // directory down to targetFolder, so a newly created item is visible without
+  // the user having to manually re-expand the path to it.
+  const reloadAndExpand = async (targetFolder: string) => {
+    if (!folderName) return;
+    let nodes = await loadChildren(folderName);
+    const chain = getAncestorChain(folderName, targetFolder);
+    for (let i = 0; i < chain.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      nodes = await openNode(chain[i], nodes);
+    }
+    setTree(nodes);
+  };
+
+  // Same ancestor-chain expansion as reloadAndExpand, but applied in-place to
+  // the current tree (no reload) -- used before showing the create input, so
+  // a collapsed target folder (or one whose ancestor got collapsed since it
+  // was selected) has a rendered children-slot for the input to appear in.
+  const expandChainInPlace = async (targetFolder: string) => {
+    if (!folderName || targetFolder === folderName) return;
+    let nodes = tree;
+    const chain = getAncestorChain(folderName, targetFolder);
+    for (let i = 0; i < chain.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      nodes = await openNode(chain[i], nodes);
+    }
+    setTree(nodes);
+  };
+
+  const handleCreateFile = async (targetFolder?: string | null) => {
     if (!newFileName.trim()) return;
-    
-    const targetFolder = selectedFolder || folderName;
-    if (!targetFolder) return;
-    
-    const sep = targetFolder.includes('\\') ? '\\' : '/';
-    const filePath = `${targetFolder}${sep}${newFileName.trim()}`;
+
+    const resolvedTarget = targetFolder ?? selectedFolder ?? folderName;
+    if (!resolvedTarget) return;
+
+    const sep = resolvedTarget.includes('\\') ? '\\' : '/';
+    const filePath = `${resolvedTarget}${sep}${newFileName.trim()}`;
     const result = await window.fileSystem.createFile(filePath);
     if (result.success) {
       setNewFileName('');
       setIsCreatingFile(false);
-      await loadFolder(folderName!);
-      setSelectedFolder(targetFolder);
+      await reloadAndExpand(resolvedTarget);
+      setSelectedFolder(resolvedTarget);
     }
   };
 
-  const handleCreateFolder = async () => {
+  const handleCreateFolder = async (targetFolder?: string | null) => {
     if (!newFolderName.trim()) return;
-    
-    const targetFolder = selectedFolder || folderName;
-    if (!targetFolder) return;
-    
-    const sep = targetFolder.includes('\\') ? '\\' : '/';
-    const folderPath = `${targetFolder}${sep}${newFolderName.trim()}`;
+
+    const resolvedTarget = targetFolder ?? selectedFolder ?? folderName;
+    if (!resolvedTarget) return;
+
+    const sep = resolvedTarget.includes('\\') ? '\\' : '/';
+    const folderPath = `${resolvedTarget}${sep}${newFolderName.trim()}`;
     const result = await window.fileSystem.createFolder(folderPath);
     if (result.success) {
-      await loadFolder(folderName!);
+      await reloadAndExpand(resolvedTarget);
       setSelectedFolder(folderPath);
     }
     setIsCreatingFolder(false);
@@ -434,15 +620,25 @@ export default function Sidebar({
     }
   };
 
-  const handleNewFileClick = () => {
+  const handleNewFileClick = async (targetFolder?: string) => {
+    const resolved = targetFolder ?? selectedFolder ?? folderName;
     setIsCreatingFolder(false);
     setNewFolderName('');
+    setCreationTarget(resolved);
+    if (resolved) {
+      await expandChainInPlace(resolved);
+    }
     setIsCreatingFile(true);
   };
 
-  const handleNewFolderClick = () => {
+  const handleNewFolderClick = async (targetFolder?: string) => {
+    const resolved = targetFolder ?? selectedFolder ?? folderName;
     setIsCreatingFile(false);
     setNewFileName('');
+    setCreationTarget(resolved);
+    if (resolved) {
+      await expandChainInPlace(resolved);
+    }
     setIsCreatingFolder(true);
   };
 
@@ -452,6 +648,18 @@ export default function Sidebar({
 
   const selectedFolderName = selectedFolder
     ? selectedFolder.split(/[\\/]/).pop() ?? selectedFolder
+    : null;
+
+  const creationTargetName = creationTarget
+    ? creationTarget.split(/[\\/]/).pop() ?? creationTarget
+    : null;
+
+  // Where "New File"/"New Folder" in the context menu should create: the
+  // right-clicked directory itself, or a file's parent directory.
+  const contextMenuTargetDir = contextMenu
+    ? contextMenu.entry.isDirectory
+      ? contextMenu.entry.path
+      : findParentDir(contextMenu.entry.path)
     : null;
 
   return (
@@ -464,7 +672,7 @@ export default function Sidebar({
         <div className="flex items-center gap-0.5">
           <button
             type="button"
-            onClick={handleNewFileClick}
+            onClick={() => void handleNewFileClick()}
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
             style={{ color: '#a855f7' }}
             title="New File"
@@ -476,7 +684,7 @@ export default function Sidebar({
           </button>
           <button
             type="button"
-            onClick={handleNewFolderClick}
+            onClick={() => void handleNewFolderClick()}
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#a855f7]/20 transition-colors"
             style={{ color: '#a855f7' }}
             title="New Folder"
@@ -522,70 +730,36 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* Create File Input */}
-      {isCreatingFile && (
-        <div ref={fileInputRef} className="px-3 py-1 flex gap-1 shrink-0 items-center">
-          <i className="codicon codicon-file" style={{ fontSize: '14px', opacity: 0.7 }} />
-          <input
-            autoFocus
-            value={newFileName}
-            onChange={(e) => setNewFileName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleCreateFile();
-              }
-              if (e.key === 'Escape') {
-                setIsCreatingFile(false);
-                setNewFileName('');
-              }
-            }}
-            placeholder={`file in ${selectedFolderName || 'root'}`}
-            className="flex-1 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
-            style={{ 
-              color: '#a7adc5', 
-              border: '1px solid #a855f7',
-              fontFamily: 'Segoe UI, sans-serif',
-            }}
-          />
-        </div>
-      )}
-
-      {/* Create Folder Input */}
-      {isCreatingFolder && (
-        <div ref={folderInputRef} className="px-3 py-1 flex gap-1 shrink-0 items-center">
-          <i className="codicon codicon-folder" style={{ fontSize: '14px', opacity: 0.7 }} />
-          <input
-            autoFocus
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void handleCreateFolder();
-              }
-              if (e.key === 'Escape') {
-                setIsCreatingFolder(false);
-                setNewFolderName('');
-              }
-            }}
-            placeholder={`folder in ${selectedFolderName || 'root'}`}
-            className="flex-1 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
-            style={{ 
-              color: '#a7adc5', 
-              border: '1px solid #a855f7',
-              fontFamily: 'Segoe UI, sans-serif',
-            }}
-          />
-        </div>
-      )}
-
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         {tree.length === 0 && !folderName && (
           <div className="px-3 py-4 text-xs text-center" style={{ color: '#2d1b4e' }}>
             Open a folder to start
           </div>
+        )}
+        {folderName && creationTarget === folderName && isCreatingFile && (
+          <CreateInputRow
+            depth={0}
+            icon="file"
+            value={newFileName}
+            onChange={setNewFileName}
+            onSubmit={() => void handleCreateFile(creationTarget)}
+            onCancel={() => { setIsCreatingFile(false); setNewFileName(''); }}
+            placeholder={`file in ${creationTargetName || 'root'}`}
+            inputRef={fileInputRef}
+          />
+        )}
+        {folderName && creationTarget === folderName && isCreatingFolder && (
+          <CreateInputRow
+            depth={0}
+            icon="folder"
+            value={newFolderName}
+            onChange={setNewFolderName}
+            onSubmit={() => void handleCreateFolder(creationTarget)}
+            onCancel={() => { setIsCreatingFolder(false); setNewFolderName(''); }}
+            placeholder={`folder in ${creationTargetName || 'root'}`}
+            inputRef={folderInputRef}
+          />
         )}
         {tree.map((node) => (
           <TreeNodeRow
@@ -600,6 +774,7 @@ export default function Sidebar({
             onContextMenu={(e, entry) => {
               e.preventDefault();
               e.stopPropagation();
+              setSelectedFolder(entry.isDirectory ? entry.path : findParentDir(entry.path));
               setContextMenu({ x: e.clientX, y: e.clientY, entry });
             }}
             renamingPath={renamingPath}
@@ -609,6 +784,19 @@ export default function Sidebar({
             onRenameCancel={() => setRenamingPath(null)}
             selectedFolderPath={selectedFolder}
             onSelectFolder={setSelectedFolder}
+            creationTarget={creationTarget}
+            isCreatingFile={isCreatingFile}
+            isCreatingFolder={isCreatingFolder}
+            newFileName={newFileName}
+            newFolderName={newFolderName}
+            onNewFileNameChange={setNewFileName}
+            onNewFolderNameChange={setNewFolderName}
+            onCreateFileSubmit={() => void handleCreateFile(creationTarget)}
+            onCreateFolderSubmit={() => void handleCreateFolder(creationTarget)}
+            onCreateFileCancel={() => { setIsCreatingFile(false); setNewFileName(''); }}
+            onCreateFolderCancel={() => { setIsCreatingFolder(false); setNewFolderName(''); }}
+            fileInputRef={fileInputRef}
+            folderInputRef={folderInputRef}
           />
         ))}
       </div>
@@ -649,6 +837,30 @@ export default function Sidebar({
               Open
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedFolder(contextMenuTargetDir);
+              void handleNewFileClick(contextMenuTargetDir ?? undefined);
+              setContextMenu(null);
+            }}
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+          >
+            New File
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedFolder(contextMenuTargetDir);
+              void handleNewFolderClick(contextMenuTargetDir ?? undefined);
+              setContextMenu(null);
+            }}
+            className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+          >
+            New Folder
+          </button>
           {contextMenu.entry.isDirectory && (
             <button
               type="button"

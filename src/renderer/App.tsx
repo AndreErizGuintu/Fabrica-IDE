@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import logo from '../assets/log.png';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
@@ -6,7 +6,8 @@ import EditorLayout from './screens/EditorLayout';
 // one usage in MainMenu below when the real mirror panel lands.
 import MirrorTest from './components/MirrorTest';
 
-type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates';
+type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates' | 'settings';
+type SettingsCategory = 'general' | 'appearance' | 'editor';
 
 type RecentProject = {
   name: string;
@@ -87,7 +88,7 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function TemplatesScreen({ onBack }: { onBack: () => void }) {
+function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings: () => void }) {
   const templates = [
     { id: 'web', name: 'Web App Blank', description: 'Templates included', icon: '🌐' },
     { id: 'mobile', name: 'Mobile App', description: 'Templates included', icon: '📱' },
@@ -127,6 +128,7 @@ function TemplatesScreen({ onBack }: { onBack: () => void }) {
             <span>📋</span> Templates
           </div>
           <button
+            onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
@@ -200,12 +202,292 @@ function TemplatesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function NewProjectScreen({ 
-  onBack, 
-  onCreate 
-}: { 
-  onBack: () => void; 
+// ============================================================
+// SETTINGS SCREEN
+// ============================================================
+function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex items-center rounded-full transition-colors duration-200 shrink-0"
+      style={{
+        width: '38px',
+        height: '20px',
+        backgroundColor: checked ? '#a855f7' : '#3d2b5e',
+      }}
+    >
+      <span
+        className="absolute rounded-full bg-white transition-transform duration-200"
+        style={{
+          width: '14px',
+          height: '14px',
+          top: '3px',
+          left: '3px',
+          transform: checked ? 'translateX(18px)' : 'translateX(0)',
+        }}
+      />
+    </button>
+  );
+}
+
+function SettingsRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-6 py-3"
+      style={{ borderBottom: '1px solid #2d1b4e' }}
+    >
+      <div>
+        <div className="text-sm font-medium" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+          {label}
+        </div>
+        <div className="text-xs mt-0.5" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+          {description}
+        </div>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function GeneralSettingsCategory() {
+  return (
+    <div className="text-sm" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+      General settings are coming soon.
+    </div>
+  );
+}
+
+function AppearanceSettingsCategory() {
+  return (
+    <div className="text-sm" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+      Appearance settings (theme, etc.) are coming soon.
+    </div>
+  );
+}
+
+function EditorSettingsCategory() {
+  const [fontSize, setFontSize] = useState(14);
+  const [tabSize, setTabSize] = useState(2);
+  const [indentType, setIndentType] = useState<'spaces' | 'tabs'>('spaces');
+  const [wordWrap, setWordWrap] = useState(true);
+  const [lineNumbers, setLineNumbers] = useState(true);
+
+  return (
+    <div className="max-w-2xl">
+      <SettingsRow label="Font Size" description="Adjust the text size in the code editor.">
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={10}
+            max={24}
+            step={1}
+            value={fontSize}
+            onChange={(e) => setFontSize(Number(e.target.value))}
+            className="w-40"
+            style={{ accentColor: '#a855f7' }}
+          />
+          <span
+            className="text-xs w-10 text-right"
+            style={{ color: '#d4d4d4', fontFamily: 'Space Mono, monospace' }}
+          >
+            {fontSize}px
+          </span>
+        </div>
+      </SettingsRow>
+
+      <SettingsRow label="Tab Size" description="Number of spaces a tab character represents.">
+        <select
+          value={tabSize}
+          onChange={(e) => setTabSize(Number(e.target.value))}
+          className="px-3 py-1.5 rounded text-sm outline-none"
+          style={{
+            backgroundColor: '#1a0a2e',
+            color: '#d4d4d4',
+            border: '1px solid #3d2b5e',
+            fontFamily: 'Segoe UI, sans-serif',
+          }}
+        >
+          <option value={2}>2</option>
+          <option value={4}>4</option>
+          <option value={8}>8</option>
+        </select>
+      </SettingsRow>
+
+      <SettingsRow label="Indentation" description="Insert spaces or tab characters when pressing Tab.">
+        <div className="flex rounded overflow-hidden" style={{ border: '1px solid #3d2b5e' }}>
+          {(['spaces', 'tabs'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setIndentType(option)}
+              className="px-3 py-1.5 text-xs font-medium capitalize transition-colors"
+              style={{
+                backgroundColor: indentType === option ? '#a855f7' : '#1a0a2e',
+                color: indentType === option ? '#ffffff' : '#a7adc5',
+                fontFamily: 'Segoe UI, sans-serif',
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </SettingsRow>
+
+      <SettingsRow label="Word Wrap" description="Wrap long lines to fit the editor width.">
+        <ToggleSwitch checked={wordWrap} onChange={setWordWrap} label="Word Wrap" />
+      </SettingsRow>
+
+      <SettingsRow label="Line Numbers" description="Show line numbers in the editor gutter.">
+        <ToggleSwitch checked={lineNumbers} onChange={setLineNumbers} label="Line Numbers" />
+      </SettingsRow>
+    </div>
+  );
+}
+
+function SettingsScreen({ onBack }: { onBack: () => void }) {
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
+
+  const categories: { id: SettingsCategory; label: string }[] = [
+    { id: 'general', label: 'General' },
+    { id: 'appearance', label: 'Appearance' },
+    { id: 'editor', label: 'Editor' },
+  ];
+
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+      <div
+        className="flex flex-col w-48 lg:w-56 shrink-0"
+        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+      >
+        <div className="flex items-center gap-2 px-4 py-4">
+          <img src={logo} alt="Fabrica" className="w-6 h-6" />
+          <span className="text-base font-semibold hidden sm:block" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            Fabrica
+          </span>
+        </div>
+
+        <nav className="flex flex-col gap-0.5 px-2 mt-2">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+          >
+            <span>📁</span> Projects
+          </button>
+          <button
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+          >
+            <span>📋</span> Templates
+          </button>
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded"
+            style={{
+              backgroundColor: 'rgba(168, 85, 247, 0.15)',
+              color: '#a855f7',
+              fontFamily: 'Segoe UI, sans-serif',
+              cursor: 'default',
+            }}
+          >
+            <span>⚙️</span> Settings
+          </div>
+        </nav>
+
+        <div className="mt-auto px-3 py-3">
+          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
+            Offline model
+          </div>
+          <div
+            className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
+            style={{
+              backgroundColor: '#1a0a2e',
+              color: '#d4d4d4',
+              fontFamily: 'Segoe UI, sans-serif',
+              border: '1px solid #3d2b5e',
+            }}
+          >
+            <span>llama-3.1-8b</span>
+            <span style={{ color: '#a7adc5' }}>▼</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="flex flex-col w-44 shrink-0"
+        style={{ backgroundColor: '#1a0a2e', borderRight: '1px solid #3d2b5e' }}
+      >
+        <div className="px-4 py-4">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+            Categories
+          </span>
+        </div>
+        <nav className="flex flex-col gap-0.5 px-2">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => setActiveCategory(category.id)}
+              className="w-full text-left px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
+              style={{
+                backgroundColor: activeCategory === category.id ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                color: activeCategory === category.id ? '#a855f7' : '#a7adc5',
+                fontFamily: 'Segoe UI, sans-serif',
+              }}
+            >
+              {category.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div
+          className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
+          style={{ borderBottom: '1px solid #3d2b5e' }}
+        >
+          <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            {categories.find((c) => c.id === activeCategory)?.label}
+          </h1>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+          {activeCategory === 'general' && <GeneralSettingsCategory />}
+          {activeCategory === 'appearance' && <AppearanceSettingsCategory />}
+          {activeCategory === 'editor' && <EditorSettingsCategory />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewProjectScreen({
+  onBack,
+  onCreate,
+  onOpenSettings,
+}: {
+  onBack: () => void;
   onCreate: (projectName: string, template: string) => void;
+  onOpenSettings: () => void;
 }) {
   const [projectName, setProjectName] = useState('my-fabrica-project');
   const [selectedTemplate, setSelectedTemplate] = useState('web');
@@ -254,6 +536,7 @@ function NewProjectScreen({
             <span>📋</span> Templates
           </div>
           <button
+            onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
@@ -404,18 +687,20 @@ function NewProjectScreen({
   );
 }
 
-function MainMenu({ 
-  recentProjects, 
+function MainMenu({
+  recentProjects,
   onNewProject,
   onOpenProject,
   onOpenFolder,
   onCloneRepository,
-}: { 
+  onOpenSettings,
+}: {
   recentProjects: RecentProject[];
   onNewProject: () => void;
   onOpenProject: (project: RecentProject) => void;
   onOpenFolder: () => void;
   onCloneRepository: (url: string) => Promise<{ success: boolean; error?: string }>;
+  onOpenSettings: () => void;
 }) {
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [cloneUrl, setCloneUrl] = useState('');
@@ -484,6 +769,7 @@ function MainMenu({
             <span>📋</span> Templates
           </div>
           <button
+            onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
             style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
@@ -830,12 +1116,22 @@ export default function App() {
       <NewProjectScreen
         onBack={() => setScreen('main')}
         onCreate={handleCreateProject}
+        onOpenSettings={() => setScreen('settings')}
       />
     );
   }
 
   if (screen === 'templates') {
-    return <TemplatesScreen onBack={() => setScreen('main')} />;
+    return (
+      <TemplatesScreen
+        onBack={() => setScreen('main')}
+        onOpenSettings={() => setScreen('settings')}
+      />
+    );
+  }
+
+  if (screen === 'settings') {
+    return <SettingsScreen onBack={() => setScreen('main')} />;
   }
 
   // screen === 'main'
@@ -846,6 +1142,7 @@ export default function App() {
       onOpenProject={(project) => openEditor(project.path)}
       onOpenFolder={handleOpenFolder}
       onCloneRepository={handleCloneRepository}
+      onOpenSettings={() => setScreen('settings')}
     />
   );
 }
