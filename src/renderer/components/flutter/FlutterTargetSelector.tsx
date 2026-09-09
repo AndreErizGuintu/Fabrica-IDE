@@ -78,7 +78,8 @@ export default function FlutterTargetSelector({
         disabled
         className="flex items-center gap-2 pl-3 pr-2 py-1 rounded-l text-sm font-medium opacity-40"
         style={{
-          background: 'rgba(96, 165, 250, 0.05)',
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
           color: '#6b7280',
           cursor: 'not-allowed',
         }}
@@ -102,11 +103,14 @@ export default function FlutterTargetSelector({
             ? 'A process is already running'
             : selected ? `Run on ${selected.name}` : 'No target selected'
         }
-        className="flex items-center gap-2 pl-3 pr-2 py-1 rounded-l text-sm font-medium transition-colors hover:bg-white/10"
+        className="flex items-center gap-2 pl-3 pr-2 py-1 rounded-l text-sm font-medium transition-colors hover:bg-[#a855f7]/10"
         style={{
-          background: isRunning ? 'transparent' : 'rgba(96, 165, 250, 0.15)',
-          color: isRunning ? '#6b7280' : '#60a5fa',
-          border: isRunning ? '1px solid #2d2d3a' : 'none',
+          background: 'rgba(255, 255, 255, 0.05)',
+          color: isRunning ? '#6b7280' : '#a7adc5',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRight: 'none',
           cursor: disabled || !selected || isRunning ? 'not-allowed' : 'pointer',
         }}
       >
@@ -121,12 +125,11 @@ export default function FlutterTargetSelector({
         disabled={disabled || targets.length === 0 || isRunning}
         title="Select run target"
         aria-label="Select run target"
-        className="flex items-center px-1.5 py-1 rounded-r text-sm transition-colors hover:bg-white/10"
+        className="flex items-center px-1.5 py-1 rounded-r text-sm transition-colors hover:bg-[#a855f7]/10"
         style={{
-          background: isRunning ? 'transparent' : 'rgba(96, 165, 250, 0.15)',
-          color: isRunning ? '#6b7280' : '#60a5fa',
-          border: isRunning ? '1px solid #2d2d3a' : 'none',
-          borderLeft: isRunning ? 'none' : '1px solid rgba(96, 165, 250, 0.3)',
+          background: 'rgba(255, 255, 255, 0.05)',
+          color: isRunning ? '#6b7280' : '#a7adc5',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
           cursor: disabled || targets.length === 0 || isRunning ? 'not-allowed' : 'pointer',
         }}
       >

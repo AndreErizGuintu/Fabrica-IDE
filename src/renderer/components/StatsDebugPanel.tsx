@@ -4,6 +4,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
+/**
+ * TEMPORARY debug-only UI for inspecting the Stats layer (src/main/stats.ts).
+ * Not part of the product UI — safe to delete before defense.
+ */
+
 type CurrentSession = {
   projectPath: string;
   sessionStart: string;
@@ -28,13 +33,13 @@ type SessionHistoryEntry = {
 };
 
 type StatsSample = { t: number; sessionCalls: number; sessionRuns: number };
-const MAX_SAMPLES = 60;
+const MAX_SAMPLES = 60; // ~60s rolling window at the existing 1s poll
 
 const CHART_GRID = '#333';
 const CHART_AXIS = '#888';
-const COLOR_CALLS = '#a855f7';
-const COLOR_RUNS = '#38bdf8';
-const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6'];
+const COLOR_CALLS = '#a855f7'; // brand purple
+const COLOR_RUNS = '#38bdf8';  // sky, distinct on the dark card
+const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6']; // scenarios 1..4
 const chartTooltip: React.CSSProperties = { background: '#1a1a1a', border: '1px solid #333', color: '#eee', fontSize: 12 };
 
 function formatSeconds(s: number | null): string {
@@ -119,10 +124,11 @@ const tdStyle: React.CSSProperties = {
 
 interface StatsDebugPanelProps {
   projectPath?: string;
+  open: boolean;
+  onClose: () => void;
 }
 
-export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
-  const [open, setOpen] = useState(false);
+export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDebugPanelProps) {
   const [currentSession, setCurrentSession] = useState<CurrentSession>(null);
   const [aggregate, setAggregate] = useState<Aggregate | null>(null);
   const [history, setHistory] = useState<SessionHistoryEntry[]>([]);
@@ -148,15 +154,12 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
     }
   };
 
-  const handleOpen = () => {
-    setOpen(true);
-    setSamples([]);
-    loadData();
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-  };
+  useEffect(() => {
+    if (open) {
+      setSamples([]);
+      loadData();
+    }
+  }, [open]);
 
   // Live-refresh while open
   useEffect(() => {
@@ -195,41 +198,9 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
   const scenarioData = ([1, 2, 3, 4] as const).map((n) => ({ name: `Scenario ${n}`, value: fireCounts[n] }));
   const scenarioTotal = scenarioData.reduce((sum, d) => sum + d.value, 0);
 
-  return (
-    <>
-      {/* Clickable ⓘ Icon */}
-      <button
-        type="button"
-        onClick={handleOpen}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'transparent',
-          border: 'none',
-          color: '#6b7280',
-          cursor: 'pointer',
-          fontSize: '13px',
-          padding: '2px 6px',
-          borderRadius: '4px',
-          transition: 'all 0.2s ease',
-          fontFamily: 'Segoe UI, sans-serif',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = '#a78bfa';
-          e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = '#6b7280';
-          e.currentTarget.style.background = 'transparent';
-        }}
-        title="Click to view Stats Debug"
-      >
-        ⓘ
-      </button>
+  if (!open) return null;
 
-      {/* Stats Dialog */}
-      {open && (
+  return (
         <div
           style={{
             position: 'fixed',
@@ -279,7 +250,7 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
               </button>
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={onClose}
                 style={{
                   padding: '4px 10px',
                   background: '#4c1d1d',
@@ -300,8 +271,9 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
               <pre style={{ color: '#f87171', whiteSpace: 'pre-wrap' }}>{error}</pre>
             )}
 
-            {/* Charts */}
+            {/* ── Charts ─────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
+              {/* Activity Over Time — line, from rolling buffer */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Activity Over Time</h3>
                 <ResponsiveContainer width="100%" height={200}>
@@ -318,6 +290,7 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
                 {samples.length === 0 && <p style={{ color: '#888', margin: '4px 0 0' }}>Collecting… (samples every 1s while open)</p>}
               </div>
 
+              {/* Actions / Events — latest calls vs runs, two bars */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Actions / Events (current)</h3>
                 <ResponsiveContainer width="100%" height={200}>
@@ -333,6 +306,7 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
                 </ResponsiveContainer>
               </div>
 
+              {/* Activity Categories — scenario-fire distribution doughnut */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Activity Categories (scenario fires)</h3>
                 {scenarioTotal > 0 ? (
@@ -350,6 +324,7 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
                 )}
               </div>
 
+              {/* Session Status — badge, not a chart */}
               <div style={sectionStyle}>
                 <h3 style={headingStyle}>Session Status</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
@@ -552,7 +527,5 @@ export default function StatsDebugPanel({ projectPath }: StatsDebugPanelProps) {
             </div>
           </div>
         </div>
-      )}
-    </>
   );
 }

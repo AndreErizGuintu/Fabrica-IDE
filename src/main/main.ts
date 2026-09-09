@@ -12,7 +12,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { exec, execFile, spawn } from 'child_process';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, dialog, Menu, globalShortcut } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import * as pty from 'node-pty';
@@ -780,8 +780,25 @@ const createWindow = async () => {
     mainWindow = null;
   });
 
-  const menuBuilder = new MenuBuilder(mainWindow);
-  menuBuilder.buildMenu();
+  // Native OS menu removed -- the custom MenuBarComponent in EditorLayout.tsx
+  // duplicates File/View/Help. Of the old template's accelerators, only F11
+  // (real OS-level fullscreen) was load-bearing with no fallback anywhere
+  // else in the app; it's preserved below via a direct global shortcut.
+  // Ctrl+O was already a dead no-op, Ctrl+W closed the whole window (likely
+  // wrong, not a regression), and dev-only Ctrl+R conflicted with -- and is
+  // superseded by -- the renderer's own Preview-refresh Ctrl+R binding.
+  Menu.setApplicationMenu(null);
+  if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
+    // buildMenu() used to wire this as a side effect; call it directly now
+    // that the menu itself is gone, so the dev "Inspect element" right-click
+    // context menu doesn't silently disappear.
+    new MenuBuilder(mainWindow).setupDevelopmentEnvironment();
+  }
+
+  globalShortcut.register('F11', () => {
+    if (!mainWindow) return;
+    mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  });
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -819,6 +836,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // Matches the F11 registration in createWindow() -- global shortcuts are
+  // process-wide and must be released or they'd leak across app restarts.
+  globalShortcut.unregisterAll();
 });
 
 // ===========================================================================
