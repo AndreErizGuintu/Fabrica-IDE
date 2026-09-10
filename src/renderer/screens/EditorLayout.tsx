@@ -18,6 +18,7 @@ import FlutterTargetSelector, {
   isAndroidPlatform,
 } from '../components/flutter/FlutterTargetSelector';
 import MirrorButton from '../components/mirror/MirrorButton';
+import AndroidSdkButton from '../components/AndroidSdkButton';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -989,17 +990,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
   }, [openFileInTab]);
 
+  const activeTabIndexRef = useRef(activeTabIndex);
+  activeTabIndexRef.current = activeTabIndex;
+
   const handleEditorChange = useCallback((value: string | undefined) => {
-    if (!activeTab) return;
     window.stats?.activity();
-    setTabs((prev) =>
-      prev.map((tab, index) =>
-        index === activeTabIndex
-          ? { ...tab, content: value ?? '', isDirty: true }
-          : tab,
-      ),
-    );
-  }, [activeTab, activeTabIndex]);
+    setTabs((prev) => {
+      const index = activeTabIndexRef.current;
+      if (index < 0 || index >= prev.length) return prev;
+
+      const content = value ?? '';
+      if (prev[index].content === content) return prev;
+
+      const next = prev.slice();
+      next[index] = { ...next[index], content, isDirty: true };
+      return next;
+    });
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!activeTab || !activeTab.path) return;
@@ -1401,6 +1408,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           {isAndroidPlatform(flutterTarget.platform) && (
             <MirrorButton udid={flutterTarget.id} />
           )}
+          <AndroidSdkButton />
           <button
             type="button"
             className="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 hover:bg-[#a855f7]/10"
@@ -1567,6 +1575,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 <Editor
                   language={getLanguage(tabs[activeTabIndex].filename)}
                   filename={activeTab!.filename}
+                  path={activeTab!.path}
                   value={activeTab!.content}
                   onChange={handleEditorChange}
                   onSelectionChange={(s) => setSelectedCode(s)}

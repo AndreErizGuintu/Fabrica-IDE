@@ -21,6 +21,7 @@ import { generate, shutdownWorker } from './llm';
 import { ensureRequiredImports } from './translateImports';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
+import { registerAndroidSdkIpc } from './androidSdk';
 import { resolveHtmlPath } from './util';
 import {
   startSession,
@@ -705,6 +706,16 @@ ipcMain.handle('mirror:start', async () => startMirrorServer());
 
 ipcMain.handle('mirror:stop', async () => stopMirrorServer());
 
+// Android SDK first-run fetch. Unlike mirroring, this module registers its own
+// handlers: its renderer contract is a stateful protocol (streamed progress, a
+// license round-trip, cancel) rather than the two one-line calls above, so the
+// channel names live next to the code that serves them.
+//
+// Registration only -- nothing here starts a download. The fetch is student-
+// initiated and APK-building is the only feature that depends on it; mirroring
+// and every other part of the IDE work with the SDK absent.
+registerAndroidSdkIpc();
+
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
@@ -942,44 +953,6 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
       payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : `Prompt: Translate the selected code into ${payload.language}.`,
       payload.selectedCode.trim() ? `Selected code:\n${payload.selectedCode.trim()}` : '',
     ].filter(Boolean).join('\n\n');
-
-    // TEMPORARY DIAGNOSTIC LOGGING - remove or gate before defense.
-    //
-    // Added 2026-08-10 for the RECURRENCE of the missing-import bug (JS
-    // Math.min/Math.max -> Dart dropping `import 'dart:math'`) after the 08-08
-    // systemPrompt delivery fix. Unconditional, matching this file's existing
-    // diagnostic convention (see the codeInference:request handler above) --
-    // main.ts has no debug-flag const like codeInference.ts's CI_DEBUG or
-    // llmWorker.ts's LOCK_DEBUG, and this needs to be on without anyone having
-    // to remember to enable it.
-    //
-    // Printed VERBATIM and unabridged -- deliberately not run through a
-    // preview()-style truncator like codeInference.ts uses for code, because
-    // the clause being checked for ("you MUST include the necessary import
-    // statement(s)") sits in the MIDDLE of the system prompt, which is exactly
-    // what truncation would hide.
-    //
-    // SCOPE, read this before drawing a conclusion from it: this proves what
-    // main SENDS, not what the model RECEIVES. Since the utility-process split
-    // those are different places -- the system prompt now crosses a
-    // MessagePort and is applied to the LlamaChatSession constructor over in
-    // worker/llmWorker.ts, which is the exact layer the 08-08 delivery bug
-    // lived in. An intact instruction here narrows the fault to the worker
-    // side or to the model itself; it does not clear delivery.
-    console.log(
-      `[ai:translate] --- system prompt sent to the model ---\n${systemPrompt}\n--- end system prompt ---`,
-    );
-    console.log(
-      `[ai:translate] --- user prompt sent to the model ---\n${userPrompt}\n--- end user prompt ---`,
-    );
-    console.log(
-      '[ai:translate] calling generate()',
-      `language=${payload.language}`,
-      `systemPromptLen=${systemPrompt.length}`,
-      `userPromptLen=${userPrompt.length}`,
-      // One-glance answer to "did the import clause survive into this call?"
-      `hasImportInstruction=${/you MUST include the necessary import statement/i.test(systemPrompt)}`,
-    );
 
     let fullText = '';
     const result = await generate(userPrompt, systemPrompt, (chunk: string) => {

@@ -88,19 +88,40 @@
       "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/.erb/mocks/fileMock.js",
       "\\.(css|less|sass|scss)$": "identity-obj-proxy"
     },
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "modulePathIgnorePatterns": [
+      "asar-extracted",
+      "release[\\\\/]build",
+      "release[\\\\/]app[\\\\/]dist",
+      "resources[\\\\/]runtimes",
+      "test_windows_app",
+      "\\.erb[\\\\/]dll"
+    ],
     "setupFiles": [
-      "./.erb/scripts/check-build-exists.ts"
+      "./.erb/scripts/jest-setup.ts"
     ],
     "testEnvironment": "jsdom",
     "testEnvironmentOptions": {
       "url": "http://localhost/"
     },
     "testPathIgnorePatterns": [
-      "release/app/dist",
-      ".erb/dll"
+      "[\\\\/]node_modules[\\\\/]",
+      "asar-extracted",
+      "release[\\\\/]build",
+      "release[\\\\/]app[\\\\/]dist",
+      "resources[\\\\/]runtimes",
+      "test_windows_app",
+      "\\.erb[\\\\/]dll"
     ],
     "transform": {
-      "\\.(ts|tsx|js|jsx)$": "ts-jest"
+      "\\.(ts|tsx|js|jsx)$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.test.json"
+        }
+      ]
     }
   },
   "dependencies": {
@@ -119,7 +140,7 @@
     "react-dom": "^19.0.0",
     "react-rnd": "^10.5.3",
     "react-router-dom": "^7.3.0",
-    "recharts": "^3.2.1"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
@@ -209,7 +230,7 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        "dir"
       ]
     },
     "directories": {

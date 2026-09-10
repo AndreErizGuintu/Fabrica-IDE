@@ -36,7 +36,7 @@ import config from './codeInference.config.json';
 // behind a real debug setting, before defense. Flip this one flag to silence
 // the whole file.
 // ===========================================================================
-const CI_DEBUG = true;
+const CI_DEBUG = false;
 
 const ciLog = (...args: unknown[]) => {
   if (CI_DEBUG) console.log('[CodeInference:core]', ...args);

@@ -73,6 +73,60 @@ type MirrorBridge = {
   stop: () => Promise<void>;
 };
 
+// Android SDK first-run fetch. APK BUILDING ONLY -- mirroring a phone has no
+// dependency on this, so a renderer must never gate device features in general
+// on `installed`.
+type AndroidSdkStatus = {
+  installed: boolean;
+  sdkRoot: string;
+  adbPath: string;
+  missing: string[];
+  adbVersion?: string;
+  error?: string;
+};
+
+type AndroidSdkPhase =
+  | 'idle'
+  | 'preflight'
+  | 'downloading'
+  | 'extracting'
+  | 'licenses'
+  | 'awaiting-license'
+  | 'installing'
+  | 'done'
+  | 'cancelled'
+  | 'error';
+
+// One discriminated union over one channel. `percent` is per-PHASE, not overall
+// -- 100% during 'downloading' means the command-line tools archive finished,
+// not that setup is done.
+type AndroidSdkProgress = {
+  phase: AndroidSdkPhase;
+  message: string;
+  percent?: number;
+  receivedBytes?: number;
+  totalBytes?: number;
+  packageName?: string;
+  // Present on 'awaiting-license': the verbatim text sdkmanager printed. Render
+  // it as-is. The install is genuinely blocked until respondToLicense() is
+  // called, so this is a real decision point, not a notification.
+  licenseText?: string;
+  error?: string;
+};
+
+type AndroidSdkBridge = {
+  check: () => Promise<AndroidSdkStatus>;
+  // Resolves when the whole flow settles; progress arrives via onProgress.
+  // Rejects only on a programming error -- expected failures (offline, no disk
+  // space, declined licenses) resolve with `error` set and an 'error' progress
+  // event, because they are states the UI should render, not exceptions.
+  fetch: () => Promise<AndroidSdkStatus>;
+  cancel: () => Promise<void>;
+  getProgress: () => Promise<AndroidSdkProgress>;
+  respondToLicense: (accepted: boolean) => Promise<void>;
+  onProgress: (cb: (progress: AndroidSdkProgress) => void) => () => void;
+};
+
 declare global {
   // eslint-disable-next-line no-unused-vars
   interface Window {
@@ -136,6 +190,7 @@ declare global {
     };
     flutter: FlutterBridge;
     mirror: MirrorBridge;
+    androidSdk: AndroidSdkBridge;
     git: {
       init: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       status: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;

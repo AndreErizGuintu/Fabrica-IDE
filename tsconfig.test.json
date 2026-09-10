@@ -1,0 +1,46 @@
+{
+  /*
+   * Jest / ts-jest ONLY. Wired in via package.json -> jest.transform.
+   *
+   * Why tests need their own tsconfig: the base tsconfig.json sets
+   * "include": ["src/main/**\/*"], and ts-jest seeds its TypeScript program
+   * from that file list. src/main/worker/llmWorkerBootstrap.ts deliberately
+   * imports and exports NOTHING -- that is load-bearing, since an import would
+   * be hoisted above the crash handlers it exists to install first -- which
+   * makes it a global SCRIPT rather than a module in TypeScript's eyes. Every
+   * top-level const in it therefore becomes a GLOBAL declaration, including
+   * its `const describe = (err: unknown): string => ...` error formatter. That
+   * shadowed Jest's own global `describe`, so every suite failed to compile
+   * with "TS2554: Expected 1 arguments, but got 2".
+   *
+   * Limiting "include" to the test files fixes that at the root: the program is
+   * seeded from the tests, and everything they actually use
+   * (translateImports.ts, App.tsx, ...) is pulled in transitively as a real
+   * module. llmWorkerBootstrap.ts is imported by no test, so it never enters
+   * the program and its script-scope globals cannot leak into one.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* The base pins rootDir to ./src/main; src/__tests__ would be "not under
+     * rootDir" (TS6059). */
+    "rootDir": ".",
+    /* The base emits to .erb/dll for the DLL build. Tests never emit. */
+    "noEmit": true,
+    "incremental": false,
+    /* App.test.tsx renders JSX; the tests run in jsdom. */
+    "jsx": "react-jsx",
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "types": ["jest", "node"]
+  },
+  /* The ambient declaration files are listed explicitly: a .d.ts that declares
+   * globals (preload.d.ts is what types every `window.fileSystem` /
+   * `window.store` / `window.git` bridge) is never pulled in transitively by an
+   * import, so App.test.tsx cannot type-check without them. These two are safe
+   * to add where llmWorkerBootstrap.ts is not -- they declare types only, and
+   * define no value that could shadow a Jest global. */
+  "include": [
+    "src/__tests__/**/*",
+    "src/renderer/preload.d.ts",
+    "src/renderer/assets.d.ts"
+  ]
+}

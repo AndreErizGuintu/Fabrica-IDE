@@ -119,6 +119,25 @@ contextBridge.exposeInMainWorld('mirror', {
   stop: () => ipcRenderer.invoke('mirror:stop'),
 });
 
+contextBridge.exposeInMainWorld('androidSdk', {
+  check: () => ipcRenderer.invoke('android:check'),
+  fetch: () => ipcRenderer.invoke('android:fetch'),
+  cancel: () => ipcRenderer.invoke('android:cancel'),
+  // Lets a renderer that mounted mid-install (a reload, a panel opened late)
+  // paint the current state immediately instead of waiting for the next event.
+  getProgress: () => ipcRenderer.invoke('android:getProgress'),
+  // The student's explicit answer to the license currently on screen. Nothing
+  // in main writes an acceptance without this call having been made first.
+  respondToLicense: (accepted: boolean) =>
+    ipcRenderer.invoke('android:licenseRespond', accepted),
+  // Same unsubscribe-returning shape as git.onProgress and terminal.onOutput.
+  onProgress: (cb: (progress: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, progress: unknown) => cb(progress);
+    ipcRenderer.on('android:sdk-progress', handler);
+    return () => ipcRenderer.removeListener('android:sdk-progress', handler);
+  },
+});
+
 contextBridge.exposeInMainWorld('git', {
   init: (cwd: string) => ipcRenderer.invoke('git:init', cwd),
   status: (cwd: string) => ipcRenderer.invoke('git:status', cwd),
