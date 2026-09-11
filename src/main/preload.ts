@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'terminal:output' | 'terminal:exit' | 'adaptive:suggest';
+export type Channels = 'ipc-example' | 'ai:token' | 'git:progress' | 'flutter:create-progress' | 'terminal:output' | 'terminal:exit' | 'terminal:run-complete' | 'adaptive:suggest';
 
 const electronHandler = {
   ipcRenderer: {
@@ -68,13 +68,26 @@ contextBridge.exposeInMainWorld('stats', {
     ipcRenderer.invoke('stats:getSessionHistory', projectPath),
 });
 
+// Mirrors Suggestion in adaptiveEngine.ts. Kept as a local type rather than an
+// import so preload stays free of main-process module graph.
+type AdaptiveSuggestionPayload = {
+  scenario: 1 | 2 | 3 | 4 | 5;
+  message: string;
+  offersHint: boolean;
+  autoDismissSeconds: number;
+  errorCategory?: string;
+  offersCorrection?: boolean;
+};
+
 contextBridge.exposeInMainWorld('adaptive', {
   dismiss: () => ipcRenderer.send('adaptive:dismiss'),
   requestHint: (payload: { code: string; language: string }) =>
     ipcRenderer.invoke('adaptive:hint', payload),
+  requestCorrection: (payload: { code: string; language: string }) =>
+    ipcRenderer.invoke('adaptive:correction', payload),
   getDebugState: () => ipcRenderer.invoke('adaptive:getDebugState'),
-  onSuggest: (cb: (suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) => void) => {
-    const handler = (_event: IpcRendererEvent, suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) =>
+  onSuggest: (cb: (suggestion: AdaptiveSuggestionPayload) => void) => {
+    const handler = (_event: IpcRendererEvent, suggestion: AdaptiveSuggestionPayload) =>
       cb(suggestion);
     ipcRenderer.on('adaptive:suggest', handler);
     return () => ipcRenderer.removeListener('adaptive:suggest', handler);
@@ -93,6 +106,7 @@ contextBridge.exposeInMainWorld('codeInference', {
 
 contextBridge.exposeInMainWorld('terminal', {
   run: (payload: { language: string; path: string; deviceId?: string }) => ipcRenderer.invoke('terminal:run', payload),
+  create: (payload?: { cwd?: string }) => ipcRenderer.invoke('terminal:create', payload ?? {}),
   hotReload: () => ipcRenderer.invoke('terminal:hotReload'),
   input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),
   stop: (sessionId: string) => ipcRenderer.invoke('terminal:stop', { sessionId }),
@@ -108,10 +122,32 @@ contextBridge.exposeInMainWorld('terminal', {
     ipcRenderer.on('terminal:exit', handler);
     return () => ipcRenderer.removeListener('terminal:exit', handler);
   },
+  // Fires once per captured run, when the exit sentinel is seen. Same
+  // unsubscribe-returning shape as onOutput/onExit. No current consumer — this
+  // is the surface future error classification reads from.
+  onRunComplete: (
+    cb: (payload: { sessionId: string; exitCode: number; output: string; truncated: boolean }) => void,
+  ) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: { sessionId: string; exitCode: number; output: string; truncated: boolean },
+    ) => cb(payload);
+    ipcRenderer.on('terminal:run-complete', handler);
+    return () => ipcRenderer.removeListener('terminal:run-complete', handler);
+  },
 });
 
 contextBridge.exposeInMainWorld('flutter', {
   listDevices: () => ipcRenderer.invoke('flutter:listDevices'),
+  createProject: (projectPath: string, projectName: string) =>
+    ipcRenderer.invoke('flutter:createProject', projectPath, projectName),
+  // Same unsubscribe-returning shape as git.onProgress — `flutter create` is
+  // long-running, so the New Project dialog tails this for live output.
+  onCreateProgress: (cb: (data: string) => void) => {
+    const handler = (_event: IpcRendererEvent, data: string) => cb(data);
+    ipcRenderer.on('flutter:create-progress', handler);
+    return () => ipcRenderer.removeListener('flutter:create-progress', handler);
+  },
 });
 
 contextBridge.exposeInMainWorld('mirror', {
@@ -148,6 +184,14 @@ contextBridge.exposeInMainWorld('git', {
   log: (cwd: string) => ipcRenderer.invoke('git:log', cwd),
   statusFiles: (cwd: string) => ipcRenderer.invoke('git:statusFiles', cwd),
   clone: (url: string, targetDir: string) => ipcRenderer.invoke('git:clone', url, targetDir),
+  remoteAdd: (cwd: string, url: string) => ipcRenderer.invoke('git:remote-add', cwd, url),
+  addFile: (cwd: string, filePath: string) => ipcRenderer.invoke('git:addFile', cwd, filePath),
+  unstageFile: (cwd: string, filePath: string) =>
+    ipcRenderer.invoke('git:unstageFile', cwd, filePath),
+  remotes: (cwd: string) => ipcRenderer.invoke('git:remotes', cwd),
+  currentBranch: (cwd: string) => ipcRenderer.invoke('git:currentBranch', cwd),
+  pushSetUpstream: (cwd: string, branch: string) =>
+    ipcRenderer.invoke('git:pushSetUpstream', cwd, branch),
   onProgress: (cb: (data: string) => void) => {
     const handler = (_event: IpcRendererEvent, data: string) => cb(data);
     ipcRenderer.on('git:progress', handler);

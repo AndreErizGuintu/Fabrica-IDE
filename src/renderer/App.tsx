@@ -2,11 +2,12 @@ import { useEffect, useState, ReactNode } from 'react';
 import logo from '../assets/log.png';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
+import StatsDashboard from './screens/StatsDashboard';
 // TEMPORARY: throwaway device-mirroring test UI. Remove this import and its
 // one usage in MainMenu below when the real mirror panel lands.
 import MirrorTest from './components/MirrorTest';
 
-type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates' | 'settings';
+type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates' | 'settings' | 'stats-dashboard';
 type SettingsCategory = 'general' | 'appearance' | 'editor';
 
 type RecentProject = {
@@ -20,6 +21,183 @@ function getPathSeparator(targetPath: string): string {
 
 function getLastPathSegment(targetPath: string): string {
   return targetPath.split(/[\\/]/).filter(Boolean).pop() ?? targetPath;
+}
+
+// ============================================================
+// PROJECT TEMPLATES
+// ============================================================
+// Each template id is the language key, and every generated entry point is
+// named/placed to match what main.ts's getRunConfig() expects for that
+// language, so Run works immediately after creation with no extra steps:
+//
+//   web    -> index.html  getRunConfig returns { html: true } — no process is
+//             spawned, it renders in the Live Preview panel instead.
+//   csharp -> Program.cs  run as `dotnet run <file>`  (file-level, .NET 10
+//             file-based app — no .csproj, confirmed against the bundled
+//             dotnet 10.0.302 in resources/runtimes/dotnet)
+//   flutter-> lib/main.dart, but Flutter is PROJECT-level (`flutter run -d
+//             windows`, cwd = folder) and is launched from the Flutter target
+//             selector in the editor toolbar, NOT the Run button.
+type TemplateId = 'web' | 'csharp' | 'flutter';
+
+type ProjectTemplate = {
+  id: TemplateId;
+  name: string;
+  description: string;
+  icon: string;
+};
+
+const PROJECT_TEMPLATES: ProjectTemplate[] = [
+  {
+    id: 'web',
+    name: 'Web',
+    description: 'index.html, style.css and script.js. Static files, no build step.',
+    icon: '🌐',
+  },
+  {
+    id: 'csharp',
+    name: 'C#',
+    description: 'Program.cs using top-level statements. No .csproj needed on .NET 10.',
+    icon: '🟦',
+  },
+  {
+    id: 'flutter',
+    name: 'Flutter (Windows)',
+    description: 'Full Windows desktop preview app via flutter create. Desktop only.',
+    icon: '💙',
+  },
+];
+
+// Mirrors flutter_tools' own potentialValidPackageName() (create_base.dart):
+// lowercase, a leading digit gets an underscore prefix, hyphens become
+// underscores. Everything else outside [a-z0-9_] is folded to '_' too, which is
+// a superset of flutter's rule and keeps the name a legal Dart identifier.
+// Used for the Flutter --project-name, which rejects the wizard's own default
+// ("my-fabrica-project") otherwise.
+function toDartPackageName(projectName: string): string {
+  let name = projectName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  if (/^[0-9]/.test(name)) name = `_${name}`;
+  return name || 'fabrica_project';
+}
+
+// Files written directly to disk via window.fileSystem.writeFile for every
+// template except Flutter, which has to shell out to the real tool instead.
+function getScaffoldFiles(
+  template: TemplateId,
+  projectName: string,
+): { relativePath: string; content: string }[] {
+  switch (template) {
+    case 'web':
+      // Three plain static files, no build step and no package.json. The
+      // stylesheet/script are linked by relative path, which is what a browser
+      // (and a preview that serves from the project folder) expects. NOTE: the
+      // current Live Preview panel feeds the editor buffer to iframe.srcdoc, so
+      // it renders index.html's markup but does NOT resolve these two relative
+      // links — see the report; fixing that lives in Preview.tsx/EditorLayout.
+      return [
+        {
+          relativePath: 'index.html',
+          content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${projectName}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Hello, World!</h1>
+    <p>Edit index.html, style.css and script.js to get started.</p>
+    <button id="greet-button" type="button">Click me</button>
+    <p id="output"></p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+`,
+        },
+        {
+          relativePath: 'style.css',
+          content: `/* style.css - styles for this Fabrica web project. */
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: #f5f5f5;
+  color: #222;
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+h1 {
+  margin-bottom: 8px;
+}
+
+button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: #6c5ce7;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #5b4bd6;
+}
+`,
+        },
+        {
+          relativePath: 'script.js',
+          content: `// script.js - behaviour for this Fabrica web project.
+
+console.log('Hello from script.js');
+
+const button = document.getElementById('greet-button');
+const output = document.getElementById('output');
+let clicks = 0;
+
+button.addEventListener('click', () => {
+  clicks += 1;
+  output.textContent = \`You clicked \${clicks} time\${clicks === 1 ? '' : 's'}.\`;
+});
+`,
+        },
+      ];
+
+    case 'csharp':
+      // Top-level statements, no Main() and no .csproj: .NET 10 file-based
+      // apps let `dotnet run Program.cs` compile a lone .cs file. The explicit
+      // `using System;` is redundant under implicit usings but costs nothing
+      // and removes the one way this could fail to compile.
+      return [
+        {
+          relativePath: 'Program.cs',
+          content: `// Program.cs - entry point for this Fabrica C# project.
+// Press Run to execute it (Fabrica runs: dotnet run Program.cs).
+// .NET 10 file-based app: a single .cs file, no .csproj required.
+
+using System;
+
+string Greet(string name) => $"Hello, {name}!";
+
+Console.WriteLine(Greet("World"));
+`,
+        },
+      ];
+
+    case 'flutter':
+    default:
+      // Handled by window.flutter.createProject(), not by file writes.
+      return [];
+  }
 }
 
 function useRecentProjects() {
@@ -394,12 +572,6 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
           >
             <span>📁</span> Projects
           </button>
-          <button
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
-          >
-            <span>📋</span> Templates
-          </button>
           <div
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded"
             style={{
@@ -484,23 +656,24 @@ function NewProjectScreen({
   onBack,
   onCreate,
   onOpenSettings,
+  busy,
+  progress,
 }: {
   onBack: () => void;
-  onCreate: (projectName: string, template: string) => void;
+  onCreate: (projectName: string, template: TemplateId, remoteUrl: string) => void;
   onOpenSettings: () => void;
+  busy: boolean;
+  progress: string;
 }) {
   const [projectName, setProjectName] = useState('my-fabrica-project');
-  const [selectedTemplate, setSelectedTemplate] = useState('web');
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>('web');
+  const [remoteUrl, setRemoteUrl] = useState('');
 
-  const templates = [
-    { id: 'web', name: 'Web App Blank', description: 'Templates included', icon: '🌐' },
-    { id: 'mobile', name: 'Mobile App', description: 'Templates included', icon: '📱' },
-    { id: 'backend', name: 'Backend/API', description: 'Templates included', icon: '⚙️' },
-  ];
+  const templates = PROJECT_TEMPLATES;
 
   const handleCreate = () => {
-    if (projectName.trim()) {
-      onCreate(projectName.trim(), selectedTemplate);
+    if (projectName.trim() && !busy) {
+      onCreate(projectName.trim(), selectedTemplate, remoteUrl.trim());
     }
   };
 
@@ -527,13 +700,13 @@ function NewProjectScreen({
           </button>
           <div
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded"
-            style={{ 
-              color: '#ffffff', 
+            style={{
+              color: '#ffffff',
               fontFamily: 'Segoe UI, sans-serif',
               cursor: 'default',
             }}
           >
-            <span>📋</span> Templates
+            <span>✨</span> New Project
           </div>
           <button
             onClick={onOpenSettings}
@@ -544,23 +717,6 @@ function NewProjectScreen({
           </button>
         </nav>
 
-        <div className="mt-auto px-3 py-3">
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
-            Offline model
-          </div>
-          <div
-            className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
-            style={{
-              backgroundColor: '#1a0a2e',
-              color: '#d4d4d4',
-              fontFamily: 'Segoe UI, sans-serif',
-              border: '1px solid #3d2b5e',
-            }}
-          >
-            <span>llama-3.1-8b</span>
-            <span style={{ color: '#a7adc5' }}>▼</span>
-          </div>
-        </div>
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -576,7 +732,7 @@ function NewProjectScreen({
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="max-w-3xl mx-auto">
             <p className="text-sm mb-6" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
-              Choose a template to get started.
+              Choose a language to scaffold a starter project you can run straight away.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
@@ -660,24 +816,74 @@ function NewProjectScreen({
               />
             </div>
 
+            <div className="mb-6">
+              <label className="text-sm font-medium block mb-1.5" style={{ color: '#d4d4d4', fontFamily: 'Segoe UI, sans-serif' }}>
+                Git remote URL (optional)
+              </label>
+              <input
+                type="text"
+                value={remoteUrl}
+                onChange={(e) => setRemoteUrl(e.target.value)}
+                placeholder="https://github.com/user/repo.git"
+                className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
+                style={{
+                  backgroundColor: '#1a0a2e',
+                  color: '#d4d4d4',
+                  border: '1px solid #3d2b5e',
+                  fontFamily: 'Segoe UI, sans-serif',
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreate();
+                }}
+              />
+              <p className="text-xs mt-1.5" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+                Leave blank to just initialise a local repository. If filled, the
+                project is also wired to this remote as “origin” and gets an
+                initial commit.
+              </p>
+            </div>
+
+            {progress && (
+              <pre
+                className="mb-4 p-3 rounded text-xs overflow-y-auto whitespace-pre-wrap"
+                style={{
+                  backgroundColor: '#120A1F',
+                  color: '#a7adc5',
+                  border: '1px solid #3d2b5e',
+                  maxHeight: '160px',
+                  fontFamily: 'Space Mono, monospace',
+                }}
+              >
+                {progress}
+              </pre>
+            )}
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={onBack}
+                disabled={busy}
                 className="px-4 py-2 text-sm rounded transition-colors hover:bg-white/5"
-                style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+                style={{
+                  color: '#a7adc5',
+                  fontFamily: 'Segoe UI, sans-serif',
+                  opacity: busy ? 0.5 : 1,
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
+                disabled={busy || !projectName.trim()}
                 className="px-4 py-2 text-sm font-medium rounded transition-colors hover:bg-purple-500"
                 style={{
-                  backgroundColor: '#a855f7',
-                  color: '#ffffff',
+                  backgroundColor: busy || !projectName.trim() ? '#3d2b5e' : '#a855f7',
+                  color: busy || !projectName.trim() ? '#a7adc5' : '#ffffff',
                   fontFamily: 'Segoe UI, sans-serif',
+                  cursor: busy || !projectName.trim() ? 'not-allowed' : 'pointer',
                 }}
               >
-                Create Project
+                {busy ? 'Creating...' : 'Create Project'}
               </button>
             </div>
           </div>
@@ -694,6 +900,7 @@ function MainMenu({
   onOpenFolder,
   onCloneRepository,
   onOpenSettings,
+  onOpenStats,
 }: {
   recentProjects: RecentProject[];
   onNewProject: () => void;
@@ -701,6 +908,7 @@ function MainMenu({
   onOpenFolder: () => void;
   onCloneRepository: (url: string) => Promise<{ success: boolean; error?: string }>;
   onOpenSettings: () => void;
+  onOpenStats: () => void;
 }) {
   const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [cloneUrl, setCloneUrl] = useState('');
@@ -758,16 +966,13 @@ function MainMenu({
           >
             <span>📁</span> Projects
           </button>
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded"
-            style={{ 
-              color: '#ffffff', 
-              fontFamily: 'Segoe UI, sans-serif',
-              cursor: 'default',
-            }}
+          <button
+            onClick={onOpenStats}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
+            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
           >
-            <span>📋</span> Templates
-          </div>
+            <span>📊</span> Stats
+          </button>
           <button
             onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
@@ -1034,6 +1239,8 @@ export default function App() {
   // ===== ALL HOOKS AT TOP LEVEL - UNCONDITIONALLY =====
   const [screen, setScreen] = useState<Screen>('splash');
   const [editorFolder, setEditorFolder] = useState<string | undefined>(undefined);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createProgress, setCreateProgress] = useState('');
   const { recentProjects, load: loadRecentProjects, add: addRecentProject } = useRecentProjects();
 
   // All useEffect hooks at top level
@@ -1045,7 +1252,21 @@ export default function App() {
     if (screen === 'main' || screen === 'new-project' || screen === 'templates') {
       void loadRecentProjects();
     }
+    // Clear any output left over from a previous (possibly failed) create so
+    // the wizard doesn't reopen showing a stale log.
+    if (screen === 'new-project') {
+      setCreateProgress('');
+    }
   }, [screen]);
+
+  // `flutter create` is the only scaffold that streams; everything else reports
+  // per-file. Subscribed once for the life of the app rather than per-create so
+  // no output is missed between the invoke and the first chunk.
+  useEffect(() => {
+    return window.flutter.onCreateProgress((data) => {
+      setCreateProgress((prev) => prev + data);
+    });
+  }, []);
 
   // All callback functions
   const openEditor = (folderPath?: string) => {
@@ -1053,7 +1274,11 @@ export default function App() {
     setScreen('editor');
   };
 
-  const handleCreateProject = async (projectName: string, template: string) => {
+  const handleCreateProject = async (
+    projectName: string,
+    template: TemplateId,
+    remoteUrl: string,
+  ) => {
     const folderPath = await window.fileSystem.openFolder();
     if (!folderPath) return;
 
@@ -1061,15 +1286,92 @@ export default function App() {
     const normalizedLocation = folderPath.endsWith(sep) ? folderPath.slice(0, -1) : folderPath;
     const fullPath = `${normalizedLocation}${sep}${projectName}`;
 
-    const result = await window.fileSystem.createFolder(fullPath);
-    if (!result.success) {
-      console.error('Failed to create project folder:', result.error);
-      return;
-    }
+    setCreateBusy(true);
+    setCreateProgress('');
+    const log = (line: string) => setCreateProgress((prev) => prev + line);
 
-    await window.store.addRecentProject({ name: projectName, path: fullPath });
-    setScreen('main');
-    openEditor(fullPath);
+    try {
+      // Guards an existing folder: fs:createFolder refuses when the path is
+      // already there, which is what stops a scaffold from landing on top of
+      // someone's existing project.
+      const result = await window.fileSystem.createFolder(fullPath);
+      if (!result.success) {
+        log(`✗ Could not create project folder: ${result.error ?? 'unknown error'}\n`);
+        return;
+      }
+
+      if (template === 'flutter') {
+        log('Running flutter create (this can take a while)...\n');
+        const created = await window.flutter.createProject(
+          fullPath,
+          toDartPackageName(projectName),
+        );
+        if (!created.success) {
+          log(`\n✗ flutter create failed: ${created.error ?? 'see output above'}\n`);
+          return;
+        }
+        log('\n✓ Flutter project created.\n');
+      } else {
+        const files = getScaffoldFiles(template, projectName);
+
+        // fs:writeFile is a plain writeFileSync — it will not create missing
+        // parent directories, so any nested path needs its folder made first.
+        const dirs = new Set<string>();
+        files.forEach((file) => {
+          const idx = file.relativePath.lastIndexOf('/');
+          if (idx > 0) dirs.add(file.relativePath.slice(0, idx));
+        });
+        // eslint-disable-next-line no-restricted-syntax
+        for (const dir of Array.from(dirs)) {
+          // eslint-disable-next-line no-await-in-loop
+          await window.fileSystem.createFolder(`${fullPath}${sep}${dir.split('/').join(sep)}`);
+        }
+
+        // Sequential rather than Promise.all so a failure reports the specific
+        // file that broke, and the progress log stays in a readable order.
+        // eslint-disable-next-line no-restricted-syntax
+        for (const file of files) {
+          const target = `${fullPath}${sep}${file.relativePath.split('/').join(sep)}`;
+          // eslint-disable-next-line no-await-in-loop
+          const written = await window.fileSystem.writeFile(target, file.content);
+          if (!written.success) {
+            log(`✗ Failed to write ${file.relativePath}: ${written.error ?? 'unknown error'}\n`);
+            return;
+          }
+          log(`✓ ${file.relativePath}\n`);
+        }
+      }
+
+      // Every new project gets a local repo. A remote is only touched when the
+      // student actually supplied a URL — a blank field stops at `git init`,
+      // with no origin and no commit forced.
+      const initResult = await window.git.init(fullPath);
+      log(initResult.success ? '✓ git init\n' : `✗ git init: ${initResult.error ?? ''}\n`);
+
+      if (initResult.success && remoteUrl) {
+        const remoteResult = await window.git.remoteAdd(fullPath, remoteUrl);
+        log(
+          remoteResult.success
+            ? '✓ git remote add origin\n'
+            : `✗ git remote add: ${remoteResult.error ?? ''}\n`,
+        );
+
+        if (remoteResult.success) {
+          await window.git.add(fullPath);
+          const commitResult = await window.git.commit(fullPath, 'Initial commit');
+          log(
+            commitResult.success
+              ? '✓ Initial commit\n'
+              : `✗ Initial commit: ${commitResult.error ?? ''}\n`,
+          );
+        }
+      }
+
+      await addRecentProject({ name: projectName, path: fullPath });
+      openEditor(fullPath);
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
   const handleOpenFolder = async () => {
@@ -1117,6 +1419,8 @@ export default function App() {
         onBack={() => setScreen('main')}
         onCreate={handleCreateProject}
         onOpenSettings={() => setScreen('settings')}
+        busy={createBusy}
+        progress={createProgress}
       />
     );
   }
@@ -1134,6 +1438,16 @@ export default function App() {
     return <SettingsScreen onBack={() => setScreen('main')} />;
   }
 
+  if (screen === 'stats-dashboard') {
+    return (
+      <StatsDashboard
+        onBack={() => setScreen('main')}
+        onOpenSettings={() => setScreen('settings')}
+        recentProjects={recentProjects}
+      />
+    );
+  }
+
   // screen === 'main'
   return (
     <MainMenu
@@ -1143,6 +1457,7 @@ export default function App() {
       onOpenFolder={handleOpenFolder}
       onCloneRepository={handleCloneRepository}
       onOpenSettings={() => setScreen('settings')}
+      onOpenStats={() => setScreen('stats-dashboard')}
     />
   );
 }

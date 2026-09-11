@@ -39,7 +39,7 @@ const CHART_GRID = '#333';
 const CHART_AXIS = '#888';
 const COLOR_CALLS = '#a855f7'; // brand purple
 const COLOR_RUNS = '#38bdf8';  // sky, distinct on the dark card
-const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6']; // scenarios 1..4
+const SCENARIO_COLORS = ['#a855f7', '#38bdf8', '#fbbf24', '#f472b6', '#4ade80']; // scenarios 1..5
 const chartTooltip: React.CSSProperties = { background: '#1a1a1a', border: '1px solid #333', color: '#eee', fontSize: 12 };
 
 function formatSeconds(s: number | null): string {
@@ -194,8 +194,8 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
     { name: 'AI calls', value: adaptive?.scenario4.sessionCallCount ?? 0 },
     { name: 'Runs', value: adaptive?.scenario4.sessionRunCount ?? 0 },
   ];
-  const fireCounts = adaptive?.scenarioFireCounts ?? { 1: 0, 2: 0, 3: 0, 4: 0 };
-  const scenarioData = ([1, 2, 3, 4] as const).map((n) => ({ name: `Scenario ${n}`, value: fireCounts[n] }));
+  const fireCounts = adaptive?.scenarioFireCounts ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const scenarioData = ([1, 2, 3, 4, 5] as const).map((n) => ({ name: `Scenario ${n}`, value: fireCounts[n] }));
   const scenarioTotal = scenarioData.reduce((sum, d) => sum + d.value, 0);
 
   if (!open) return null;
@@ -453,6 +453,29 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                             calls:runs = {adaptive.scenario4.sessionCallCount}:{adaptive.scenario4.sessionRunCount}
                             {' | '}ratio: {adaptive.scenario4.ratio !== null ? adaptive.scenario4.ratio.toFixed(2) : '—'} / {adaptive.scenario4.threshold}
                             {' | '}min runs met: {adaptive.scenario4.minimumRunsMet ? 'yes' : `no (need ${adaptive.scenario4.minimumRunsBeforeEvaluating})`}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={tdStyle}>5 — repeat error</td>
+                          <td style={tdStyle}><Indicator on={adaptive.scenario5.conditionTrue} /></td>
+                          <td style={tdStyle}>
+                            last category: {adaptive.scenario5.lastErrorCategory ?? 'none'}
+                            {' | '}threshold: {adaptive.scenario5.repeatThreshold}
+                            {' | '}next offer:{' '}
+                            {adaptive.scenario5.conditionTrue
+                              ? (adaptive.scenario5.wouldEscalateToCorrection ? 'correction' : 'hint')
+                              : '—'}
+                            {/* Scenario 5's OWN cooldown, not the shared one shown above. */}
+                            {' | '}own cooldown ({adaptive.scenario5.cooldownMinutes}m):{' '}
+                            {adaptive.scenario5.cooldownActive
+                              ? `SUPPRESSED, ${formatSeconds(adaptive.scenario5.cooldownRemainingSeconds)} left`
+                              : 'ready'}
+                            {' | '}counts:{' '}
+                            {Object.entries(adaptive.scenario5.errorCategoryCounts).length === 0
+                              ? 'none'
+                              : Object.entries(adaptive.scenario5.errorCategoryCounts)
+                                  .map(([category, count]) => `${category}=${count}`)
+                                  .join(', ')}
                           </td>
                         </tr>
                       </tbody>

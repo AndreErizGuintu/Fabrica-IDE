@@ -20,6 +20,29 @@ type StoreBridge = {
 
 type FlutterTarget = { id: string; name: string; platform: string };
 
+// Hand-duplicated from src/main/adaptiveEngine.ts (Scenario, Suggestion,
+// AdaptiveDebugState) and src/main/errorClassifier.ts (ErrorCategory). These
+// drifted out of sync once already — scenarioFireCounts was returned by main
+// but missing here. Update BOTH sides together.
+type AdaptiveScenario = 1 | 2 | 3 | 4 | 5;
+
+type AdaptiveErrorCategory =
+  | 'syntax'
+  | 'undefined-reference'
+  | 'type-mismatch'
+  | 'null-reference'
+  | 'missing-import'
+  | 'runtime-exception';
+
+type AdaptiveSuggestion = {
+  scenario: AdaptiveScenario;
+  message: string;
+  offersHint: boolean;
+  autoDismissSeconds: number;
+  errorCategory?: AdaptiveErrorCategory;
+  offersCorrection?: boolean;
+};
+
 type AdaptiveDebugState = {
   now: number;
   scenario1: {
@@ -49,18 +72,35 @@ type AdaptiveDebugState = {
     minimumRunsMet: boolean;
     conditionTrue: boolean;
   };
-  lastSuggestionFired: { scenario: 1 | 2 | 3 | 4; firedAt: number } | null;
+  scenario5: {
+    errorCategoryCounts: Partial<Record<AdaptiveErrorCategory, number>>;
+    lastErrorCategory: AdaptiveErrorCategory | null;
+    repeatThreshold: number;
+    conditionTrue: boolean;
+    wouldEscalateToCorrection: boolean;
+    cooldownActive: boolean;
+    cooldownRemainingSeconds: number | null;
+    cooldownMinutes: number;
+  };
+  lastSuggestionFired: { scenario: AdaptiveScenario; firedAt: number } | null;
   cooldown: {
     active: boolean;
     remainingSeconds: number | null;
   };
-  suggestionActive: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number } | null;
-  priorityWinner: 1 | 2 | 3 | 4 | null;
-  scenarioFireCounts: Record<1 | 2 | 3 | 4, number>;
+  suggestionActive: AdaptiveSuggestion | null;
+  priorityWinner: AdaptiveScenario | null;
+  scenarioFireCounts: Record<AdaptiveScenario, number>;
 };
 
 type FlutterBridge = {
   listDevices: () => Promise<{ success: boolean; devices?: FlutterTarget[]; error?: string }>;
+  // Runs `flutter create --offline --platforms=windows` for the New Project
+  // wizard. Long-running: tail onCreateProgress for live output.
+  createProject: (
+    projectPath: string,
+    projectName: string,
+  ) => Promise<{ success: boolean; output: string; error?: string }>;
+  onCreateProgress: (cb: (data: string) => void) => () => void;
 };
 
 // Embedded device mirroring. Unlike the other bridges these REJECT on failure
@@ -172,7 +212,8 @@ declare global {
     adaptive: {
       dismiss: () => void;
       requestHint: (payload: { code: string; language: string }) => Promise<{ success: boolean; hint?: string; error?: string }>;
-      onSuggest: (cb: (suggestion: { scenario: 1 | 2 | 3 | 4; message: string; offersHint: boolean; autoDismissSeconds: number }) => void) => () => void;
+      requestCorrection: (payload: { code: string; language: string }) => Promise<{ success: boolean; correction?: string; error?: string }>;
+      onSuggest: (cb: (suggestion: AdaptiveSuggestion) => void) => () => void;
       getDebugState: () => Promise<AdaptiveDebugState>;
     };
     codeInference: {
@@ -182,11 +223,15 @@ declare global {
     };
     terminal: {
       run: (payload: { language: string; path: string; deviceId?: string }) => Promise<{ success: boolean; sessionId?: string; html?: boolean; error?: string }>;
+      create: (payload?: { cwd?: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
       hotReload: () => Promise<{ success: boolean }>;
       input: (sessionId: string, data: string) => void;
       stop: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
       onOutput: (cb: (sessionId: string, data: string) => void) => () => void;
       onExit: (cb: (sessionId: string, exitCode: number) => void) => () => void;
+      onRunComplete: (
+        cb: (payload: { sessionId: string; exitCode: number; output: string; truncated: boolean }) => void,
+      ) => () => void;
     };
     flutter: FlutterBridge;
     mirror: MirrorBridge;
@@ -201,6 +246,12 @@ declare global {
       log: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       statusFiles: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       clone: (url: string, targetDir: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      remoteAdd: (cwd: string, url: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      addFile: (cwd: string, filePath: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      unstageFile: (cwd: string, filePath: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      remotes: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      currentBranch: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
+      pushSetUpstream: (cwd: string, branch: string) => Promise<{ success: boolean; output: string; error?: string }>;
       onProgress: (cb: (data: string) => void) => () => void;
     };
   }
