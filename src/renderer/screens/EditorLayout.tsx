@@ -1437,66 +1437,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
       {/* Main Workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Activity Bar */}
-        <div
-          className="flex flex-col items-center shrink-0 py-2 gap-1"
-          style={{
-            width: '48px',
-            background: '#0a0512',
-            borderRight: '1px solid #1a0a2e',
-          }}
-        >
-          <button
-            type="button"
-            className="w-9 h-9 rounded flex items-center justify-center transition-colors"
-            style={{
-              background: 'rgba(168, 85, 247, 0.15)',
-              color: '#a855f7',
-              borderLeft: '2px solid #a855f7',
-            }}
-            title="Explorer"
-            aria-label="Explorer"
-          >
-            <i className="codicon codicon-files" style={{ fontSize: '18px' }} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGit((prev) => !prev)}
-            className="w-9 h-9 rounded flex items-center justify-center transition-colors hover:bg-[#a855f7]/10"
-            style={{
-              background: showGit ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-              color: showGit ? '#a855f7' : '#a7adc5',
-              borderLeft: showGit ? '2px solid #a855f7' : '2px solid transparent',
-            }}
-            title="Toggle Source Control (Ctrl+Shift+G)"
-            aria-label="Source Control"
-          >
-            <i className="codicon codicon-source-control" style={{ fontSize: '18px' }} />
-          </button>
-          <button
-            type="button"
-            disabled
-            className="w-9 h-9 rounded flex items-center justify-center cursor-default"
-            style={{ color: '#4b5563', opacity: 0.5 }}
-            title="Search (not yet available)"
-            aria-label="Search (not yet available)"
-          >
-            <i className="codicon codicon-search" style={{ fontSize: '18px' }} />
-          </button>
-          <button
-            type="button"
-            disabled
-            className="w-9 h-9 rounded flex items-center justify-center cursor-default"
-            style={{ color: '#4b5563', opacity: 0.5 }}
-            title="Settings (not yet available)"
-            aria-label="Settings (not yet available)"
-          >
-            <i className="codicon codicon-settings-gear" style={{ fontSize: '18px' }} />
-          </button>
-        </div>
-
         {/* Explorer Sidebar */}
-        <div
+        <div 
           ref={sidebarRef}
           className="flex shrink-0 relative"
           style={{ 
