@@ -52,7 +52,11 @@ const EXPECTED_COPY = {
   2: 'Lots of AI questions and no runs yet — want to try running your code to see where things stand?',
   3: 'Looks like you might be stuck — want a hint?',
   4: "You've been leaning on the AI assistant a lot compared to running your own code — no pressure, just flagging it in case it's useful to know.",
+  5: "You've hit this kind of error again — want a hand working out what's going on?",
 };
+
+const SCENARIO5_THRESHOLD = config.scenario5_errorPattern.repeatThreshold;
+const SCENARIO5_COOLDOWN_MS = config.scenario5_errorPattern.cooldownMinutesAfterDismiss * 60_000;
 
 // --- Fake clock + engine harness --------------------------------------------
 
@@ -397,8 +401,249 @@ console.log('\nScenario 4 (session call/run ratio):');
 test('fires once the ratio crosses threshold with minimumRunsBeforeEvaluating met', scenario4_firesWhenMinimumRunsMet);
 test('does NOT fire at the same ratio when runs are below the minimum', scenario4_noFireWhenRunsBelowMinimum);
 
+// --- Scenario 5: repeated classified run error ------------------------------
+
+// A first occurrence of a category is normal and must not interrupt.
+function scenario5_firstOccurrenceDoesNotFire() {
+  resetEngine();
+  engine.onRun();
+  engine.onRunError('syntax', 'SyntaxError: Unexpected token');
+  assertEqual(firedSuggestions.length, 0, 'a single error should not fire Scenario 5');
+}
+
+// The SAME category hit again at repeatThreshold fires, offering the hint path.
+function scenario5_repeatFiresWithHintOffer() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRun();
+    engine.onRunError('syntax', 'SyntaxError: Unexpected token');
+  }
+  assertEqual(firedSuggestions.length, 1, 'Scenario 5 should fire exactly once at threshold');
+  assertEqual(firedSuggestions[0].scenario, 5, 'fired suggestion should be scenario 5');
+  assertEqual(firedSuggestions[0].message, EXPECTED_COPY[5], 'scenario 5 copy mismatch');
+  assertEqual(firedSuggestions[0].errorCategory, 'syntax', 'category should travel on the suggestion');
+  assertEqual(firedSuggestions[0].offersHint, true, 'first fire should offer the guiding hint');
+  assertTrue(!firedSuggestions[0].offersCorrection, 'first fire must NOT offer a correction');
+}
+
+// Two DIFFERENT categories are not a repeat — neither reaches the threshold.
+function scenario5_differentCategoriesDoNotFire() {
+  resetEngine();
+  engine.onRun();
+  engine.onRunError('syntax', 'SyntaxError');
+  engine.onRun();
+  engine.onRunError('null-reference', 'Cannot read properties of null');
+  assertEqual(firedSuggestions.length, 0, 'distinct categories should not aggregate into a repeat');
+}
+
+// Hitting the same category AGAIN after the hint escalates to a direct fix.
+// The dismiss+advance clears the suggestion and the post-dismiss cooldown so
+// the escalation itself is what is being observed, not suppression.
+function scenario5_escalatesToCorrection() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRun();
+    engine.onRunError('null-reference', 'Cannot read properties of null');
+  }
+  assertEqual(firedSuggestions.length, 1, 'expected the threshold fire first');
+
+  engine.dismissSuggestion();
+  advance(COOLDOWN_MS + 1000);
+
+  engine.onRun();
+  engine.onRunError('null-reference', 'Cannot read properties of null');
+
+  assertEqual(firedSuggestions.length, 2, 'a further repeat should fire again');
+  assertEqual(firedSuggestions[1].scenario, 5, 'escalation should still be scenario 5');
+  assertEqual(firedSuggestions[1].offersCorrection, true, 'escalation should offer a correction');
+  assertEqual(firedSuggestions[1].offersHint, false, 'escalation should NOT also offer a hint');
+}
+
+// Counters are per-session: a new session starts the category tally at zero.
+function scenario5_countsResetOnNewSession() {
+  resetEngine();
+  engine.onRun();
+  engine.onRunError('syntax', 'SyntaxError');
+  resetEngine();
+  engine.onRun();
+  engine.onRunError('syntax', 'SyntaxError');
+  assertEqual(firedSuggestions.length, 0, 'category counts must not survive startEngineSession()');
+}
+
+// Scenario 5 outranks Scenario 3 when both are simultaneously true.
+function priority_scenario5BeatsScenario3() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO3_THRESHOLD; i += 1) {
+    idleResetCycle();
+  }
+  firedSuggestions = [];
+  engine.dismissSuggestion();
+  advance(COOLDOWN_MS + 1000);
+
+  // Rebuild the scenario-3 streak, then trigger a repeat error in the same tick.
+  for (let i = 0; i < SCENARIO3_THRESHOLD; i += 1) {
+    idleResetCycle();
+  }
+  firedSuggestions = [];
+  engine.dismissSuggestion();
+  advance(COOLDOWN_MS + 1000);
+
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRunError('type-mismatch', 'TypeError: x.map is not a function');
+  }
+
+  assertTrue(firedSuggestions.length > 0, 'expected a suggestion to fire');
+  assertEqual(firedSuggestions[0].scenario, 5, 'scenario 5 should win priority over scenario 3');
+}
+
+// Every occurrence at or above the threshold fires, not just the first one to
+// reach it exactly. Guards against the condition ever being narrowed to `===`.
+// Cooldown is cleared between occurrences so the THRESHOLD is what is measured.
+function scenario5_firesAtEveryCountAtOrAboveThreshold() {
+  resetEngine();
+  const seen = [];
+  for (let i = 1; i <= SCENARIO5_THRESHOLD + 2; i += 1) {
+    const before = firedSuggestions.length;
+    engine.onRunError('syntax', 'boom');
+    const didFire = firedSuggestions.length > before;
+    const last = firedSuggestions.at(-1);
+    seen.push({ count: i, didFire, offersCorrection: didFire ? !!last.offersCorrection : null });
+    engine.dismissSuggestion();
+    advance(COOLDOWN_MS + 1000);
+  }
+
+  for (const entry of seen) {
+    if (entry.count < SCENARIO5_THRESHOLD) {
+      assertEqual(entry.didFire, false, `count=${entry.count} is below threshold and must not fire`);
+    } else {
+      assertEqual(entry.didFire, true, `count=${entry.count} is at/above threshold and must fire`);
+    }
+  }
+
+  assertEqual(seen[SCENARIO5_THRESHOLD - 1].offersCorrection, false, 'the first fire at threshold offers a hint');
+  assertEqual(seen[SCENARIO5_THRESHOLD].offersCorrection, true, 'the next fire escalates to a correction');
+  assertEqual(seen[SCENARIO5_THRESHOLD + 1].offersCorrection, true, 'and stays escalated thereafter');
+}
+
+// Documents the real reason a third consecutive failure can appear "not to
+// fire": the post-dismiss cooldown, not the threshold comparison.
+function scenario5_suppressedByCooldownNotThreshold() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRunError('syntax', 'boom');
+  }
+  assertEqual(firedSuggestions.length, 1, 'expected the threshold fire');
+
+  engine.dismissSuggestion();
+  advance(30_000); // well inside the 10-minute cooldown
+
+  engine.onRunError('syntax', 'boom');
+  assertEqual(firedSuggestions.length, 1, 'a repeat inside the cooldown is suppressed');
+
+  // The very same occurrence fires once the cooldown has elapsed, proving the
+  // threshold condition itself was satisfied all along.
+  advance(COOLDOWN_MS + 1000);
+  engine.onRunError('syntax', 'boom');
+  assertEqual(firedSuggestions.length, 2, 'the same condition fires once cooldown clears');
+  assertEqual(firedSuggestions.at(-1).offersCorrection, true, 'and it is the escalated correction');
+}
+
+// The debug snapshot must stay readable between ticks: pendingErrorCategory is
+// consumed synchronously by evaluate(), so a poll-based panel keyed on it would
+// always read false. Regression test for that panel bug.
+function scenario5_debugStateReadableAfterEvaluate() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRunError('type-mismatch', 'boom');
+  }
+  const debug = engine.getDebugState();
+  assertEqual(debug.scenario5.conditionTrue, true, 'conditionTrue must survive evaluate() consuming the pending category');
+  assertEqual(debug.scenario5.lastErrorCategory, 'type-mismatch', 'lastErrorCategory should be reported');
+  assertEqual(debug.scenario5.errorCategoryCounts['type-mismatch'], SCENARIO5_THRESHOLD, 'counts should be reported');
+  assertEqual(debug.scenario5.wouldEscalateToCorrection, false, 'at threshold the next offer is a hint');
+}
+
+// Scenario 5 runs on its own, shorter cooldown clock. Verifies BOTH halves:
+// that 5 recovers well before the shared window, and that Scenarios 1-4 are
+// still held for the full shared window by that same dismissal.
+function scenario5_hasItsOwnShorterCooldown() {
+  assertTrue(
+    SCENARIO5_COOLDOWN_MS < COOLDOWN_MS,
+    `scenario 5 cooldown (${SCENARIO5_COOLDOWN_MS}ms) must be shorter than the shared one (${COOLDOWN_MS}ms)`,
+  );
+
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRunError('syntax', 'boom');
+  }
+  assertEqual(firedSuggestions.length, 1, 'expected the threshold fire');
+  engine.dismissSuggestion();
+
+  // Still inside Scenario 5's own window — must stay suppressed.
+  advance(SCENARIO5_COOLDOWN_MS - 5000);
+  engine.onRunError('syntax', 'boom');
+  assertEqual(firedSuggestions.length, 1, 'suppressed while scenario 5 cooldown is still running');
+
+  // Past scenario 5's window but FAR short of the shared 10-minute one.
+  advance(10_000);
+  assertTrue(fakeNow < 1_700_000_000_000 + COOLDOWN_MS, 'sanity: still inside the shared window');
+  engine.onRunError('syntax', 'boom');
+  assertEqual(firedSuggestions.length, 2, 'scenario 5 fires again on its own shorter cooldown');
+  assertEqual(firedSuggestions.at(-1).scenario, 5, 'the new fire is scenario 5');
+}
+
+// The same dismissal must NOT let scenarios 1-4 off early.
+function scenario5_dismissalDoesNotShortenSharedCooldown() {
+  resetEngine();
+  for (let i = 0; i < SCENARIO5_THRESHOLD; i += 1) {
+    engine.onRunError('syntax', 'boom');
+  }
+  assertEqual(firedSuggestions.at(-1).scenario, 5, 'expected scenario 5 to fire');
+  engine.dismissSuggestion();
+
+  // Past scenario 5's short window, still well inside the shared one.
+  advance(SCENARIO5_COOLDOWN_MS + 5000);
+  const before = firedSuggestions.length;
+
+  // Build a scenario 2 trigger: threshold AI calls in-window with zero runs.
+  // Runs are what onRunError implies, so start a clean streak by using calls only.
+  for (let i = 0; i < SCENARIO2_THRESHOLD; i += 1) {
+    engine.onAiCall();
+    advance(1000);
+  }
+  assertEqual(
+    firedSuggestions.length,
+    before,
+    'scenarios 1-4 must stay suppressed for the FULL shared cooldown after a scenario 5 dismissal',
+  );
+
+  // Once the shared window elapses, scenario 2 is free again. The earlier calls
+  // have aged out of scenario 2's own 5-minute window by now, so the condition
+  // has to be rebuilt with fresh calls rather than topped up with one more.
+  advance(COOLDOWN_MS);
+  for (let i = 0; i < SCENARIO2_THRESHOLD; i += 1) {
+    engine.onAiCall();
+    advance(1000);
+  }
+  assertTrue(firedSuggestions.length > before, 'scenario 2 fires once the shared cooldown clears');
+  assertEqual(firedSuggestions.at(-1).scenario, 2, 'and it is scenario 2 that fires');
+}
+
+console.log('\nScenario 5 (repeated classified run error):');
+test('a first occurrence of a category does NOT fire', scenario5_firstOccurrenceDoesNotFire);
+test('a repeat of the SAME category fires and offers the guiding hint', scenario5_repeatFiresWithHintOffer);
+test('two different categories do not aggregate into a repeat', scenario5_differentCategoriesDoNotFire);
+test('a further repeat escalates from hint to direct correction', scenario5_escalatesToCorrection);
+test('category counts reset on a new session', scenario5_countsResetOnNewSession);
+test('fires at EVERY count at or above threshold, not just the first (>= not ===)', scenario5_firesAtEveryCountAtOrAboveThreshold);
+test('a repeat inside the cooldown is suppressed by cooldown, not by the threshold', scenario5_suppressedByCooldownNotThreshold);
+test('debug snapshot stays readable after evaluate() consumes the pending category', scenario5_debugStateReadableAfterEvaluate);
+test('has its own shorter cooldown, independent of the shared one', scenario5_hasItsOwnShorterCooldown);
+test('dismissing scenario 5 does NOT shorten the shared cooldown for scenarios 1-4', scenario5_dismissalDoesNotShortenSharedCooldown);
+
 console.log('\nPriority:');
 test('scenario 2 wins over scenario 3 when both conditions are true simultaneously', priority_scenario2BeatsScenario3);
+test('scenario 5 wins over scenario 3 when both conditions are true simultaneously', priority_scenario5BeatsScenario3);
 
 console.log('\nCooldown:');
 test('a new valid trigger during cooldown does not fire until the cooldown clears', cooldown_blocksUntilCleared);

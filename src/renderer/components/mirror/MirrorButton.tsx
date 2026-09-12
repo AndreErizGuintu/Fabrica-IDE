@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactElement, Ref } from 'react';
 import { useEffect, useRef } from 'react';
+import useFlutterDevices from '../../hooks/useFlutterDevices';
 import useMirrorSession from './useMirrorSession';
 
 // Electron's <webview> is not in React's intrinsic-element types, so the tag
@@ -61,8 +62,29 @@ type MirrorButtonProps = {
 // EditorLayout mounts this only while an Android device is the SELECTED run
 // target, so this component never has to ask whether a device is present.
 export default function MirrorButton({ udid }: MirrorButtonProps) {
-  const { port, isMirroring, error, toggle } = useMirrorSession();
+  const { port, isMirroring, error, toggle, stop } = useMirrorSession();
+  const { targets, status } = useFlutterDevices();
   const webviewRef = useRef<HTMLElement | null>(null);
+
+  // Device disconnected mid-session: the phone is unplugged or loses
+  // authorization while the panel is open. Nothing tears the server down on its
+  // own in that case -- ws-scrcpy keeps listening, and the webview sits on a
+  // stream that will never resume -- so the session is ended here.
+  //
+  // Gated on `status === 'ok'`, and that gate is the whole point rather than a
+  // detail. A FAILED poll is not evidence the device left (DECISIONS.md
+  // 2026-08-29, Bug 1: treating a failed query as proof of absence is exactly
+  // the defect that produced the phantom "not debug-ready" row). `flutter
+  // devices` can time out transiently with the phone sitting there perfectly
+  // authorized, so only a poll that actually SUCCEEDED and did not list this
+  // udid is allowed to kill a live mirror.
+  useEffect(() => {
+    if (!isMirroring || status !== 'ok') return;
+    if (targets.some((device) => device.id === udid)) return;
+
+    console.log('[MIRROR:device-gone] Selected device left a successful poll, stopping:', udid);
+    void stop();
+  }, [isMirroring, status, targets, udid, stop]);
 
   console.log('[MIRROR:component-render] MirrorButton render:', { udid, port, isMirroring });
 

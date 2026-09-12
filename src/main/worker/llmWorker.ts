@@ -58,40 +58,6 @@ import {
 // createContext().
 const MAX_INFERENCE_THREADS = Math.max(1, os.cpus().length - 2);
 
-// ===========================================================================
-// TEMPORARY DIAGNOSTIC: worker boot line -- the FIRST thing this module does.
-//
-// Its only job is to answer "is worker stdout reaching the terminal at all?"
-// on its own, before and independently of anything that could go wrong later
-// (model load, GPU init, generation). Prior to the 2026-08-10 stdio fix in
-// `llm.ts` the answer was silently no, and it was impossible to tell from a log
-// capture: this file printed nothing before `post({ type: 'ready' })`, and the
-// `[llm] inference utility process ready` line that looked like proof of life
-// is printed by MAIN, not by the worker. That ambiguity is what this line
-// removes -- if you can read it, the pipe works.
-//
-// Emitted on BOTH streams on purpose: stdout carries the `[llm] DIAGNOSTIC:` /
-// `[generate:phase]` / `[CodeInference:lock]` output, stderr carries crashes
-// and native warnings, and they are relayed separately in `llm.ts`. Two lines
-// prove both halves in one run instead of leaving stderr untested until
-// something has already gone wrong.
-//
-// Placement note: this sits immediately after the imports rather than literally
-// above them because webpack hoists ESM imports above every other statement
-// regardless of source order -- putting it higher would read as first without
-// being first. Every import above is side-effect-free (`fs`, a JSON config, and
-// type/error definitions); `node-llama-cpp` is loaded lazily inside
-// `importNodeLlamaCpp()`, so nothing heavy runs before this.
-//
-// Remove alongside LOCK_DEBUG / HEARTBEAT_DEBUG before defense.
-// ===========================================================================
-console.log(
-  `[llmWorker] BOOT (stdout): worker module evaluated, pid=${process.pid}. If you can read this, worker stdout is reaching the terminal.`,
-);
-console.error(
-  `[llmWorker] BOOT (stderr): worker module evaluated, pid=${process.pid}. If you can read this, worker stderr is reaching the terminal.`,
-);
-
 // Single swap point: change modelFile in src/main/modelConfig.json and drop the new
 // .gguf into resources/models/ to switch models. scripts/benchmark.mjs and
 // scripts/test-gpu-layers.mjs read the same file, so this is the only place to edit.
@@ -303,7 +269,7 @@ const loadModelWithFallback = async (llama: any, modelPath: string) => {
 // 'opportunistic' is the startup warmup in main.ts (it was Code Inference until
 // the 08-07 pivot -- see the lock policy below), 'explicit' is everything else.
 // ===========================================================================
-const LOCK_DEBUG = true;
+const LOCK_DEBUG = false;
 let generationSeq = 0;
 
 const lockLog = (...args: unknown[]) => {
@@ -346,32 +312,10 @@ export const initLlama = async (): Promise<LlamaRuntime> => {
     runtimePromise = (async () => {
       const { getLlama, resolveChatWrapper } = await importNodeLlamaCpp();
       const modelPath = readModelPathArg();
-      // TEMPORARY DIAGNOSTIC: confirm what the real, process-wide getLlama() call
-      // actually sees at the moment it runs.
-      //
-      // MIGRATION NOTE (DECISIONS.md section 3): this and the two device
-      // diagnostics below are the EXISTING probes, deliberately reused rather
-      // than rewritten. They are now the check for the one thing section 3 said
-      // to verify empirically rather than assume -- that a FORKED worker
-      // genuinely sees only the isolated device. The "env var must be present at
-      // process creation" constraint was established for the Electron main
-      // process; `utilityProcess.fork()` is a process creation with an env block
-      // main controls, so it should hold, but it is unverified until this line
-      // is read off a real run.
-      console.log('[llm] DIAGNOSTIC: process.env.GGML_VK_VISIBLE_DEVICES immediately before real getLlama() =', JSON.stringify(process.env.GGML_VK_VISIBLE_DEVICES));
       const getLlamaStartHr = process.hrtime.bigint();
       const getLlamaStartMs = Date.now();
       const llama = await getLlama({ maxThreads: MAX_INFERENCE_THREADS });
       phaseLog('init', 'getLlama()', getLlamaStartHr, process.hrtime.bigint(), getLlamaStartMs, Date.now());
-      // TEMPORARY DIAGNOSTIC: does the REAL, in-process native Vulkan backend
-      // actually honor the filter, or does it still see both devices despite
-      // the env var being correctly set (per the logs above)? This isolates
-      // "our JS set the var correctly" from "the native layer respected it."
-      const diagnosticsStartHr = process.hrtime.bigint();
-      const diagnosticsStartMs = Date.now();
-      console.log('[llm] DIAGNOSTIC: llama.getGpuDeviceNames() after real getLlama() =', await llama.getGpuDeviceNames());
-      console.log('[llm] DIAGNOSTIC: llama.getVramState() after real getLlama() =', await llama.getVramState());
-      phaseLog('init', 'diagnostics (getGpuDeviceNames+getVramState)', diagnosticsStartHr, process.hrtime.bigint(), diagnosticsStartMs, Date.now());
       // Resolve the model's real layer count once, here, and reuse it for the
       // rest of the process -- same "resolve once, cache" shape as the
       // resolveChatWrapper() fix below. No longer used to cap gpuLayers (see

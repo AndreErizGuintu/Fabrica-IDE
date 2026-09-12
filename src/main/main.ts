@@ -21,7 +21,15 @@ import { generate, shutdownWorker } from './llm';
 import { ensureRequiredImports } from './translateImports';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
+import { registerAndroidSdkIpc } from './androidSdk';
 import { resolveHtmlPath } from './util';
+import {
+  RUN_SENTINEL_SUFFIX,
+  startCapture,
+  feedCapture,
+  discardCapture,
+  stripSentinelForDisplay,
+} from './runCapture';
 import {
   startSession,
   recordActivity,
@@ -38,12 +46,15 @@ import {
   onEditorActivity,
   onAiCall,
   onRun,
+  onRunError,
   dismissSuggestion,
   requestHint,
+  requestCorrection,
   setSuggestionSink,
   getDebugState,
   Suggestion,
 } from './adaptiveEngine';
+import { classifyError } from './errorClassifier';
 import {
   requestCodeInference,
   checkCodeInferenceTrigger,
@@ -229,6 +240,73 @@ ipcMain.handle('flutter:listDevices', async () => {
   });
 });
 
+// Flutter is the only scaffold that cannot be hand-written: a Windows-desktop
+// app is a multi-hundred-file tree (pubspec, lib/, plus windows/ CMake + the
+// C++ runner + generated plugin registrants) that `flutter run -d windows`
+// resolves against. So this shells out to the real tool.
+//
+// Streams like git:clone rather than buffering through exec(): `flutter create`
+// runs a pub solve and can take tens of seconds, and a buffered call would show
+// the student a frozen dialog with no output until it finished.
+//
+// --offline is deliberate, not a micro-optimisation. The app template declares
+// two *hosted* dev/runtime deps (cupertino_icons ^1.0.8, flutter_lints ^6.0.0),
+// so the pub get that `flutter create` runs at the end is the one step here that
+// can touch the network. --offline forces pub to resolve from the local pub
+// cache only, which makes the outcome deterministic instead of
+// silently-online-dependent. It REQUIRES a warm cache — see DECISIONS.md.
+//
+// --project-name is required, not optional: without it flutter derives the
+// package name from the directory name, and the default project name the wizard
+// offers ("my-fabrica-project") contains hyphens, which flutter rejects
+// outright ("is not a valid Dart package name"). The renderer sanitises to the
+// same [a-z0-9_] rule flutter's own potentialValidPackageName() applies.
+ipcMain.handle(
+  'flutter:createProject',
+  async (event, projectPath: string, projectName: string) => {
+    return new Promise<{ success: boolean; output: string; error?: string }>((resolve) => {
+      // flutter.bat can only be launched through a shell, and Node's shell:true
+      // quoting breaks on paths with spaces — same reasoning (and same helpers)
+      // as flutter:listDevices above.
+      const commandLine = buildCommandLine(getFlutterBinary(), [
+        'create',
+        '--offline',
+        '--platforms=windows',
+        '--project-name',
+        projectName,
+        projectPath,
+      ]);
+
+      const child = spawn('cmd.exe', ['/d', '/s', '/c', `"${commandLine}"`], {
+        windowsVerbatimArguments: true,
+        env: prependBundledRuntimePaths(),
+      });
+
+      let output = '';
+
+      child.stdout.on('data', (data: Buffer) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flutter:create-progress', text);
+      });
+
+      child.stderr.on('data', (data: Buffer) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flutter:create-progress', text);
+      });
+
+      child.on('close', (code: number | null) => {
+        resolve({ success: code === 0, output });
+      });
+
+      child.on('error', (err: Error) => {
+        resolve({ success: false, output, error: err.message });
+      });
+    });
+  },
+);
+
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
@@ -378,6 +456,18 @@ ipcMain.handle('adaptive:hint', async (_event, payload: { code: string; language
   try {
     const hint = await requestHint(payload.code, payload.language);
     return { success: true, hint };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+// Scenario 5's escalation path. Same shape as adaptive:hint — the failing
+// category and output come from engine state, so the renderer sends only the
+// code and language exactly as it does for a hint.
+ipcMain.handle('adaptive:correction', async (_event, payload: { code: string; language: string }) => {
+  try {
+    const correction = await requestCorrection(payload.code, payload.language);
+    return { success: true, correction };
   } catch (err) {
     return { success: false, error: String(err) };
   }
@@ -535,6 +625,49 @@ ipcMain.handle('git:clone', async (event, url: string, targetDir: string) => {
   });
 });
 
+// Used by the New Project flow when a remote URL is supplied: `git init` alone
+// leaves the repo with no origin, so the first push has nowhere to go. Same
+// runGit/exec shape as the handlers above; the URL is quoted for the same
+// reason the commit message is (it reaches a shell as one token).
+ipcMain.handle('git:remote-add', async (_event, cwd: string, url: string) => {
+  return runGit(['remote', 'add', 'origin', `"${url}"`], cwd);
+});
+
+// Per-file staging for the Source Control panel. The existing git:add stages
+// everything ('git add .') and stays as the Stage All action; this is the
+// single-file equivalent. '--' terminates options so a filename that happens to
+// start with a dash is still treated as a path, and the quoting is what lets
+// paths with spaces survive runGit's exec().
+ipcMain.handle('git:addFile', async (_event, cwd: string, filePath: string) => {
+  return runGit(['add', '--', `"${filePath}"`], cwd);
+});
+
+// Unstage one file. Deliberately `git reset -- <file>` and NOT the more obvious
+// `git reset HEAD <file>` or `git restore --staged <file>`: both of those
+// resolve HEAD and so fail with exit 128 on a repository that has no commits
+// yet ("fatal: ambiguous argument 'HEAD'" / "could not resolve 'HEAD'"). A
+// freshly scaffolded Fabrica project created without a remote URL is exactly
+// that case. Verified against git 2.54.0 on both an unborn and a normal repo.
+ipcMain.handle('git:unstageFile', async (_event, cwd: string, filePath: string) => {
+  return runGit(['reset', '--', `"${filePath}"`], cwd);
+});
+
+// Remote detection for the Sync-vs-Publish decision. Exits 0 with empty stdout
+// when no remote is configured, so "has a remote" is simply non-empty output.
+ipcMain.handle('git:remotes', async (_event, cwd: string) => {
+  return runGit(['remote', '-v'], cwd);
+});
+
+// Works on an unborn branch too (returns e.g. "master" before the first
+// commit), unlike `rev-parse --abbrev-ref HEAD`.
+ipcMain.handle('git:currentBranch', async (_event, cwd: string) => {
+  return runGit(['branch', '--show-current'], cwd);
+});
+
+ipcMain.handle('git:pushSetUpstream', async (_event, cwd: string, branch: string) => {
+  return runGit(['push', '--set-upstream', 'origin', `"${branch}"`], cwd);
+});
+
 // SDK detection — reuses getRunConfig for the binary resolution only; the
 // version-check args ('--version') are inherently different from run args,
 // so that part is still owned locally, but the runtime->binary switch is not.
@@ -630,6 +763,13 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
     Object.entries({ ...spawnEnv, FORCE_COLOR: '1' }).filter(([, v]) => v !== undefined),
   ) as Record<string, string>;
 
+  // `flutter run` is long-lived by design — it stays attached serving hot
+  // reload/restart keystrokes (DECISIONS.md 2026-07-30) and only ends when the
+  // app window is closed. A sentinel would therefore not resolve until app
+  // shutdown, and buffering would grow for the whole session, so Flutter runs
+  // are left as pure passthrough: no sentinel appended, no capture started.
+  const capturesOutput = language !== 'flutter';
+
   try {
     // Spawn a persistent cmd.exe shell as the pty's root process (like VS Code's
     // integrated terminal) instead of running the target command directly as the
@@ -648,8 +788,44 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
       activeFlutterSessionId = sessionId;
     }
 
+    if (capturesOutput) {
+      startCapture(sessionId);
+    }
+
     ptyProcess.onData((data) => {
-      event.sender.send('terminal:output', { sessionId, data });
+      // Passthrough first — the capture below is a read-only tap and must never
+      // delay what the terminal renders. The only edit made to the stream is
+      // removing the sentinel this app injected; everything the program itself
+      // wrote, colour included, is forwarded untouched.
+      event.sender.send('terminal:output', {
+        sessionId,
+        data: capturesOutput ? stripSentinelForDisplay(data) : data,
+      });
+
+      if (capturesOutput) {
+        // Deliberately the raw chunk, not the filtered one — the sentinel is
+        // the capture's completion signal.
+        const completion = feedCapture(sessionId, data);
+        if (completion) {
+          event.sender.send('terminal:run-complete', completion);
+
+          // Classification happens HERE, in main, not round-tripped through the
+          // renderer: `language` is already in scope from this handler's own
+          // payload, and the Adaptive Engine lives in main anyway. onRun() has
+          // already fired unconditionally for this run (top of the handler);
+          // onRunError is strictly additional and only for a real, classified
+          // failure — an unclassifiable one deliberately says nothing.
+          const category = classifyError({
+            language,
+            output: completion.output,
+            exitCode: completion.exitCode,
+          });
+
+          if (category) {
+            onRunError(category, completion.output);
+          }
+        }
+      }
     });
 
     ptyProcess.onExit(({ exitCode }) => {
@@ -657,10 +833,14 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
         activeFlutterSessionId = null;
       }
       ptySessions.delete(sessionId);
+      // The shell died before any sentinel arrived — drop the buffer rather
+      // than reporting a completion that never happened.
+      discardCapture(sessionId);
       event.sender.send('terminal:exit', { sessionId, exitCode });
     });
 
-    ptyProcess.write(`${buildCommandLine(config.cmd, config.args)}\r`);
+    const commandLine = buildCommandLine(config.cmd, config.args);
+    ptyProcess.write(`${commandLine}${capturesOutput ? RUN_SENTINEL_SUFFIX : ''}\r`);
 
     return { success: true, sessionId };
   } catch (err) {
@@ -693,7 +873,52 @@ ipcMain.handle('terminal:stop', async (_event, { sessionId }: { sessionId: strin
   }
   session.kill();
   ptySessions.delete(sessionId);
+  // Explicit Stop / tab close — the run will never reach its sentinel, so the
+  // buffer is dropped and no run-complete is emitted for it.
+  discardCapture(sessionId);
   return { success: true };
+});
+
+// Blank interactive shell for the terminal tab bar's "+" button. Same spawn
+// shape as terminal:run (persistent cmd.exe, NODE_OPTIONS scrubbed, per-session
+// output/exit events) minus getRunConfig and the trailing command write — the
+// shell comes up at a prompt with nothing queued.
+//
+// Deliberately does NOT call recordActivity()/incrementRunCount()/onRun():
+// opening a shell is not a program run, and counting it would corrupt the
+// run counter plus the Adaptive Engine's calls:runs ratio (Scenarios 2 and 4).
+ipcMain.handle('terminal:create', async (event, { cwd }: { cwd?: string } = {}) => {
+  const sessionId = crypto.randomUUID();
+  const { NODE_OPTIONS, ...spawnEnv } = process.env;
+  const env = Object.fromEntries(
+    Object.entries({ ...spawnEnv, FORCE_COLOR: '1' }).filter(([, v]) => v !== undefined),
+  ) as Record<string, string>;
+
+  const startDir = cwd && fs.existsSync(cwd) ? cwd : app.getPath('home');
+
+  try {
+    const ptyProcess = pty.spawn('cmd.exe', [], {
+      cwd: startDir,
+      env,
+      cols: 80,
+      rows: 24,
+    });
+
+    ptySessions.set(sessionId, ptyProcess);
+
+    ptyProcess.onData((data) => {
+      event.sender.send('terminal:output', { sessionId, data });
+    });
+
+    ptyProcess.onExit(({ exitCode }) => {
+      ptySessions.delete(sessionId);
+      event.sender.send('terminal:exit', { sessionId, exitCode });
+    });
+
+    return { success: true, sessionId };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
 });
 
 // Device mirroring. Deliberately NOT following the `{ success, error }` shape
@@ -704,6 +929,16 @@ ipcMain.handle('terminal:stop', async (_event, { sessionId }: { sessionId: strin
 ipcMain.handle('mirror:start', async () => startMirrorServer());
 
 ipcMain.handle('mirror:stop', async () => stopMirrorServer());
+
+// Android SDK first-run fetch. Unlike mirroring, this module registers its own
+// handlers: its renderer contract is a stateful protocol (streamed progress, a
+// license round-trip, cancel) rather than the two one-line calls above, so the
+// channel names live next to the code that serves them.
+//
+// Registration only -- nothing here starts a download. The fetch is student-
+// initiated and APK-building is the only feature that depends on it; mirroring
+// and every other part of the IDE work with the SDK absent.
+registerAndroidSdkIpc();
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -942,44 +1177,6 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
       payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : `Prompt: Translate the selected code into ${payload.language}.`,
       payload.selectedCode.trim() ? `Selected code:\n${payload.selectedCode.trim()}` : '',
     ].filter(Boolean).join('\n\n');
-
-    // TEMPORARY DIAGNOSTIC LOGGING - remove or gate before defense.
-    //
-    // Added 2026-08-10 for the RECURRENCE of the missing-import bug (JS
-    // Math.min/Math.max -> Dart dropping `import 'dart:math'`) after the 08-08
-    // systemPrompt delivery fix. Unconditional, matching this file's existing
-    // diagnostic convention (see the codeInference:request handler above) --
-    // main.ts has no debug-flag const like codeInference.ts's CI_DEBUG or
-    // llmWorker.ts's LOCK_DEBUG, and this needs to be on without anyone having
-    // to remember to enable it.
-    //
-    // Printed VERBATIM and unabridged -- deliberately not run through a
-    // preview()-style truncator like codeInference.ts uses for code, because
-    // the clause being checked for ("you MUST include the necessary import
-    // statement(s)") sits in the MIDDLE of the system prompt, which is exactly
-    // what truncation would hide.
-    //
-    // SCOPE, read this before drawing a conclusion from it: this proves what
-    // main SENDS, not what the model RECEIVES. Since the utility-process split
-    // those are different places -- the system prompt now crosses a
-    // MessagePort and is applied to the LlamaChatSession constructor over in
-    // worker/llmWorker.ts, which is the exact layer the 08-08 delivery bug
-    // lived in. An intact instruction here narrows the fault to the worker
-    // side or to the model itself; it does not clear delivery.
-    console.log(
-      `[ai:translate] --- system prompt sent to the model ---\n${systemPrompt}\n--- end system prompt ---`,
-    );
-    console.log(
-      `[ai:translate] --- user prompt sent to the model ---\n${userPrompt}\n--- end user prompt ---`,
-    );
-    console.log(
-      '[ai:translate] calling generate()',
-      `language=${payload.language}`,
-      `systemPromptLen=${systemPrompt.length}`,
-      `userPromptLen=${userPrompt.length}`,
-      // One-glance answer to "did the import clause survive into this call?"
-      `hasImportInstruction=${/you MUST include the necessary import statement/i.test(systemPrompt)}`,
-    );
 
     let fullText = '';
     const result = await generate(userPrompt, systemPrompt, (chunk: string) => {

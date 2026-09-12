@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Suggestion = {
-  scenario: 1 | 2 | 3 | 4;
+  scenario: 1 | 2 | 3 | 4 | 5;
   message: string;
   offersHint: boolean;
   autoDismissSeconds: number;
+  // Scenario 5 only. `offersCorrection` is the escalation: the student hit the
+  // same error category again after a guiding question already failed, so the
+  // offer becomes a direct fix instead of another question.
+  errorCategory?: string;
+  offersCorrection?: boolean;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  syntax: 'Syntax error',
+  'undefined-reference': 'Undefined reference',
+  'type-mismatch': 'Type mismatch',
+  'null-reference': 'Null reference',
+  'missing-import': 'Missing import',
+  'runtime-exception': 'Runtime exception',
 };
 
 // Isolated, self-contained toast for the Adaptive Assistance Engine — reads
@@ -18,6 +32,8 @@ export default function AdaptiveToast({
   language: string;
 }) {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  // Holds whichever of the two answers came back — the guiding hint or the
+  // direct correction. Both replace the toast body the same way.
   const [hint, setHint] = useState<string | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,7 +80,29 @@ export default function AdaptiveToast({
     setHint(result.success && result.hint ? result.hint : 'Could not fetch a hint right now — try again in a moment.');
   }, []);
 
+  const handleAcceptCorrection = useCallback(async () => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = null;
+    }
+    setHintLoading(true);
+    const result = await window.adaptive.requestCorrection({
+      code: currentCodeRef.current,
+      language: languageRef.current,
+    });
+    setHintLoading(false);
+    setHint(
+      result.success && result.correction
+        ? result.correction
+        : 'Could not work out a fix right now — try again in a moment.',
+    );
+  }, []);
+
   if (!suggestion) return null;
+
+  const categoryLabel = suggestion.errorCategory
+    ? CATEGORY_LABELS[suggestion.errorCategory] ?? suggestion.errorCategory
+    : null;
 
   return (
     <div
@@ -83,9 +121,33 @@ export default function AdaptiveToast({
           <i className="codicon codicon-sparkle" style={{ fontSize: '16px' }} />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs leading-snug" style={{ color: '#e5e7eb' }}>
+          {categoryLabel && !hint && (
+            <p
+              className="text-[10px] font-medium mb-1 uppercase tracking-wide"
+              style={{ color: '#f59e0b' }}
+            >
+              {categoryLabel}
+            </p>
+          )}
+          <p className="text-xs leading-snug whitespace-pre-wrap" style={{ color: '#e5e7eb' }}>
             {hint ?? suggestion.message}
           </p>
+          {suggestion.offersCorrection && !hint && (
+            <button
+              type="button"
+              onClick={handleAcceptCorrection}
+              disabled={hintLoading}
+              className="mt-2 text-[11px] px-3 py-1 rounded-md font-medium"
+              style={{
+                background: hintLoading ? '#3d2b5e' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#ffffff',
+                cursor: hintLoading ? 'default' : 'pointer',
+                border: 'none',
+              }}
+            >
+              {hintLoading ? 'Working it out…' : 'Show me the fix'}
+            </button>
+          )}
           {suggestion.offersHint && !hint && (
             <button
               type="button"

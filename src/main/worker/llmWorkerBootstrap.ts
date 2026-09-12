@@ -37,6 +37,26 @@ declare const __non_webpack_require__: (moduleId: string) => unknown;
 
 const LABEL = '[llmWorker BOOTSTRAP]';
 
+// ---------------------------------------------------------------------------
+// Print gates (added for the pre-defense logging cleanup).
+//
+// Two flags on purpose, because the two kinds of output here are not the same
+// thing:
+//
+// BOOTSTRAP_DEBUG covers the ROUTINE trace -- the boot lines and the
+// require/loaded pair. That is happy-path chatter and is off for defense.
+//
+// BOOTSTRAP_CRASH_DEBUG covers the CRASH output only: the uncaughtException /
+// unhandledRejection handlers and the failed-require stack. Left ON. Silencing
+// it would delete the single reason this file exists (a worker that dies before
+// its first message otherwise reaches main as a bare exit code with no stack).
+// Flip it only if a silent crash is genuinely what you want.
+//
+// Neither flag touches control flow: the handlers stay registered and every
+// process.exit(1) below is unconditional.
+const BOOTSTRAP_DEBUG = false;
+const BOOTSTRAP_CRASH_DEBUG = true;
+
 const describe = (err: unknown): string => {
   if (err instanceof Error) return err.stack ?? `${err.name}: ${err.message}`;
   return String(err);
@@ -47,7 +67,7 @@ const describe = (err: unknown): string => {
 //    anything else this file does.
 
 process.on('uncaughtException', (err) => {
-  console.error(`${LABEL} uncaughtException:`, describe(err));
+  if (BOOTSTRAP_CRASH_DEBUG) console.error(`${LABEL} uncaughtException:`, describe(err));
   // Exit 1, NEVER 0. `llm.ts`'s 'exit' handler has only the code to reason
   // from, so a nonzero code is what lets a real crash be told apart from a
   // clean exit going forward. (The worker's own parent-watchdog path in
@@ -56,7 +76,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error(`${LABEL} unhandledRejection:`, describe(reason));
+  if (BOOTSTRAP_CRASH_DEBUG) console.error(`${LABEL} unhandledRejection:`, describe(reason));
   process.exit(1);
 });
 
@@ -68,8 +88,10 @@ process.on('unhandledRejection', (reason) => {
 // is working this still proves the process reached JS execution at all -- the
 // single most useful fact when a fork dies having printed nothing.
 const bootLine = `${LABEL} attempting to load real worker module, pid=${process.pid}`;
-console.log(bootLine);
-console.error(bootLine);
+if (BOOTSTRAP_DEBUG) {
+  console.log(bootLine);
+  console.error(bootLine);
+}
 
 // ---------------------------------------------------------------------------
 // 3. Dynamic require in a try/catch.
@@ -96,18 +118,20 @@ try {
   const realWorkerModule =
     __filename.slice(0, at) + 'llmWorker' + __filename.slice(at + marker.length);
 
-  console.log(`${LABEL} requiring ${realWorkerModule}`);
+  if (BOOTSTRAP_DEBUG) console.log(`${LABEL} requiring ${realWorkerModule}`);
   __non_webpack_require__(realWorkerModule);
-  console.log(`${LABEL} real worker module loaded, pid=${process.pid}`);
+  if (BOOTSTRAP_DEBUG) console.log(`${LABEL} real worker module loaded, pid=${process.pid}`);
 } catch (err) {
   // The whole reason this file exists: a synchronous top-level throw inside
   // llmWorker.ts (bad import, bad top-level code, native module that will not
   // link) reaches main as a bare exit code with no stack. Now it reaches main
   // as a stack, on stderr, before the exit code.
-  console.error(
-    `${LABEL} FAILED to load the real worker module -- the inference process ` +
-      `will now exit(1). Full error follows:`,
-  );
-  console.error(describe(err));
+  if (BOOTSTRAP_CRASH_DEBUG) {
+    console.error(
+      `${LABEL} FAILED to load the real worker module -- the inference process ` +
+        `will now exit(1). Full error follows:`,
+    );
+    console.error(describe(err));
+  }
   process.exit(1);
 }

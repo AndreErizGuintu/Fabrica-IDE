@@ -7,7 +7,8 @@ import Sidebar from '../components/sidebar/Sidebar';
 import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
 import { useAIPanelState } from '../components/useAIPanelState';
-import Terminal, { TerminalHandle } from '../components/terminal/Terminal';
+import { TerminalHandle } from '../components/terminal/Terminal';
+import TerminalTabs from '../components/terminal/TerminalTabs';
 import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
 import CodeInferencePrompt from '../components/inference/CodeInferencePrompt';
@@ -18,6 +19,8 @@ import FlutterTargetSelector, {
   isAndroidPlatform,
 } from '../components/flutter/FlutterTargetSelector';
 import MirrorButton from '../components/mirror/MirrorButton';
+import SourceControlPanel from '../components/git/SourceControlPanel';
+import AndroidSdkButton from '../components/AndroidSdkButton';
 import { Tab } from '../types/index';
 
 type FloatingPanel = 'preview' | 'ai';
@@ -538,12 +541,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showPreview, setShowPreview] = useState(true);
   const [statsOpen, setStatsOpen] = useState(false);
   const [showGit, setShowGit] = useState(false);
-  const [commitMessage, setCommitMessage] = useState('');
+  // Owned by SourceControlPanel now; kept here only to feed the Sidebar's
+  // per-file git badges, which render whether or not the panel is open.
   const [gitStatusFiles, setGitStatusFiles] = useState<string[]>([]);
-  const [gitLog, setGitLog] = useState<string[]>([]);
-  const [gitChangesOpen, setGitChangesOpen] = useState(true);
-  const [gitHistoryOpen, setGitHistoryOpen] = useState(true);
-  const [gitLoading, setGitLoading] = useState(false);
+  // Incremented on every successful save so Source Control re-reads git status
+  // immediately rather than waiting for its poll tick.
+  const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [showOutput, setShowOutput] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -946,6 +949,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       triggerFlutterHotReload(targetPath);
       openFileInTab(targetPath, newName, cleaned);
       setSidebarRefreshToken((n) => n + 1);
+      setGitRefreshToken((n) => n + 1);
       showNotification(`Saved translation to ${newName}`, 'success');
       return { success: true };
     },
@@ -961,17 +965,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
   }, [openFileInTab]);
 
+  const activeTabIndexRef = useRef(activeTabIndex);
+  activeTabIndexRef.current = activeTabIndex;
+
   const handleEditorChange = useCallback((value: string | undefined) => {
-    if (!activeTab) return;
     window.stats?.activity();
-    setTabs((prev) =>
-      prev.map((tab, index) =>
-        index === activeTabIndex
-          ? { ...tab, content: value ?? '', isDirty: true }
-          : tab,
-      ),
-    );
-  }, [activeTab, activeTabIndex]);
+    setTabs((prev) => {
+      const index = activeTabIndexRef.current;
+      if (index < 0 || index >= prev.length) return prev;
+
+      const content = value ?? '';
+      if (prev[index].content === content) return prev;
+
+      const next = prev.slice();
+      next[index] = { ...next[index], content, isDirty: true };
+      return next;
+    });
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!activeTab || !activeTab.path) return;
@@ -983,6 +993,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           index === activeTabIndex ? { ...tab, isDirty: false } : tab,
         ),
       );
+      setGitRefreshToken((n) => n + 1);
       showNotification(`Saved ${activeTab.filename}`, 'success');
     } else {
       showNotification(`Failed to save ${activeTab.filename}`, 'error');
@@ -1029,69 +1040,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     await terminalRef.current?.run({ language: 'flutter', path: initialFolder, deviceId: target.id });
   }, [initialFolder]);
 
-  const runGitCommand = useCallback(async (
-    label: string,
-    fn: () => Promise<{ success: boolean; output: string; error?: string }>,
-  ) => {
-    if (!initialFolder) {
-      setShowOutput(true);
-      terminalRef.current?.write('No folder open. Open a folder first.\n');
-      showNotification('No folder open', 'error');
-      return;
-    }
-
-    setGitLoading(true);
+  // Raw git output still goes to the terminal so power users see everything;
+  // SourceControlPanel only renders the readable summary.
+  const handleGitLog = useCallback((text: string) => {
     setShowOutput(true);
-    terminalRef.current?.write(`⎇ git ${label}...\n`);
-    showNotification(`Git ${label}...`, 'info');
-
-    try {
-      const result = await fn();
-      terminalRef.current?.write(`${result.output || result.error || '(no output)'}\n`);
-      terminalRef.current?.write(result.success ? '✓ Done\n' : '✗ Failed\n');
-      if (result.success) {
-        showNotification(`Git ${label} successful`, 'success');
-      } else {
-        showNotification(`Git ${label} failed`, 'error');
-      }
-    } finally {
-      setGitLoading(false);
-    }
-  }, [initialFolder]);
-
-  const refreshGitStatus = useCallback(async () => {
-    if (!initialFolder) return;
-    const [statusResult, logResult] = await Promise.all([
-      window.git.statusFiles(initialFolder),
-      window.git.log(initialFolder),
-    ]);
-    if (statusResult.success) {
-      setGitStatusFiles(
-        statusResult.output
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean),
-      );
-    } else {
-      setGitStatusFiles([]);
-    }
-    if (logResult.success) {
-      setGitLog(
-        logResult.output
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean),
-      );
-    } else {
-      setGitLog([]);
-    }
-  }, [initialFolder]);
-
-  useEffect(() => {
-    if (initialFolder) {
-      void refreshGitStatus();
-    }
-  }, [initialFolder, refreshGitStatus]);
+    terminalRef.current?.write(text);
+  }, []);
 
   const handleOpenFileDialog = useCallback(async () => {
     const filePath = await window.fileSystem.openFile();
@@ -1174,12 +1128,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       preFullscreenRef.current = null;
     }
   }, [floatingPanel]);
-
-  useEffect(() => {
-    if (showGit) {
-      void refreshGitStatus();
-    }
-  }, [showGit, refreshGitStatus]);
 
   const currentFloatingPanel = floatingPanel ?? 'preview';
   const currentSize = floatSize[currentFloatingPanel] || { width: 420, height: 350 };
@@ -1352,6 +1300,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           {isAndroidPlatform(flutterTarget.platform) && (
             <MirrorButton udid={flutterTarget.id} />
           )}
+          <AndroidSdkButton />
           <button
             type="button"
             className="w-7 h-7 rounded flex items-center justify-center transition-all duration-200 hover:bg-[#a855f7]/10"
@@ -1518,6 +1467,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 <Editor
                   language={getLanguage(tabs[activeTabIndex].filename)}
                   filename={activeTab!.filename}
+                  path={activeTab!.path}
                   value={activeTab!.content}
                   onChange={handleEditorChange}
                   onSelectionChange={(s) => setSelectedCode(s)}
@@ -1666,294 +1616,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           )}
         </div>
 
-        {/* Git Panel */}
-        {showGit && (
-          <div
-            className="flex flex-col shrink-0 overflow-hidden border-l"
-            style={{
-              width: '260px',
-              background: '#0a0512',
-              borderColor: '#1a0a2e',
-            }}
-          >
-            <div
-              className="px-4 py-2 text-[10px] font-medium tracking-wider shrink-0 flex items-center justify-between"
-              style={{
-                color: '#a7adc5',
-                fontFamily: 'Segoe UI, sans-serif',
-                borderBottom: '1px solid #1a0a2e',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-              }}
-            >
-              <span className="flex items-center gap-2">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-                Source Control
-              </span>
-              <button
-                type="button"
-                onClick={() => void refreshGitStatus()}
-                className="transition-colors hover:text-white"
-                style={{ color: '#6b7280' }}
-                title="Refresh"
-              >
-                <i className="codicon codicon-refresh" style={{ fontSize: '13px' }} />
-              </button>
-            </div>
-
-            {/* Commit Section */}
-            <div className="px-4 pt-2 pb-2 shrink-0 flex flex-col gap-1.5 border-b" style={{ borderColor: '#1a0a2e' }}>
-              <div className="flex gap-1.5">
-                <input
-                  type="text"
-                  placeholder="Commit message (Ctrl+Enter)"
-                  value={commitMessage}
-                  onChange={(e) => setCommitMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.ctrlKey) {
-                      runGitCommand('commit', () =>
-                        window.git.commit(initialFolder!, commitMessage)
-                      );
-                      setCommitMessage('');
-                      setTimeout(() => void refreshGitStatus(), 800);
-                    }
-                  }}
-                  className="flex-1 text-[10px] px-2.5 py-1.5 rounded transition-all duration-200 focus:ring-1 focus:ring-[#a855f7]"
-                  style={{
-                    background: '#12081f',
-                    color: '#d4d4d4',
-                    border: '1px solid #1a0a2e',
-                    fontFamily: 'Segoe UI, sans-serif',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={gitLoading || !commitMessage.trim()}
-                  onClick={() => {
-                    runGitCommand('commit', () =>
-                      window.git.commit(initialFolder!, commitMessage)
-                    );
-                    setCommitMessage('');
-                    setTimeout(() => void refreshGitStatus(), 800);
-                  }}
-                  className="text-[10px] px-3 py-1.5 rounded font-medium transition-all duration-200 hover:scale-[1.02]"
-                  style={{
-                    background: gitLoading || !commitMessage.trim() ? '#1a0a2e' : '#a855f7',
-                    color: gitLoading || !commitMessage.trim() ? '#6b7280' : '#ffffff',
-                    cursor: gitLoading || !commitMessage.trim() ? 'not-allowed' : 'pointer',
-                    border: 'none',
-                  }}
-                >
-                  Commit
-                </button>
-              </div>
-
-              <div className="flex gap-1">
-                {[
-                  { label: 'init', fn: () => window.git.init(initialFolder!) },
-                  { label: 'add', fn: () => window.git.add(initialFolder!) },
-                  { label: 'push', fn: () => window.git.push(initialFolder!) },
-                  { label: 'pull', fn: () => window.git.pull(initialFolder!) },
-                ].map(({ label, fn }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    disabled={gitLoading}
-                    onClick={() => {
-                      runGitCommand(label, fn);
-                      setTimeout(() => void refreshGitStatus(), 600);
-                    }}
-                    className="flex-1 text-[10px] py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10"
-                    style={{
-                      background: '#12081f',
-                      color: '#6b7280',
-                      border: '1px solid #1a0a2e',
-                      opacity: gitLoading ? 0.4 : 1,
-                      fontFamily: 'Segoe UI, sans-serif',
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Git Status */}
-            {(() => {
-              const staged: { code: string; filename: string }[] = [];
-              const unstaged: { code: string; filename: string }[] = [];
-
-              gitStatusFiles.forEach((line) => {
-                const stagedCode = line[0] ?? ' ';
-                const unstagedCode = line[1] ?? ' ';
-                const filename = line.slice(3);
-                if (!filename) return;
-
-                if (line.startsWith('??')) {
-                  unstaged.push({ code: '?', filename });
-                  return;
-                }
-                if (stagedCode !== ' ') {
-                  staged.push({ code: stagedCode, filename });
-                }
-                if (unstagedCode !== ' ') {
-                  unstaged.push({ code: unstagedCode, filename });
-                }
-              });
-
-              const codeColor = (code: string) => {
-                if (code === 'M') return '#fbbf24';
-                if (code === 'A' || code === '?') return '#4ade80';
-                if (code === 'D') return '#f87171';
-                if (code === 'R') return '#60a5fa';
-                return '#6b7280';
-              };
-
-              const renderRow = (item: { code: string; filename: string }, i: number) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 px-4 py-0.5 text-xs truncate transition-colors hover:bg-[#a855f7]/10"
-                  style={{ fontFamily: 'Segoe UI, sans-serif', color: codeColor(item.code) }}
-                >
-                  <span className="shrink-0 text-[10px] font-medium w-4">{item.code}</span>
-                  <span className="truncate">{item.filename}</span>
-                </div>
-              );
-
-              return (
-                <div className="flex-1 overflow-y-auto">
-                  <div className="shrink-0">
-                    <div
-                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium"
-                      style={{
-                        color: '#6b7280',
-                        fontFamily: 'Segoe UI, sans-serif',
-                        background: '#0a0512',
-                        borderTop: '1px solid #1a0a2e',
-                        borderBottom: '1px solid #1a0a2e',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      <i className="codicon codicon-chevron-down" style={{ fontSize: '11px' }} />
-                      Staged
-                      {staged.length > 0 && (
-                        <span
-                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
-                          style={{ background: '#4ade80', color: '#0a0512' }}
-                        >
-                          {staged.length}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      {staged.length === 0 ? (
-                        <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
-                          Nothing staged
-                        </div>
-                      ) : (
-                        staged.map(renderRow)
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setGitChangesOpen((p) => !p)}
-                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium transition-colors hover:bg-[#a855f7]/10"
-                      style={{
-                        color: '#6b7280',
-                        fontFamily: 'Segoe UI, sans-serif',
-                        background: '#0a0512',
-                        borderTop: '1px solid #1a0a2e',
-                        borderBottom: gitChangesOpen ? '1px solid #1a0a2e' : 'none',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      <i className={`codicon ${gitChangesOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '11px' }} />
-                      Changes
-                      {unstaged.length > 0 && (
-                        <span
-                          className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
-                          style={{ background: '#a855f7', color: '#0a0512' }}
-                        >
-                          {unstaged.length}
-                        </span>
-                      )}
-                    </button>
-                    {gitChangesOpen && (
-                      <div>
-                        {unstaged.length === 0 ? (
-                          <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
-                            {initialFolder ? 'No changes' : 'No folder open'}
-                          </div>
-                        ) : (
-                          unstaged.map(renderRow)
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setGitHistoryOpen((p) => !p)}
-                      className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium transition-colors hover:bg-[#a855f7]/10"
-                      style={{
-                        color: '#6b7280',
-                        fontFamily: 'Segoe UI, sans-serif',
-                        background: '#0a0512',
-                        borderTop: '1px solid #1a0a2e',
-                        borderBottom: gitHistoryOpen ? '1px solid #1a0a2e' : 'none',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      <i className={`codicon ${gitHistoryOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '11px' }} />
-                      History
-                    </button>
-                    {gitHistoryOpen && (
-                      <div>
-                        {gitLog.length === 0 ? (
-                          <div className="px-4 py-1.5 text-xs" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
-                            No commits
-                          </div>
-                        ) : (
-                          gitLog.map((line, i) => {
-                            const sha = line.slice(0, 7);
-                            const message = line.slice(8);
-                            return (
-                              <div
-                                key={i}
-                                className="flex items-start gap-2 px-4 py-0.5 text-xs hover:bg-[#a855f7]/10"
-                                style={{ fontFamily: 'Segoe UI, sans-serif' }}
-                              >
-                                <span
-                                  className="shrink-0 px-1.5 py-0.5 rounded"
-                                  style={{ background: '#1a0a2e', color: '#a855f7', fontSize: '9px' }}
-                                >
-                                  {sha}
-                                </span>
-                                <span className="truncate" style={{ color: '#6b7280' }}>
-                                  {message}
-                                </span>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
+        {/* Source Control — all logic lives in the component; it stays mounted
+            while hidden so the Sidebar keeps receiving status updates. */}
+        <SourceControlPanel
+          cwd={initialFolder}
+          visible={showGit}
+          onLog={handleGitLog}
+          onNotify={showNotification}
+          onStatusChange={setGitStatusFiles}
+          refreshToken={gitRefreshToken}
+        />
       </div>
 
       {/* Floating Preview */}
@@ -2090,7 +1762,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </div>
         )}
         <div className="flex-1 min-h-0">
-          <Terminal ref={terminalRef} onClose={() => setShowOutput(false)} onRunningChange={setIsRunning} />
+          <TerminalTabs
+            ref={terminalRef}
+            onClose={() => setShowOutput(false)}
+            onRunningChange={setIsRunning}
+            cwd={initialFolder}
+          />
         </div>
       </div>
 

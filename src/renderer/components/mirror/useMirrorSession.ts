@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Owns the lifecycle of one mirror server for whichever component uses it:
 // `port` is the running server's port, or null when nothing is mirroring.
@@ -13,11 +13,23 @@ export type MirrorSession = {
   isMirroring: boolean;
   error: string | null;
   toggle: () => Promise<void>;
+  // Unconditional teardown, for callers that know the session must end and are
+  // not toggling a button: the device went away, the panel is closing. Separate
+  // from `toggle` because toggle would START a server when none is running,
+  // which is the opposite of what those callers want.
+  stop: () => Promise<void>;
 };
 
 export default function useMirrorSession(): MirrorSession {
   const [port, setPort] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Mirrors `port` for the unmount cleanup below. A cleanup function captures
+  // the state from the render it was created in, so reading `port` there would
+  // see whatever it was when the effect last ran -- null, on the mount pass.
+  // The ref always reads current.
+  const portRef = useRef<number | null>(null);
+  portRef.current = port;
 
   // No in-flight guard on purpose: startMirrorServer() already coalesces
   // concurrent calls into one fork and returns the running server's port, so a
@@ -59,5 +71,42 @@ export default function useMirrorSession(): MirrorSession {
     }
   }, [port]);
 
-  return { port, isMirroring: port !== null, error, toggle };
+  const stop = useCallback(async () => {
+    if (portRef.current === null) return;
+
+    console.log('[MIRROR:stop] Explicit stop requested, port:', portRef.current);
+    try {
+      await window.mirror.stop();
+    } catch (err) {
+      // Same reasoning as toggle's stop path: the UI has to close either way.
+      console.error('[mirror] stop failed:', err);
+    }
+    setPort(null);
+    setError(null);
+  }, []);
+
+  // Teardown on unmount. Without this, anything that removes this hook's owner
+  // from the tree -- the user leaving the editor screen, the selected run target
+  // changing to a non-Android device, a device disconnect that unmounts the
+  // button -- would take the panel away while leaving the forked ws-scrcpy
+  // server running, holding both its port and the phone's scrcpy connection
+  // with no UI left to stop it. This is the renderer-side counterpart to
+  // main.ts's `before-quit` handler in mirrorProcess.ts: same rule (nothing may
+  // dangle), applied at the other end of the lifecycle.
+  //
+  // Deliberately fire-and-forget: a cleanup function cannot await, and
+  // `mirror:stop` is a no-op when nothing is running, so a redundant call from
+  // a race with an explicit stop is harmless.
+  useEffect(
+    () => () => {
+      if (portRef.current === null) return;
+      console.log('[MIRROR:unmount] Owner unmounted while mirroring, stopping server');
+      void window.mirror.stop().catch((err: unknown) => {
+        console.error('[mirror] stop on unmount failed:', err);
+      });
+    },
+    [],
+  );
+
+  return { port, isMirroring: port !== null, error, toggle, stop };
 }
