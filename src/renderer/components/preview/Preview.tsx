@@ -29,11 +29,11 @@ export default function Preview({ html, isHtmlFile, zoom = 1, device = 'desktop'
 
   return (
     <div className="flex flex-col h-full w-full"
-      style={{ background: '#120A1F', borderLeft: '1px solid #2A183D' }}>
+      style={{ background: '#180C29', borderLeft: '1px solid rgba(168, 85, 247, 0.16)' }}>
 
       {/* Preview area */}
       {isHtmlFile ? (
-        <div className="flex-1 overflow-auto flex items-center justify-center" style={{ background: '#120A1F' }}>
+        <div className="flex-1 overflow-auto flex items-center justify-center" style={{ background: '#180C29' }}>
           <div style={{ width: getDeviceWidth(), height: '100%', transition: 'width 0.3s ease' }}>
             <iframe
               ref={iframeRef}

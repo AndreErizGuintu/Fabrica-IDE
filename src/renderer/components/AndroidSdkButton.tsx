@@ -125,7 +125,7 @@ export default function AndroidSdkButton() {
         className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
         style={{
           background: active ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-          color: mode === 'error' ? '#f87171' : active ? '#a855f7' : '#a7adc5',
+          color: mode === 'error' ? '#f87171' : active ? '#a855f7' : '#B8AFC2',
           border: active ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
           cursor: mode === 'working' ? 'default' : 'pointer',
         }}
@@ -146,12 +146,12 @@ export default function AndroidSdkButton() {
         <div
           className="absolute right-0 top-full mt-1 z-50 w-96 rounded p-3 flex flex-col gap-2"
           style={{
-            background: '#2d1b4e',
+            background: '#180C29',
             border: '1px solid #a855f7',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
           }}
         >
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}>
+          <div className="text-xs" style={{ color: '#B8AFC2', fontFamily: 'Space Mono, monospace' }}>
             Android SDK license
           </div>
           <pre
@@ -172,7 +172,7 @@ export default function AndroidSdkButton() {
               className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10"
               style={{
                 background: 'rgba(255, 255, 255, 0.05)',
-                color: '#a7adc5',
+                color: '#B8AFC2',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >

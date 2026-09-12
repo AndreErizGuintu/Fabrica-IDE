@@ -1,34 +1,34 @@
 /* Monaco editor overrides go here when enabled. */
 /* Editor styles - Override Monaco defaults to match violet theme */
 .monaco-editor {
-  background-color: #1a0a2e !important;
+  background-color: #0F0616 !important;
 }
 
 .monaco-editor .margin {
-  background-color: #1a0a2e !important;
+  background-color: #0F0616 !important;
 }
 
 .monaco-editor .monaco-editor-background {
-  background-color: #1a0a2e !important;
+  background-color: #0F0616 !important;
 }
 
 /* Scrollbar styling to match theme */
 .monaco-editor .scrollbar .slider {
-  background: #2d1b4e !important;
+  background: #180C29 !important;
 }
 
 .monaco-editor .scrollbar .slider:hover {
-  background: #3d2b5e !important;
+  background: #1C0F30 !important;
 }
 
 /* Selection highlight */
 .monaco-editor .selected-text {
-  background-color: #3d2b5e !important;
+  background-color: #1C0F30 !important;
 }
 
 /* Line numbers */
 .monaco-editor .line-numbers {
-  color: #6b7280 !important;
+  color: #81748F !important;
 }
 
 .monaco-editor .current-line ~ .line-numbers {
@@ -37,7 +37,7 @@
 
 /* Current line highlight */
 .monaco-editor .view-overlays .current-line {
-  background-color: rgba(45, 27, 78, 0.5) !important;
+  background-color: rgba(24, 12, 41, 0.5) !important;
   border: none !important;
 }
 
@@ -54,25 +54,25 @@
 
 /* Hover and suggestion widgets */
 .monaco-editor .monaco-hover {
-  background-color: #1a0a2e !important;
-  border: 1px solid #2d1b4e !important;
+  background-color: #0F0616 !important;
+  border: 1px solid rgba(168, 85, 247, 0.16) !important;
 }
 
 .monaco-editor .suggest-widget {
-  background-color: #1a0a2e !important;
-  border: 1px solid #2d1b4e !important;
+  background-color: #0F0616 !important;
+  border: 1px solid rgba(168, 85, 247, 0.16) !important;
 }
 
 .monaco-editor .suggest-widget .monaco-list-row.focused {
-  background-color: #2d1b4e !important;
+  background-color: #180C29 !important;
 }
 
 /* Peek view */
 .monaco-editor .peekview-widget {
-  background-color: #1a0a2e !important;
-  border: 1px solid #2d1b4e !important;
+  background-color: #0F0616 !important;
+  border: 1px solid rgba(168, 85, 247, 0.16) !important;
 }
 
 .monaco-editor .peekview-widget .head {
-  background-color: #2d1b4e !important;
+  background-color: #180C29 !important;
 }

@@ -548,9 +548,9 @@ export default function CodeInferencePrompt() {
         style={{
           top: Math.max(8, Math.min(ghostHint.top, window.innerHeight - 40)),
           left: Math.max(8, Math.min(ghostHint.left, window.innerWidth - 220)),
-          background: '#2d1b4e',
+          background: '#180C29',
           border: '1px solid #a855f7',
-          color: '#a7adc5',
+          color: '#B8AFC2',
           fontFamily: 'Space Mono, monospace',
           fontSize: 10,
           boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
@@ -587,7 +587,7 @@ export default function CodeInferencePrompt() {
         top: Math.max(8, placement.top),
         left: Math.max(8, placement.left),
         width: CARD_WIDTH,
-        background: '#2d1b4e',
+        background: '#180C29',
         border: '1px solid #a855f7',
         color: '#ffffff',
         fontFamily: 'Segoe UI, sans-serif',
@@ -599,7 +599,7 @@ export default function CodeInferencePrompt() {
           <i className="codicon codicon-sparkle" style={{ fontSize: '16px' }} />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs leading-snug" style={{ color: '#e5e7eb' }}>
+          <p className="text-xs leading-snug" style={{ color: '#F5F0FA' }}>
             {error ??
               `Looks like you're building a ${label} file — want me to complete it?`}
           </p>
@@ -612,7 +612,7 @@ export default function CodeInferencePrompt() {
                 className="text-[11px] px-3 py-1 rounded-md font-medium"
                 style={{
                   background: busy
-                    ? '#3d2b5e'
+                    ? '#1C0F30'
                     : 'linear-gradient(135deg, #a855f7, #7c3aed)',
                   color: '#ffffff',
                   cursor: busy ? 'default' : 'pointer',
@@ -628,7 +628,7 @@ export default function CodeInferencePrompt() {
                   className="text-[11px] px-2 py-1 rounded-md"
                   style={{
                     background: 'transparent',
-                    color: '#a7adc5',
+                    color: '#B8AFC2',
                     border: 'none',
                     cursor: 'pointer',
                   }}
@@ -644,7 +644,7 @@ export default function CodeInferencePrompt() {
             type="button"
             onClick={dismiss}
             className="text-[10px] shrink-0 hover:text-white transition-colors"
-            style={{ color: '#a7adc5' }}
+            style={{ color: '#B8AFC2' }}
             title="Dismiss"
           >
             <i className="codicon codicon-close" style={{ fontSize: '12px' }} />

@@ -80,7 +80,7 @@ export default function FlutterTargetSelector({
         style={{
           background: 'rgba(255, 255, 255, 0.05)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
-          color: '#6b7280',
+          color: '#81748F',
           cursor: 'not-allowed',
         }}
       >
@@ -106,7 +106,7 @@ export default function FlutterTargetSelector({
         className="flex items-center gap-2 pl-3 pr-2 py-1 rounded-l text-sm font-medium transition-colors hover:bg-[#a855f7]/10"
         style={{
           background: 'rgba(255, 255, 255, 0.05)',
-          color: isRunning ? '#6b7280' : '#a7adc5',
+          color: isRunning ? '#81748F' : '#B8AFC2',
           borderTop: '1px solid rgba(255, 255, 255, 0.08)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
@@ -128,7 +128,7 @@ export default function FlutterTargetSelector({
         className="flex items-center px-1.5 py-1 rounded-r text-sm transition-colors hover:bg-[#a855f7]/10"
         style={{
           background: 'rgba(255, 255, 255, 0.05)',
-          color: isRunning ? '#6b7280' : '#a7adc5',
+          color: isRunning ? '#81748F' : '#B8AFC2',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           cursor: disabled || targets.length === 0 || isRunning ? 'not-allowed' : 'pointer',
         }}
@@ -142,8 +142,8 @@ export default function FlutterTargetSelector({
         <div
           className="absolute top-full right-0 mt-1 rounded-lg overflow-hidden z-50"
           style={{
-            background: '#1e1e2e',
-            border: '1px solid #2d2d3a',
+            background: '#180C29',
+            border: '1px solid rgba(168, 85, 247, 0.16)',
             minWidth: '220px',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
           }}
@@ -155,13 +155,13 @@ export default function FlutterTargetSelector({
               onClick={() => handleSelect(target)}
               className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/5"
               style={{
-                color: target.id === selected?.id ? '#a78bfa' : '#d4d4d4',
-                background: target.id === selected?.id ? 'rgba(167, 139, 250, 0.1)' : 'transparent',
+                color: target.id === selected?.id ? '#C084FC' : '#F5F0FA',
+                background: target.id === selected?.id ? 'rgba(192, 132, 252, 0.1)' : 'transparent',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
               {target.name}
-              <span className="block text-[10px]" style={{ color: '#6b7280' }}>
+              <span className="block text-[10px]" style={{ color: '#81748F' }}>
                 {target.platform || 'device'}
               </span>
             </button>

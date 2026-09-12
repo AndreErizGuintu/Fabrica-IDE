@@ -38,6 +38,11 @@ type AggregateFile = {
 
 let current: SessionState | null = null;
 
+// TEMP DIAGNOSTIC (duplicate-session investigation, remove once confirmed):
+// counts every startSession() call so terminal output shows call ordering,
+// not just timestamps that may round to the same displayed minute.
+let sessionCallSeq = 0;
+
 const getStatsRoot = () => path.join(app.getPath('userData'), 'stats');
 const getProjectsRoot = () => path.join(getStatsRoot(), 'projects');
 const getAggregatePath = () => path.join(getStatsRoot(), 'aggregate.json');
@@ -104,6 +109,12 @@ function tick() {
 }
 
 export function startSession(projectPath: string) {
+  sessionCallSeq += 1;
+  // TEMP DIAGNOSTIC (duplicate-session investigation, remove once confirmed):
+  console.log(
+    `[STATS][start #${sessionCallSeq}] project=${projectPath} hadPriorSession=${current !== null} at=${new Date().toISOString()}`,
+  );
+
   if (current) {
     // eslint-disable-next-line no-use-before-define
     endSession();
@@ -194,6 +205,17 @@ export function endSession() {
     getProjectsRoot(),
     current.projectHash,
     `session-${fileTimestamp}.json`,
+  );
+
+  // TEMP DIAGNOSTIC (duplicate-session investigation, remove once confirmed):
+  // this is the actual write point. sessionId = the filename-safe timestamp
+  // used as this session file's on-disk identity (there is no separate id
+  // field). durationMs makes restart-churn sessions (near 0) obvious even
+  // when sessionStart/sessionEnd round to the same displayed minute.
+  console.log(
+    `[STATS][end] sessionId=session-${fileTimestamp} project=${sessionFile.projectPath} `
+    + `sessionStart=${sessionFile.sessionStart} sessionEnd=${sessionFile.sessionEnd} `
+    + `durationMs=${Date.parse(sessionFile.sessionEnd) - Date.parse(sessionFile.sessionStart)}`,
   );
 
   try {

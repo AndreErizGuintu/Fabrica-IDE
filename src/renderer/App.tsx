@@ -227,7 +227,7 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   }, [onDone]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4" style={{ backgroundColor: '#1a0a2e' }}>
+    <div className="min-h-screen w-full flex items-center justify-center p-4" style={{ backgroundColor: '#100718' }}>
       <div className="w-full max-w-xl text-center flex flex-col items-center gap-6">
         <img 
           src={logo} 
@@ -245,7 +245,7 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
         </div>
         <div
           className="w-96 h-2 rounded-full overflow-hidden"
-          style={{ backgroundColor: '#2d1b4e' }}
+          style={{ backgroundColor: '#180C29' }}
         >
           <div
             className="h-full rounded-full animate-progress"
@@ -274,10 +274,10 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
       <div
         className="flex flex-col w-48 lg:w-56 shrink-0"
-        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#180C29', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="Fabrica" className="w-6 h-6" />
@@ -290,7 +290,7 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
           <button
             onClick={onBack}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>📁</span> Projects
           </button>
@@ -308,27 +308,27 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
           <button
             onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>⚙️</span> Settings
           </button>
         </nav>
 
         <div className="mt-auto px-3 py-3">
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
+          <div className="text-xs" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
             Offline model
           </div>
           <div
             className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: '#1a0a2e',
-              color: '#d4d4d4',
+              backgroundColor: '#100718',
+              color: '#F5F0FA',
               fontFamily: 'Segoe UI, sans-serif',
-              border: '1px solid #3d2b5e',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
             }}
           >
             <span>llama-3.1-8b</span>
-            <span style={{ color: '#a7adc5' }}>▼</span>
+            <span style={{ color: '#B8AFC2' }}>▼</span>
           </div>
         </div>
       </div>
@@ -336,7 +336,7 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
       <div className="flex-1 flex flex-col overflow-hidden">
         <div
           className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid #3d2b5e' }}
+          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
         >
           <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
             Templates
@@ -350,15 +350,15 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
                 key={template.id}
                 className="p-4 rounded-lg transition-colors hover:bg-white/5"
                 style={{
-                  backgroundColor: '#2d1b4e',
-                  border: '1px solid #3d2b5e',
+                  backgroundColor: '#180C29',
+                  border: '1px solid rgba(168, 85, 247, 0.24)',
                 }}
               >
                 <div className="text-3xl mb-2">{template.icon}</div>
                 <div className="text-sm font-medium" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
                   {template.name}
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-xs mt-1" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                   {template.description}
                 </div>
                 <button
@@ -403,7 +403,7 @@ function ToggleSwitch({
       style={{
         width: '38px',
         height: '20px',
-        backgroundColor: checked ? '#a855f7' : '#3d2b5e',
+        backgroundColor: checked ? '#a855f7' : '#1C0F30',
       }}
     >
       <span
@@ -432,13 +432,13 @@ function SettingsRow({
   return (
     <div
       className="flex items-center justify-between gap-6 py-3"
-      style={{ borderBottom: '1px solid #2d1b4e' }}
+      style={{ borderBottom: '1px solid #180C29' }}
     >
       <div>
         <div className="text-sm font-medium" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
           {label}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+        <div className="text-xs mt-0.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
           {description}
         </div>
       </div>
@@ -449,7 +449,7 @@ function SettingsRow({
 
 function GeneralSettingsCategory() {
   return (
-    <div className="text-sm" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+    <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
       General settings are coming soon.
     </div>
   );
@@ -457,7 +457,7 @@ function GeneralSettingsCategory() {
 
 function AppearanceSettingsCategory() {
   return (
-    <div className="text-sm" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+    <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
       Appearance settings (theme, etc.) are coming soon.
     </div>
   );
@@ -486,7 +486,7 @@ function EditorSettingsCategory() {
           />
           <span
             className="text-xs w-10 text-right"
-            style={{ color: '#d4d4d4', fontFamily: 'Space Mono, monospace' }}
+            style={{ color: '#F5F0FA', fontFamily: 'Space Mono, monospace' }}
           >
             {fontSize}px
           </span>
@@ -499,9 +499,9 @@ function EditorSettingsCategory() {
           onChange={(e) => setTabSize(Number(e.target.value))}
           className="px-3 py-1.5 rounded text-sm outline-none"
           style={{
-            backgroundColor: '#1a0a2e',
-            color: '#d4d4d4',
-            border: '1px solid #3d2b5e',
+            backgroundColor: '#100718',
+            color: '#F5F0FA',
+            border: '1px solid rgba(168, 85, 247, 0.24)',
             fontFamily: 'Segoe UI, sans-serif',
           }}
         >
@@ -512,7 +512,7 @@ function EditorSettingsCategory() {
       </SettingsRow>
 
       <SettingsRow label="Indentation" description="Insert spaces or tab characters when pressing Tab.">
-        <div className="flex rounded overflow-hidden" style={{ border: '1px solid #3d2b5e' }}>
+        <div className="flex rounded overflow-hidden" style={{ border: '1px solid rgba(168, 85, 247, 0.24)' }}>
           {(['spaces', 'tabs'] as const).map((option) => (
             <button
               key={option}
@@ -520,8 +520,8 @@ function EditorSettingsCategory() {
               onClick={() => setIndentType(option)}
               className="px-3 py-1.5 text-xs font-medium capitalize transition-colors"
               style={{
-                backgroundColor: indentType === option ? '#a855f7' : '#1a0a2e',
-                color: indentType === option ? '#ffffff' : '#a7adc5',
+                backgroundColor: indentType === option ? '#a855f7' : '#100718',
+                color: indentType === option ? '#ffffff' : '#B8AFC2',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
@@ -552,10 +552,10 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
       <div
         className="flex flex-col w-48 lg:w-56 shrink-0"
-        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#180C29', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="Fabrica" className="w-6 h-6" />
@@ -568,7 +568,7 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
           <button
             onClick={onBack}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>📁</span> Projects
           </button>
@@ -586,30 +586,30 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
         </nav>
 
         <div className="mt-auto px-3 py-3">
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
+          <div className="text-xs" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
             Offline model
           </div>
           <div
             className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: '#1a0a2e',
-              color: '#d4d4d4',
+              backgroundColor: '#100718',
+              color: '#F5F0FA',
               fontFamily: 'Segoe UI, sans-serif',
-              border: '1px solid #3d2b5e',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
             }}
           >
             <span>llama-3.1-8b</span>
-            <span style={{ color: '#a7adc5' }}>▼</span>
+            <span style={{ color: '#B8AFC2' }}>▼</span>
           </div>
         </div>
       </div>
 
       <div
         className="flex flex-col w-44 shrink-0"
-        style={{ backgroundColor: '#1a0a2e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#100718', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="px-4 py-4">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
             Categories
           </span>
         </div>
@@ -622,7 +622,7 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
               className="w-full text-left px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
               style={{
                 backgroundColor: activeCategory === category.id ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                color: activeCategory === category.id ? '#a855f7' : '#a7adc5',
+                color: activeCategory === category.id ? '#a855f7' : '#B8AFC2',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
@@ -635,7 +635,7 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div
           className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid #3d2b5e' }}
+          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
         >
           <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
             {categories.find((c) => c.id === activeCategory)?.label}
@@ -678,10 +678,10 @@ function NewProjectScreen({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
       <div
         className="flex flex-col w-48 lg:w-56 shrink-0"
-        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#180C29', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="Fabrica" className="w-6 h-6" />
@@ -694,7 +694,7 @@ function NewProjectScreen({
           <button
             onClick={onBack}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>📁</span> Projects
           </button>
@@ -711,7 +711,7 @@ function NewProjectScreen({
           <button
             onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>⚙️</span> Settings
           </button>
@@ -722,7 +722,7 @@ function NewProjectScreen({
       <div className="flex-1 flex flex-col overflow-hidden">
         <div
           className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid #3d2b5e' }}
+          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
         >
           <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
             New Project
@@ -731,7 +731,7 @@ function NewProjectScreen({
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="max-w-3xl mx-auto">
-            <p className="text-sm mb-6" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+            <p className="text-sm mb-6" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
               Choose a language to scaffold a starter project you can run straight away.
             </p>
 
@@ -744,21 +744,21 @@ function NewProjectScreen({
                     onClick={() => setSelectedTemplate(template.id)}
                     className="p-3 sm:p-4 rounded-lg text-left transition-all duration-200"
                     style={{
-                      backgroundColor: isSelected ? '#1a0a2e' : '#2d1b4e',
-                      border: isSelected ? '2px solid #a855f7' : '1px solid #3d2b5e',
+                      backgroundColor: isSelected ? '#100718' : '#180C29',
+                      border: isSelected ? '2px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.24)',
                       transform: isSelected ? 'scale(1.02)' : 'scale(1)',
                       boxShadow: isSelected ? '0 0 20px rgba(168, 85, 247, 0.2)' : 'none',
                     }}
                     onMouseEnter={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#3d2b5e';
+                        e.currentTarget.style.backgroundColor = '#1C0F30';
                         e.currentTarget.style.borderColor = '#4d3b6e';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#2d1b4e';
-                        e.currentTarget.style.borderColor = '#3d2b5e';
+                        e.currentTarget.style.backgroundColor = '#180C29';
+                        e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.24)';
                       }
                     }}
                   >
@@ -766,7 +766,7 @@ function NewProjectScreen({
                     <div 
                       className="text-sm sm:text-base font-medium" 
                       style={{ 
-                        color: isSelected ? '#ffffff' : '#d4d4d4', 
+                        color: isSelected ? '#ffffff' : '#F5F0FA', 
                         fontFamily: 'Segoe UI, sans-serif' 
                       }}
                     >
@@ -775,7 +775,7 @@ function NewProjectScreen({
                     <div 
                       className="text-xs sm:text-sm" 
                       style={{ 
-                        color: isSelected ? '#a855f7' : '#a7adc5', 
+                        color: isSelected ? '#a855f7' : '#B8AFC2', 
                         fontFamily: 'Segoe UI, sans-serif' 
                       }}
                     >
@@ -795,7 +795,7 @@ function NewProjectScreen({
             </div>
 
             <div className="mb-6">
-              <label className="text-sm font-medium block mb-1.5" style={{ color: '#d4d4d4', fontFamily: 'Segoe UI, sans-serif' }}>
+              <label className="text-sm font-medium block mb-1.5" style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
                 Project Name
               </label>
               <input
@@ -804,9 +804,9 @@ function NewProjectScreen({
                 onChange={(e) => setProjectName(e.target.value)}
                 className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
                 style={{
-                  backgroundColor: '#1a0a2e',
-                  color: '#d4d4d4',
-                  border: '1px solid #3d2b5e',
+                  backgroundColor: '#100718',
+                  color: '#F5F0FA',
+                  border: '1px solid rgba(168, 85, 247, 0.24)',
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => {
@@ -817,7 +817,7 @@ function NewProjectScreen({
             </div>
 
             <div className="mb-6">
-              <label className="text-sm font-medium block mb-1.5" style={{ color: '#d4d4d4', fontFamily: 'Segoe UI, sans-serif' }}>
+              <label className="text-sm font-medium block mb-1.5" style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
                 Git remote URL (optional)
               </label>
               <input
@@ -827,16 +827,16 @@ function NewProjectScreen({
                 placeholder="https://github.com/user/repo.git"
                 className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
                 style={{
-                  backgroundColor: '#1a0a2e',
-                  color: '#d4d4d4',
-                  border: '1px solid #3d2b5e',
+                  backgroundColor: '#100718',
+                  color: '#F5F0FA',
+                  border: '1px solid rgba(168, 85, 247, 0.24)',
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreate();
                 }}
               />
-              <p className="text-xs mt-1.5" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+              <p className="text-xs mt-1.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                 Leave blank to just initialise a local repository. If filled, the
                 project is also wired to this remote as “origin” and gets an
                 initial commit.
@@ -847,9 +847,9 @@ function NewProjectScreen({
               <pre
                 className="mb-4 p-3 rounded text-xs overflow-y-auto whitespace-pre-wrap"
                 style={{
-                  backgroundColor: '#120A1F',
-                  color: '#a7adc5',
-                  border: '1px solid #3d2b5e',
+                  backgroundColor: '#180C29',
+                  color: '#B8AFC2',
+                  border: '1px solid rgba(168, 85, 247, 0.24)',
                   maxHeight: '160px',
                   fontFamily: 'Space Mono, monospace',
                 }}
@@ -864,7 +864,7 @@ function NewProjectScreen({
                 disabled={busy}
                 className="px-4 py-2 text-sm rounded transition-colors hover:bg-white/5"
                 style={{
-                  color: '#a7adc5',
+                  color: '#B8AFC2',
                   fontFamily: 'Segoe UI, sans-serif',
                   opacity: busy ? 0.5 : 1,
                   cursor: busy ? 'not-allowed' : 'pointer',
@@ -877,8 +877,8 @@ function NewProjectScreen({
                 disabled={busy || !projectName.trim()}
                 className="px-4 py-2 text-sm font-medium rounded transition-colors hover:bg-purple-500"
                 style={{
-                  backgroundColor: busy || !projectName.trim() ? '#3d2b5e' : '#a855f7',
-                  color: busy || !projectName.trim() ? '#a7adc5' : '#ffffff',
+                  backgroundColor: busy || !projectName.trim() ? '#1C0F30' : '#a855f7',
+                  color: busy || !projectName.trim() ? '#B8AFC2' : '#ffffff',
                   fontFamily: 'Segoe UI, sans-serif',
                   cursor: busy || !projectName.trim() ? 'not-allowed' : 'pointer',
                 }}
@@ -942,11 +942,11 @@ function MainMenu({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
       {/* Sidebar */}
       <div
         className="flex flex-col w-48 lg:w-56 shrink-0"
-        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#180C29', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="Fabrica" className="w-6 h-6" />
@@ -969,34 +969,34 @@ function MainMenu({
           <button
             onClick={onOpenStats}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>📊</span> Stats
           </button>
           <button
             onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             <span>⚙️</span> Settings
           </button>
         </nav>
 
         <div className="mt-auto px-3 py-3">
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
+          <div className="text-xs" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif', marginBottom: '4px' }}>
             Offline model
           </div>
           <div
             className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: '#1a0a2e',
-              color: '#d4d4d4',
+              backgroundColor: '#100718',
+              color: '#F5F0FA',
               fontFamily: 'Segoe UI, sans-serif',
-              border: '1px solid #3d2b5e',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
             }}
           >
             <span>llama-3.1-8b</span>
-            <span style={{ color: '#a7adc5' }}>▼</span>
+            <span style={{ color: '#B8AFC2' }}>▼</span>
           </div>
         </div>
       </div>
@@ -1005,7 +1005,7 @@ function MainMenu({
       <div className="flex-1 flex flex-col overflow-hidden">
         <div
           className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid #3d2b5e' }}
+          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
         >
           <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
             Projects
@@ -1033,9 +1033,9 @@ function MainMenu({
               className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
               style={{
                 height: '48px',
-                backgroundColor: '#2d1b4e',
+                backgroundColor: '#180C29',
                 color: '#ffffff',
-                border: '1px solid #3d2b5e',
+                border: '1px solid rgba(168, 85, 247, 0.24)',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
@@ -1046,9 +1046,9 @@ function MainMenu({
               className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
               style={{
                 height: '48px',
-                backgroundColor: '#2d1b4e',
+                backgroundColor: '#180C29',
                 color: '#ffffff',
-                border: '1px solid #3d2b5e',
+                border: '1px solid rgba(168, 85, 247, 0.24)',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
@@ -1064,22 +1064,22 @@ function MainMenu({
             {recentProjects.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <div className="text-4xl mb-3 opacity-30">📂</div>
-                <div className="text-sm" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                   No projects yet
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#3d2b5e', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-xs mt-1" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
                   Click "New Project" to get started
                 </div>
               </div>
             ) : (
               recentProjects.map((project, index) => (
                 <div
-                  key={project.name}
+                  key={project.path}
                   onClick={() => onOpenProject(project)}
                   className="p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/10 hover:-translate-y-1"
                   style={{
-                    backgroundColor: '#2d1b4e',
-                    border: '1px solid #3d2b5e',
+                    backgroundColor: '#180C29',
+                    border: '1px solid rgba(168, 85, 247, 0.24)',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
@@ -1087,7 +1087,7 @@ function MainMenu({
                   <div className="flex items-center gap-3 mb-2">
                     <div
                       className="w-8 h-8 sm:w-10 sm:h-10 rounded flex items-center justify-center text-base sm:text-lg"
-                      style={{ backgroundColor: '#1a0a2e' }}
+                      style={{ backgroundColor: '#100718' }}
                     >
                       📁
                     </div>
@@ -1095,13 +1095,13 @@ function MainMenu({
                       <div className="text-xs sm:text-sm font-medium" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
                         {project.name}
                       </div>
-                      <div className="text-[10px] sm:text-xs" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+                      <div className="text-[10px] sm:text-xs" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                         {index === 0 ? '2 hours ago' : index === 1 ? 'Yesterday' : '3 days ago'}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded" style={{ backgroundColor: '#1a0a2e', color: '#a7adc5' }}>
+                    <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded" style={{ backgroundColor: '#100718', color: '#B8AFC2' }}>
                       Local
                     </span>
                   </div>
@@ -1114,14 +1114,14 @@ function MainMenu({
           <div
             className="p-3 rounded-lg transition-all duration-200 hover:border-purple-500"
             style={{
-              backgroundColor: '#2d1b4e',
-              border: '1px solid #3d2b5e',
+              backgroundColor: '#180C29',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
             }}
           >
             <div className="text-[10px] sm:text-xs font-medium" style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif' }}>
               WHAT'S NEW
             </div>
-            <div className="text-xs sm:text-sm mt-1" style={{ color: '#d4d4d4', fontFamily: 'Segoe UI, sans-serif' }}>
+            <div className="text-xs sm:text-sm mt-1" style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
               Offline AI completion for Rust and Go · Faster indexing · Terminal fixes
             </div>
           </div>
@@ -1143,8 +1143,8 @@ function MainMenu({
           <div
             className="rounded-lg p-6 w-[480px] max-w-[90vw]"
             style={{
-              backgroundColor: '#2d1b4e',
-              border: '1px solid #3d2b5e',
+              backgroundColor: '#180C29',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
               boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1161,18 +1161,18 @@ function MainMenu({
                     setCloneNotice('');
                   }
                 }}
-                className="text-[#a7adc5] hover:text-white transition-colors"
+                className="text-[#B8AFC2] hover:text-white transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-sm mb-4" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+            <p className="text-sm mb-4" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
               Enter the repository URL to clone from GitHub or Git.
             </p>
 
             <div className="mb-4">
-              <label className="text-sm font-medium block mb-1.5" style={{ color: '#d4d4d4', fontFamily: 'Segoe UI, sans-serif' }}>
+              <label className="text-sm font-medium block mb-1.5" style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
                 Repository URL
               </label>
               <input
@@ -1182,9 +1182,9 @@ function MainMenu({
                 onChange={(e) => setCloneUrl(e.target.value)}
                 className="w-full px-3 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
                 style={{
-                  backgroundColor: '#1a0a2e',
-                  color: '#d4d4d4',
-                  border: '1px solid #3d2b5e',
+                  backgroundColor: '#100718',
+                  color: '#F5F0FA',
+                  border: '1px solid rgba(168, 85, 247, 0.24)',
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => {
@@ -1210,7 +1210,7 @@ function MainMenu({
                   }
                 }}
                 className="px-4 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-                style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+                style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
               >
                 Cancel
               </button>
@@ -1220,8 +1220,8 @@ function MainMenu({
                 onClick={handleClone}
                 className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:bg-purple-500"
                 style={{
-                  backgroundColor: cloneLoading || !cloneUrl.trim() ? '#3d2b5e' : '#a855f7',
-                  color: cloneLoading || !cloneUrl.trim() ? '#a7adc5' : '#ffffff',
+                  backgroundColor: cloneLoading || !cloneUrl.trim() ? '#1C0F30' : '#a855f7',
+                  color: cloneLoading || !cloneUrl.trim() ? '#B8AFC2' : '#ffffff',
                   cursor: cloneLoading || !cloneUrl.trim() ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -1270,6 +1270,12 @@ export default function App() {
 
   // All callback functions
   const openEditor = (folderPath?: string) => {
+    // TEMP DIAGNOSTIC (Stats Issue 1 investigation, remove once confirmed):
+    // this is the only path that puts a truthy folder into EditorLayout,
+    // which is the only place that calls window.stats.startSession(). Logs
+    // the argument plus a stack trace so we can see which caller fired it.
+    console.log(`[STATS][renderer] openEditor called with folderPath=${folderPath}`);
+    console.trace('[STATS][renderer] openEditor call stack');
     setEditorFolder(folderPath);
     setScreen('editor');
   };

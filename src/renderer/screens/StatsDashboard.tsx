@@ -75,16 +75,16 @@ const COLOR_AI = '#a855f7';
 const COLOR_RUNS = '#38bdf8';
 const COLOR_IDLE = '#fbbf24';
 const COLOR_ACTIVE = '#4ade80';
-const CHART_GRID = '#3d2b5e';
-const CHART_AXIS = '#a7adc5';
+const CHART_GRID = 'rgba(168, 85, 247, 0.24)';
+const CHART_AXIS = '#B8AFC2';
 
 const UI_FONT = 'Segoe UI, sans-serif';
 const MONO_FONT = 'Space Mono, monospace';
 
 const chartTooltipStyle = {
-  backgroundColor: '#1a0a2e',
-  border: '1px solid #3d2b5e',
-  color: '#d4d4d4',
+  backgroundColor: '#100718',
+  border: '1px solid rgba(168, 85, 247, 0.24)',
+  color: '#F5F0FA',
   fontSize: 12,
   fontFamily: UI_FONT,
 };
@@ -149,14 +149,14 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
   return (
     <div
       className="rounded-lg p-4"
-      style={{ backgroundColor: '#2d1b4e', border: '1px solid #3d2b5e' }}
+      style={{ backgroundColor: '#180C29', border: '1px solid rgba(168, 85, 247, 0.24)' }}
     >
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-sm font-semibold" style={{ color: '#ffffff', fontFamily: UI_FONT }}>
           {title}
         </h2>
         {subtitle && (
-          <span className="text-xs" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+          <span className="text-xs" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
             {subtitle}
           </span>
         )}
@@ -170,9 +170,9 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   return (
     <div
       className="rounded-lg px-4 py-3 flex flex-col gap-1"
-      style={{ backgroundColor: '#1a0a2e', border: '1px solid #3d2b5e' }}
+      style={{ backgroundColor: '#100718', border: '1px solid rgba(168, 85, 247, 0.24)' }}
     >
-      <span className="text-[11px] uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+      <span className="text-[11px] uppercase tracking-wide" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
         {label}
       </span>
       <span className="text-xl font-semibold" style={{ color: accent, fontFamily: MONO_FONT }}>
@@ -189,16 +189,16 @@ function SplitBar({ activeMs, idleMs }: { activeMs: number; idleMs: number }) {
 
   return (
     <div className="mt-4">
-      <div className="flex h-3 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#1a0a2e' }}>
+      <div className="flex h-3 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#100718' }}>
         <div style={{ width: activePct + '%', backgroundColor: COLOR_ACTIVE }} />
         <div style={{ width: idlePct + '%', backgroundColor: COLOR_IDLE }} />
       </div>
       <div className="flex items-center gap-4 mt-2 text-xs" style={{ fontFamily: UI_FONT }}>
-        <span className="flex items-center gap-1.5" style={{ color: '#a7adc5' }}>
+        <span className="flex items-center gap-1.5" style={{ color: '#B8AFC2' }}>
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLOR_ACTIVE }} />
           Active {Math.round(activePct)}%
         </span>
-        <span className="flex items-center gap-1.5" style={{ color: '#a7adc5' }}>
+        <span className="flex items-center gap-1.5" style={{ color: '#B8AFC2' }}>
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLOR_IDLE }} />
           Idle {Math.round(idlePct)}%
         </span>
@@ -209,10 +209,10 @@ function SplitBar({ activeMs, idleMs }: { activeMs: number; idleMs: number }) {
 
 function CompareCell({ value, delta }: { value: string; delta?: string }) {
   return (
-    <td className="py-2 px-3 text-sm" style={{ color: '#d4d4d4', fontFamily: MONO_FONT, borderBottom: '1px solid #3d2b5e' }}>
+    <td className="py-2 px-3 text-sm" style={{ color: '#F5F0FA', fontFamily: MONO_FONT, borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
       {value}
       {delta && (
-        <span className="ml-2 text-xs" style={{ color: delta.startsWith('-') ? COLOR_ACTIVE : '#a7adc5' }}>
+        <span className="ml-2 text-xs" style={{ color: delta.startsWith('-') ? COLOR_ACTIVE : '#B8AFC2' }}>
           {delta}
         </span>
       )}
@@ -316,21 +316,30 @@ export default function StatsDashboard({
   // Live refresh of the in-memory session (same polling shape as the debug
   // panel, at a product-appropriate 2s instead of 1s).
   useEffect(() => {
+    // TEMP DIAGNOSTIC (Stats Issue 2 investigation, remove once confirmed):
+    console.log(`[STATS][dashboard] live-poll effect mounted at=${new Date().toISOString()}`);
     const intervalId = setInterval(() => {
+      console.log(`[STATS][dashboard] poll tick at=${new Date().toISOString()}`);
       Promise.all([window.stats.getCurrentSession(), window.stats.getAggregate()])
         .then(([current, agg]) => {
+          console.log('[STATS][dashboard] poll result', { current, agg });
           setCurrentSession(current);
           setAggregate(agg);
         })
         .catch((err) => setError(String(err)));
     }, POLL_MS);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      console.log(`[STATS][dashboard] live-poll effect unmounted/cleaned up at=${new Date().toISOString()}`);
+      clearInterval(intervalId);
+    };
   }, []);
 
   const isLive = !!currentSession && currentSession.projectPath === selectedPath;
 
   const summary: SessionSummary | null = useMemo(() => {
+    // TEMP DIAGNOSTIC (Stats Issue 2 investigation, remove once confirmed):
+    console.log(`[STATS][dashboard] summary recompute at=${new Date().toISOString()} isLive=${isLive}`);
     if (isLive && currentSession) {
       const { durationMs, idleMs, activeMs } = deriveDurations(currentSession.sessionStart, null, currentSession.idleTimeMs);
       return {
@@ -395,15 +404,15 @@ export default function StatsDashboard({
   const sessionB = history.find((entry) => entry.fileName === compareB) ?? null;
 
   const selectStyle = {
-    backgroundColor: '#1a0a2e',
-    color: '#d4d4d4',
-    border: '1px solid #3d2b5e',
+    backgroundColor: '#100718',
+    color: '#F5F0FA',
+    border: '1px solid rgba(168, 85, 247, 0.24)',
     fontFamily: UI_FONT,
   };
 
   const renderComparisonRow = (label: string, valueA: string, valueB: string, delta?: string) => (
     <tr>
-      <td className="py-2 px-3 text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT, borderBottom: '1px solid #3d2b5e' }}>
+      <td className="py-2 px-3 text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT, borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
         {label}
       </td>
       <CompareCell value={valueA} />
@@ -412,11 +421,11 @@ export default function StatsDashboard({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#1a0a2e', color: '#d4d4d4' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
       {/* Sidebar — same shell as SettingsScreen / TemplatesScreen */}
       <div
         className="flex flex-col w-48 lg:w-56 shrink-0"
-        style={{ backgroundColor: '#2d1b4e', borderRight: '1px solid #3d2b5e' }}
+        style={{ backgroundColor: '#180C29', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}
       >
         <div className="flex items-center gap-2 px-4 py-4">
           <img src={logo} alt="Fabrica" className="w-6 h-6" />
@@ -430,7 +439,7 @@ export default function StatsDashboard({
             type="button"
             onClick={onBack}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: UI_FONT }}
+            style={{ color: '#B8AFC2', fontFamily: UI_FONT }}
           >
             <span>📁</span> Projects
           </button>
@@ -449,27 +458,27 @@ export default function StatsDashboard({
             type="button"
             onClick={onOpenSettings}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-            style={{ color: '#a7adc5', fontFamily: UI_FONT }}
+            style={{ color: '#B8AFC2', fontFamily: UI_FONT }}
           >
             <span>⚙️</span> Settings
           </button>
         </nav>
 
         <div className="mt-auto px-3 py-3">
-          <div className="text-xs" style={{ color: '#a7adc5', fontFamily: UI_FONT, marginBottom: '4px' }}>
+          <div className="text-xs" style={{ color: '#B8AFC2', fontFamily: UI_FONT, marginBottom: '4px' }}>
             Tracked sessions
           </div>
           <div
             className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
             style={{
-              backgroundColor: '#1a0a2e',
-              color: '#d4d4d4',
+              backgroundColor: '#100718',
+              color: '#F5F0FA',
               fontFamily: MONO_FONT,
-              border: '1px solid #3d2b5e',
+              border: '1px solid rgba(168, 85, 247, 0.24)',
             }}
           >
             <span>{aggregate ? aggregate.totalSessionCount : '—'}</span>
-            <span style={{ color: '#a7adc5' }}>all projects</span>
+            <span style={{ color: '#B8AFC2' }}>all projects</span>
           </div>
         </div>
       </div>
@@ -478,7 +487,7 @@ export default function StatsDashboard({
       <div className="flex-1 flex flex-col overflow-hidden">
         <div
           className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid #3d2b5e' }}
+          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
         >
           <h1 className="text-base sm:text-lg font-semibold" style={{ color: '#ffffff', fontFamily: UI_FONT }}>
             Stats Dashboard
@@ -503,7 +512,7 @@ export default function StatsDashboard({
               type="button"
               onClick={() => setReloadKey((key) => key + 1)}
               className="px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-              style={{ color: '#a7adc5', border: '1px solid #3d2b5e', fontFamily: UI_FONT }}
+              style={{ color: '#B8AFC2', border: '1px solid rgba(168, 85, 247, 0.24)', fontFamily: UI_FONT }}
             >
               Refresh
             </button>
@@ -522,7 +531,7 @@ export default function StatsDashboard({
             )}
 
             {loading && (
-              <div className="text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+              <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                 Loading stats…
               </div>
             )}
@@ -530,10 +539,10 @@ export default function StatsDashboard({
             {!loading && !selectedPath && (
               <div className="text-center py-16">
                 <div className="text-4xl mb-3 opacity-30">📊</div>
-                <div className="text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                   No tracked sessions yet
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#3d2b5e', fontFamily: UI_FONT }}>
+                <div className="text-xs mt-1" style={{ color: '#81748F', fontFamily: UI_FONT }}>
                   Open a project and start coding — sessions are recorded automatically.
                 </div>
               </div>
@@ -554,13 +563,13 @@ export default function StatsDashboard({
                       <StatTile label="Runs" value={String(summary.runCount)} accent={COLOR_RUNS} />
                     </div>
                     <SplitBar activeMs={summary.activeMs} idleMs={summary.idleMs} />
-                    <div className="text-xs mt-3" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                    <div className="text-xs mt-3" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                       Total session length {formatDuration(summary.durationMs)} · active time is session length minus idle time
                       (idle accrues after 15s of no editor, AI, or run activity).
                     </div>
                   </>
                 ) : (
-                  <div className="text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                  <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                     No sessions recorded for this project yet.
                   </div>
                 )}
@@ -574,7 +583,7 @@ export default function StatsDashboard({
                 subtitle={trendData.length > 0 ? 'Last ' + trendData.length + ' sessions' : undefined}
               >
                 {trendData.length === 0 ? (
-                  <div className="text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                  <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                     No completed sessions yet — the trend appears once at least one session has been written.
                   </div>
                 ) : (
@@ -596,14 +605,14 @@ export default function StatsDashboard({
                     {trend && (
                       <div
                         className="mt-3 px-3 py-2 rounded text-xs"
-                        style={{ backgroundColor: '#1a0a2e', border: '1px solid #3d2b5e', color: '#d4d4d4', fontFamily: UI_FONT }}
+                        style={{ backgroundColor: '#100718', border: '1px solid rgba(168, 85, 247, 0.24)', color: '#F5F0FA', fontFamily: UI_FONT }}
                       >
                         AI calls per session averaged{' '}
                         <span style={{ color: COLOR_AI, fontFamily: MONO_FONT }}>{trend.earlier.toFixed(1)}</span>{' '}
                         across the earlier half and{' '}
                         <span style={{ color: COLOR_AI, fontFamily: MONO_FONT }}>{trend.later.toFixed(1)}</span>{' '}
                         across the later half —{' '}
-                        <span style={{ color: trend.changePct < 0 ? COLOR_ACTIVE : '#a7adc5' }}>
+                        <span style={{ color: trend.changePct < 0 ? COLOR_ACTIVE : '#B8AFC2' }}>
                           {trend.changePct > 0 ? '+' : ''}{trend.changePct}%
                         </span>
                         {trend.changePct < 0 ? ' (reliance trending down).' : '.'}
@@ -630,7 +639,7 @@ export default function StatsDashboard({
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>vs</span>
+                  <span className="text-xs" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>vs</span>
                   <select
                     value={compareB}
                     onChange={(event) => setCompareB(event.target.value)}
@@ -660,13 +669,13 @@ export default function StatsDashboard({
                         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                           <thead>
                             <tr>
-                              <th className="text-left py-2 px-3 text-xs uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: UI_FONT, borderBottom: '1px solid #3d2b5e' }}>
+                              <th className="text-left py-2 px-3 text-xs uppercase tracking-wide" style={{ color: '#B8AFC2', fontFamily: UI_FONT, borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
                                 Metric
                               </th>
-                              <th className="text-left py-2 px-3 text-xs" style={{ color: '#ffffff', fontFamily: UI_FONT, borderBottom: '1px solid #3d2b5e' }}>
+                              <th className="text-left py-2 px-3 text-xs" style={{ color: '#ffffff', fontFamily: UI_FONT, borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
                                 {formatShortLabel(sessionA.sessionStart)}
                               </th>
-                              <th className="text-left py-2 px-3 text-xs" style={{ color: '#ffffff', fontFamily: UI_FONT, borderBottom: '1px solid #3d2b5e' }}>
+                              <th className="text-left py-2 px-3 text-xs" style={{ color: '#ffffff', fontFamily: UI_FONT, borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
                                 {formatShortLabel(sessionB.sessionStart)}
                               </th>
                             </tr>
@@ -683,7 +692,7 @@ export default function StatsDashboard({
                     );
                   })()
                 ) : (
-                  <div className="text-sm" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                  <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                     Select two sessions to compare.
                   </div>
                 )}
@@ -699,7 +708,7 @@ export default function StatsDashboard({
                   <StatTile label="Total AI calls" value={String(aggregate.totalAiCallCount)} accent={COLOR_AI} />
                   <StatTile label="Total runs" value={String(aggregate.totalRunCount)} accent={COLOR_RUNS} />
                 </div>
-                <div className="text-xs mt-3" style={{ color: '#a7adc5', fontFamily: UI_FONT }}>
+                <div className="text-xs mt-3" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
                   Totals span every project, not just the one selected above.
                 </div>
               </Card>

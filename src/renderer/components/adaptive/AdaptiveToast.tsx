@@ -109,7 +109,7 @@ export default function AdaptiveToast({
       role="status"
       className="fixed bottom-4 right-4 z-[2000] max-w-xs rounded-lg shadow-lg"
       style={{
-        background: '#2d1b4e',
+        background: '#180C29',
         border: '1px solid #a855f7',
         color: '#ffffff',
         fontFamily: 'Segoe UI, sans-serif',
@@ -129,7 +129,7 @@ export default function AdaptiveToast({
               {categoryLabel}
             </p>
           )}
-          <p className="text-xs leading-snug whitespace-pre-wrap" style={{ color: '#e5e7eb' }}>
+          <p className="text-xs leading-snug whitespace-pre-wrap" style={{ color: '#F5F0FA' }}>
             {hint ?? suggestion.message}
           </p>
           {suggestion.offersCorrection && !hint && (
@@ -139,7 +139,7 @@ export default function AdaptiveToast({
               disabled={hintLoading}
               className="mt-2 text-[11px] px-3 py-1 rounded-md font-medium"
               style={{
-                background: hintLoading ? '#3d2b5e' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                background: hintLoading ? '#1C0F30' : 'linear-gradient(135deg, #f59e0b, #d97706)',
                 color: '#ffffff',
                 cursor: hintLoading ? 'default' : 'pointer',
                 border: 'none',
@@ -155,7 +155,7 @@ export default function AdaptiveToast({
               disabled={hintLoading}
               className="mt-2 text-[11px] px-3 py-1 rounded-md font-medium"
               style={{
-                background: hintLoading ? '#3d2b5e' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: hintLoading ? '#1C0F30' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
                 color: '#ffffff',
                 cursor: hintLoading ? 'default' : 'pointer',
                 border: 'none',
@@ -169,7 +169,7 @@ export default function AdaptiveToast({
           type="button"
           onClick={dismiss}
           className="text-[10px] shrink-0 hover:text-white transition-colors"
-          style={{ color: '#a7adc5' }}
+          style={{ color: '#B8AFC2' }}
           title="Dismiss"
         >
           <i className="codicon codicon-close" style={{ fontSize: '12px' }} />

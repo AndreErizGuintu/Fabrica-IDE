@@ -224,7 +224,7 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
   const renderMenuItem = (item: any, index: number) => {
     if (item.separator) {
       return (
-        <div key={`sep-${index}`} className="h-px my-1" style={{ background: '#2d1b4e' }} />
+        <div key={`sep-${index}`} className="h-px my-1" style={{ background: 'rgba(168, 85, 247, 0.16)' }} />
       );
     }
 
@@ -234,14 +234,14 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
           key={item.label}
           className="w-full text-left px-4 py-1 text-xs flex items-center justify-between"
           style={{
-            color: '#4b5563',
+            color: '#81748F',
             fontFamily: 'Segoe UI, sans-serif',
             cursor: 'default',
           }}
         >
           <span>{item.label}</span>
           {item.shortcut && (
-            <span className="text-[10px]" style={{ color: '#3d2b5e' }}>{item.shortcut}</span>
+            <span className="text-[10px]" style={{ color: '#81748F' }}>{item.shortcut}</span>
           )}
         </div>
       );
@@ -253,7 +253,7 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
         type="button"
         className="w-full text-left px-4 py-1 text-xs flex items-center justify-between hover:bg-[#a855f7]/10 transition-colors"
         style={{ 
-          color: '#d4d4d4', 
+          color: '#F5F0FA', 
           fontFamily: 'Segoe UI, sans-serif',
           cursor: 'pointer',
         }}
@@ -264,7 +264,7 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
       >
         <span>{item.label}</span>
         {item.shortcut && (
-          <span className="text-[10px]" style={{ color: '#6b7280' }}>{item.shortcut}</span>
+          <span className="text-[10px]" style={{ color: '#81748F' }}>{item.shortcut}</span>
         )}
       </button>
     );
@@ -274,11 +274,11 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
     <div 
       className="menu-bar-container flex items-center gap-1 px-3 py-0.5 shrink-0"
       style={{
-        background: '#0a0512',
-        borderBottom: '1px solid #1a0a2e',
+        background: '#0F0616',
+        borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
         fontFamily: 'Segoe UI, sans-serif',
         fontSize: '13px',
-        color: '#a7adc5',
+        color: '#B8AFC2',
         minHeight: '28px',
         userSelect: 'none',
       }}
@@ -293,7 +293,7 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
             type="button"
             className="px-2 py-0.5 rounded transition-colors hover:bg-[#a855f7]/10"
             style={{
-              color: openMenu === menuName ? '#a855f7' : '#a7adc5',
+              color: openMenu === menuName ? '#a855f7' : '#B8AFC2',
             }}
             onClick={() => toggleMenu(menuName)}
           >
@@ -303,8 +303,8 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
             <div 
               className="absolute top-full left-0 mt-0.5 rounded shadow-lg z-50 py-1 min-w-[220px]"
               style={{
-                background: '#12081f',
-                border: '1px solid #2d1b4e',
+                background: '#0F0616',
+                border: '1px solid rgba(168, 85, 247, 0.16)',
               }}
             >
               {menus[menuName as keyof typeof menus].items.map((item, index) => renderMenuItem(item, index))}
@@ -349,10 +349,10 @@ function StatusBarComponent({
     <div
       className="flex items-center justify-between px-4 py-0.5 shrink-0"
       style={{
-        background: '#0a0512',
-        borderTop: '1px solid #1a0a2e',
+        background: '#0F0616',
+        borderTop: '1px solid rgba(168, 85, 247, 0.16)',
         fontSize: '11px',
-        color: '#6b7280',
+        color: '#81748F',
         fontFamily: 'Segoe UI, sans-serif',
         minHeight: '24px',
         userSelect: 'none',
@@ -363,37 +363,37 @@ function StatusBarComponent({
           <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
           Ready
         </span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span className="text-[#a7adc5]">{branch}</span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span style={{ color: '#d4d4d4' }}>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span className="text-[#B8AFC2]">{branch}</span>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span style={{ color: '#F5F0FA' }}>
           {activeTab ? language : 'Plain Text'}
         </span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span style={{ color: '#d4d4d4' }}>Ln {line || 1}, Col {col || 1}</span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span style={{ color: '#6b7280' }}>UTF-8</span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span style={{ color: '#6b7280' }}>LF</span>
-        <span className="text-[#2d1b4e]">|</span>
-        <span style={{ color: '#6b7280' }}>Spaces: 2</span>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span style={{ color: '#F5F0FA' }}>Ln {line || 1}, Col {col || 1}</span>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span style={{ color: '#81748F' }}>UTF-8</span>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span style={{ color: '#81748F' }}>LF</span>
+        <span className="text-[rgba(168,85,247,0.16)]">|</span>
+        <span style={{ color: '#81748F' }}>Spaces: 2</span>
       </div>
       <div className="flex items-center gap-4">
         <button
           type="button"
           className="hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: errors > 0 ? '#f87171' : '#6b7280' }}
+          style={{ color: errors > 0 ? '#f87171' : '#81748F' }}
         >
           Errors: {errors}
         </button>
         <button
           type="button"
           className="hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: warnings > 0 ? '#fbbf24' : '#6b7280' }}
+          style={{ color: warnings > 0 ? '#fbbf24' : '#81748F' }}
         >
           Warnings: {warnings}
         </button>
-        <span style={{ color: '#a7adc5' }}>
+        <span style={{ color: '#B8AFC2' }}>
           {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
@@ -420,11 +420,11 @@ function BreadcrumbComponent({ currentPath, projectRoot }: { currentPath: string
     <div 
       className="flex items-center gap-2 px-4 py-1 shrink-0 overflow-x-auto"
       style={{ 
-        background: '#0a0512', 
-        borderBottom: '1px solid #1a0a2e',
+        background: '#0F0616', 
+        borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
         fontFamily: 'Segoe UI, sans-serif',
         fontSize: '12px',
-        color: '#6b7280',
+        color: '#81748F',
         minHeight: '26px',
       }}
     >
@@ -436,11 +436,11 @@ function BreadcrumbComponent({ currentPath, projectRoot }: { currentPath: string
       </span>
       {fileName && (
         <>
-          <span style={{ color: '#2d1b4e' }}>›</span>
-          <span style={{ color: '#d4d4d4' }}>{fileName}</span>
+          <span style={{ color: '#81748F' }}>›</span>
+          <span style={{ color: '#F5F0FA' }}>{fileName}</span>
         </>
       )}
-      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: '#2d1b4e' }}>
+      <span className="ml-auto text-[10px] inline-flex items-center gap-1" style={{ color: '#81748F' }}>
         <i className="codicon codicon-git-branch" style={{ fontSize: '12px' }} /> main
       </span>
     </div>
@@ -479,14 +479,14 @@ function ToolWindowHeader({
       className={`flex items-center justify-between px-3 py-1.5 shrink-0 select-none ${dragHandleClassName ?? ''}`}
       style={{
         background: '#170D27',
-        borderBottom: '1px solid #2A183D',
+        borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
         cursor: mode === 'floating' ? 'move' : 'default',
       }}
       onDoubleClick={onHeaderDoubleClick}
       title={mode === 'floating' ? 'Drag to move • double-click to toggle fullscreen' : undefined}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#9CA3AF', fontFamily: 'Segoe UI, sans-serif' }}>
+        <span className="text-[10px] font-medium flex items-center gap-2" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
           <span>{icon}</span> {title}
         </span>
         {leftExtra}
@@ -498,7 +498,7 @@ function ToolWindowHeader({
             type="button"
             onClick={(e) => { e.stopPropagation(); onMinimize(); }}
             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-            style={{ color: '#9CA3AF' }}
+            style={{ color: '#B8AFC2' }}
             title="Minimize"
           >
             −
@@ -508,7 +508,7 @@ function ToolWindowHeader({
           type="button"
           onClick={(e) => { e.stopPropagation(); onMaximizeFullscreen(); }}
           className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: '#9CA3AF' }}
+          style={{ color: '#B8AFC2' }}
           title={mode === 'floating' ? 'Toggle fullscreen' : 'Detach and maximize'}
         >
           □
@@ -517,7 +517,7 @@ function ToolWindowHeader({
           type="button"
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-          style={{ color: '#9CA3AF' }}
+          style={{ color: '#B8AFC2' }}
           title="Close"
         >
           ✕
@@ -607,6 +607,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   // ===== ALL useEffect HOOKS =====
   useEffect(() => {
+    // TEMP DIAGNOSTIC (Stats Issue 1 investigation, remove once confirmed):
+    // this is the ONLY call site of window.stats.startSession in the
+    // renderer. Logging every effect firing (including when initialFolder is
+    // falsy, which is the only guard that stops a startSession call) lets us
+    // see whether EditorLayout is mounting/re-firing without a real "open
+    // project" action.
+    console.log(`[STATS][renderer] EditorLayout mount effect fired, initialFolder=${initialFolder}, at=${new Date().toISOString()}`);
     if (initialFolder) {
       window.stats?.startSession(initialFolder);
       showNotification(`Workspace opened: ${initialFolder.split(/[\\/]/).pop()}`, 'success');
@@ -1150,7 +1157,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#0a0512', color: '#d4d4d4' }}>
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: '#0F0616', color: '#F5F0FA' }}>
       {/* Temporary debug-only tool, see src/renderer/components/StatsDebugPanel.tsx — triggered from the AI Assistant header's ⓘ button */}
       <StatsDebugPanel projectPath={initialFolder} open={statsOpen} onClose={() => setStatsOpen(false)} />
       <AdaptiveToast
@@ -1164,14 +1171,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         <div
           className="fixed top-4 right-4 z-50 px-3 py-1.5 rounded transition-all duration-200"
           style={{
-            background: '#12081f',
+            background: '#0F0616',
             border: `1px solid ${
               notification.type === 'error' ? 'rgba(248, 113, 113, 0.35)' :
               notification.type === 'success' ? 'rgba(74, 222, 128, 0.3)' :
               notification.type === 'warning' ? 'rgba(251, 191, 36, 0.3)' : 'rgba(168, 85, 247, 0.3)'
             }`,
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
-            color: '#a7adc5',
+            color: '#B8AFC2',
             fontFamily: 'Segoe UI, sans-serif',
             fontSize: '11px',
             maxWidth: '280px',
@@ -1203,27 +1210,27 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       <div
         className="flex items-center justify-between px-4 py-1.5 shrink-0"
         style={{ 
-          background: '#12081f',
-          borderBottom: '1px solid #1a0a2e',
+          background: '#0F0616',
+          borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
           minHeight: '36px',
         }}
       >
        <div className="flex items-center gap-3">
   <img src={log} alt="Fabrica" className="w-6 h-6 object-contain" />
-  <span className="text-sm font-medium" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+  <span className="text-sm font-medium" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
     Fabrica
   </span>
 
 </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-px h-4" style={{ background: '#1a0a2e' }} />
+          <div className="w-px h-4" style={{ background: 'rgba(168, 85, 247, 0.16)' }} />
           <button
             type="button"
             onClick={handleTogglePreview}
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: showPreview ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: showPreview ? '#a855f7' : '#a7adc5',
+              color: showPreview ? '#a855f7' : '#B8AFC2',
               border: showPreview ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title={floatingPanel === 'preview' && isFloatMinimized ? 'Restore floating Live Preview' : 'Toggle Live Preview'}
@@ -1240,7 +1247,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: showAI ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: showAI ? '#a855f7' : '#a7adc5',
+              color: showAI ? '#a855f7' : '#B8AFC2',
               border: showAI ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title={floatingPanel === 'ai' && isFloatMinimized ? 'Restore floating AI Assistant' : 'Toggle AI Assistant (Ctrl+Shift+A)'}
@@ -1256,7 +1263,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             className="text-xs px-3 py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: showGit ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: showGit ? '#a855f7' : '#a7adc5',
+              color: showGit ? '#a855f7' : '#B8AFC2',
               border: showGit ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
             }}
             title="Toggle Source Control (Ctrl+Shift+G)"
@@ -1266,7 +1273,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             </svg>
             Git
           </button>
-          <div className="w-px h-4" style={{ background: '#1a0a2e' }} />
+          <div className="w-px h-4" style={{ background: 'rgba(168, 85, 247, 0.16)' }} />
           <button
             type="button"
             onClick={handleRun}
@@ -1274,7 +1281,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             className="text-xs px-3 py-1 rounded font-medium transition-all duration-200 hover:bg-[#a855f7]/10 flex items-center gap-1.5"
             style={{
               background: isRunning ? 'rgba(255, 255, 255, 0.05)' : 'rgba(168, 85, 247, 0.15)',
-              color: isRunning ? '#6b7280' : '#a855f7',
+              color: isRunning ? '#81748F' : '#a855f7',
               border: isRunning ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(168, 85, 247, 0.3)',
               cursor: !activeTab ? 'not-allowed' : 'pointer',
               opacity: !activeTab ? 0.4 : 1,
@@ -1307,7 +1314,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             style={{
               background: 'rgba(255, 255, 255, 0.05)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              color: '#a7adc5',
+              color: '#B8AFC2',
             }}
             aria-label="Settings"
             title="Settings"
@@ -1323,8 +1330,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       <div
         className="flex items-center overflow-x-auto shrink-0"
         style={{ 
-          background: '#0a0512', 
-          borderBottom: '1px solid #1a0a2e',
+          background: '#0F0616', 
+          borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
           padding: '0 4px',
           minHeight: '30px',
         }}
@@ -1337,8 +1344,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             key={index}
             className="group flex items-center gap-1.5 px-3 py-1 cursor-pointer text-sm shrink-0 transition-all duration-200"
             style={{
-              background: isActive ? '#12081f' : 'transparent',
-              color: isActive ? '#ffffff' : '#6b7280',
+              background: isActive ? '#0F0616' : 'transparent',
+              color: isActive ? '#ffffff' : '#81748F',
               borderBottom: isActive ? '2px solid #a855f7' : '2px solid transparent',
               borderRadius: '4px 4px 0 0',
               fontFamily: 'Segoe UI, sans-serif',
@@ -1367,7 +1374,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 handleCloseTab(index);
               }}
               className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity text-[10px]"
-              style={{ color: '#6b7280' }}
+              style={{ color: '#81748F' }}
             >
               <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
             </button>
@@ -1375,7 +1382,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           );
         })}
         {tabs.length === 0 && (
-          <div className="text-sm px-3 py-1" style={{ color: '#2d1b4e', fontFamily: 'Segoe UI, sans-serif' }}>
+          <div className="text-sm px-3 py-1" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
             No files open
           </div>
         )}
@@ -1424,10 +1431,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onClick={() => setIsSidebarCollapsed((prev) => !prev)}
           className="w-3 flex items-center justify-center shrink-0 transition-colors hover:bg-[#a855f7]/10"
           style={{
-            background: '#0a0512',
-            borderLeft: '1px solid #1a0a2e',
-            borderRight: isSidebarCollapsed ? 'none' : '1px solid #1a0a2e',
-            color: '#6b7280',
+            background: '#0F0616',
+            borderLeft: '1px solid rgba(168, 85, 247, 0.16)',
+            borderRight: isSidebarCollapsed ? 'none' : '1px solid rgba(168, 85, 247, 0.16)',
+            color: '#81748F',
           }}
           title={isSidebarCollapsed ? 'Show Sidebar (Ctrl+B)' : 'Hide Sidebar (Ctrl+B)'}
         >
@@ -1439,7 +1446,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           {tabs.length === 0 ? (
             <div
               className="flex-1 flex flex-col items-center justify-center gap-3"
-              style={{ background: '#0a0512' }}
+              style={{ background: '#0F0616' }}
             >
               <div style={{ 
                 width: '80px', 
@@ -1455,7 +1462,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               </div>
               <div className="text-center" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
                 <div className="text-white font-medium text-lg mb-0.5">No file open</div>
-                <div className="text-sm" style={{ color: '#6b7280' }}>
+                <div className="text-sm" style={{ color: '#81748F' }}>
                   Open a folder or file to get started
                 </div>
               </div>
@@ -1481,10 +1488,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   onClick={() => setIsRightPanelCollapsed((prev) => !prev)}
                   className="w-3 flex items-center justify-center shrink-0 transition-colors hover:bg-[#a855f7]/10"
                   style={{
-                    background: '#0a0512',
-                    borderLeft: '1px solid #1a0a2e',
-                    borderRight: isRightPanelCollapsed ? 'none' : '1px solid #1a0a2e',
-                    color: '#6b7280',
+                    background: '#0F0616',
+                    borderLeft: '1px solid rgba(168, 85, 247, 0.16)',
+                    borderRight: isRightPanelCollapsed ? 'none' : '1px solid rgba(168, 85, 247, 0.16)',
+                    color: '#81748F',
                   }}
                   title={isRightPanelCollapsed ? 'Show panels' : 'Hide panels'}
                 >
@@ -1514,7 +1521,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           onMaximizeFullscreen={() => { detachToFloat('preview'); toggleFullscreen('preview'); }}
                           onClose={() => setShowPreview(false)}
                           leftExtra={
-                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#2A183D', color: '#9CA3AF' }}>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: '#1C0F30', color: '#B8AFC2' }}>
                               {isHtmlFile ? 'HTML' : 'Preview'}
                             </span>
                           }
@@ -1522,14 +1529,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           <button
                             type="button"
                             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                            style={{ color: '#9CA3AF' }}
+                            style={{ color: '#B8AFC2' }}
                             title="Refresh preview (Ctrl+R)"
                             onClick={() => { setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }}
                           >
                             ⟳
                           </button>
                         </ToolWindowHeader>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#180C29' }}>
                           <Preview
                             key={activeTab?.path + previewHtml}
                             html={previewHtml}
@@ -1546,13 +1553,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                       <div
                         className="h-1 shrink-0 cursor-row-resize hover:bg-[#a855f7]/20 transition-colors"
                         style={{
-                          background: '#120A1F',
-                          borderTop: '1px solid #2A183D',
-                          borderBottom: '1px solid #2A183D',
+                          background: '#180C29',
+                          borderTop: '1px solid rgba(168, 85, 247, 0.16)',
+                          borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
                           position: 'relative',
                         }}
                       >
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 rounded-full" style={{ background: '#2A183D' }} />
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 rounded-full" style={{ background: '#1C0F30' }} />
                       </div>
                     )}
 
@@ -1572,22 +1579,22 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                           onMaximizeFullscreen={() => { detachToFloat('ai'); toggleFullscreen('ai'); }}
                           onClose={() => setShowAI(false)}
                         >
-                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Lines: {selectedCode.split('\n').length}</span>
-                          <span style={{ color: '#9CA3AF' }}>|</span>
-                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
-                          <span style={{ color: '#9CA3AF' }}>|</span>
-                          <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Issues: 0</span>
+                          <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Lines: {selectedCode.split('\n').length}</span>
+                          <span style={{ color: '#B8AFC2' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+                          <span style={{ color: '#B8AFC2' }}>|</span>
+                          <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Issues: 0</span>
                           <button
                             type="button"
                             onClick={() => setStatsOpen(true)}
                             className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-                            style={{ color: '#9CA3AF' }}
+                            style={{ color: '#B8AFC2' }}
                             title="Stats Debug"
                           >
                             ⓘ
                           </button>
                         </ToolWindowHeader>
-                        <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
+                        <div className="flex-1 overflow-hidden" style={{ background: '#180C29' }}>
                           <AIPanel
                             selectedCode={selectedCode}
                             activeFilePath={activeTab?.path}
@@ -1643,8 +1650,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#120A1F',
-            border: '1px solid #2A183D',
+            backgroundColor: '#180C29',
+            border: '1px solid rgba(168, 85, 247, 0.16)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
@@ -1663,9 +1670,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowPreview(false); }}
           >
-            <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#9CA3AF' }} title="Refresh preview (Ctrl+R)">⟳</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewRefreshKey((prev) => prev + 1); showNotification('Preview refreshed', 'success'); }} className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded" style={{ color: '#B8AFC2' }} title="Refresh preview (Ctrl+R)">⟳</button>
           </ToolWindowHeader>
-          <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#180C29' }}>
             <Preview
               key={activeTab?.path + previewHtml}
               html={previewHtml}
@@ -1692,8 +1699,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           onResizeStop={handleFloatResizeStop}
           style={{
             borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
-            backgroundColor: '#120A1F',
-            border: '1px solid #2A183D',
+            backgroundColor: '#180C29',
+            border: '1px solid rgba(168, 85, 247, 0.16)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             zIndex: 1000,
             display: 'flex',
@@ -1712,22 +1719,22 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onMaximizeFullscreen={() => toggleFullscreen()}
             onClose={() => { dockPanel(); setShowAI(false); }}
           >
-            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Lines: {selectedCode.split('\n').length}</span>
-            <span style={{ color: '#9CA3AF' }}>|</span>
-            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
-            <span style={{ color: '#9CA3AF' }}>|</span>
-            <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Issues: 0</span>
+            <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Lines: {selectedCode.split('\n').length}</span>
+            <span style={{ color: '#B8AFC2' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Complexity: {Math.min(Math.floor(selectedCode.length / 50), 20)}</span>
+            <span style={{ color: '#B8AFC2' }}>|</span>
+            <span className="text-[10px]" style={{ color: '#B8AFC2' }}>Issues: 0</span>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setStatsOpen(true); }}
               className="text-[10px] hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-[#a855f7]/10"
-              style={{ color: '#9CA3AF' }}
+              style={{ color: '#B8AFC2' }}
               title="Stats Debug"
             >
               ⓘ
             </button>
           </ToolWindowHeader>
-          <div className="flex-1 overflow-hidden" style={{ background: '#120A1F' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: '#180C29' }}>
             <AIPanel
               selectedCode={selectedCode}
               activeFilePath={activeTab?.path}
@@ -1743,8 +1750,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         className="flex flex-col shrink-0 overflow-hidden"
         style={{
           height: showOutput ? '160px' : '0px',
-          background: '#0a0512',
-          borderTop: showOutput ? '1px solid #1a0a2e' : 'none',
+          background: '#0F0616',
+          borderTop: showOutput ? '1px solid rgba(168, 85, 247, 0.16)' : 'none',
         }}
       >
         {runError && (
@@ -1753,7 +1760,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             style={{
               color: '#f87171',
               background: '#2d1b1b',
-              borderBottom: '1px solid #1a0a2e',
+              borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
               fontFamily: 'Consolas, monospace',
               whiteSpace: 'pre-wrap',
             }}

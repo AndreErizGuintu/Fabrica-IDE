@@ -122,7 +122,7 @@ function CreateInputRow({
         placeholder={placeholder}
         className="flex-1 min-w-0 text-xs px-2 py-0.5 rounded outline-none bg-transparent"
         style={{
-          color: '#a7adc5',
+          color: '#B8AFC2',
           border: '1px solid #a855f7',
           fontFamily: 'Segoe UI, sans-serif',
         }}
@@ -224,7 +224,7 @@ function TreeNodeRow({
         style={{
           paddingLeft: `${indent + 8}px`,
           paddingRight: '8px',
-          color: isActive || isSelectedFolder ? '#ffffff' : '#a7adc5',
+          color: isActive || isSelectedFolder ? '#ffffff' : '#B8AFC2',
           borderLeft: isActive || isSelectedFolder ? '2px solid #a855f7' : '2px solid transparent',
           background: isActive || isSelectedFolder ? 'rgba(168,85,247,0.15)' : 'transparent',
           fontFamily: 'Segoe UI, sans-serif',
@@ -233,7 +233,7 @@ function TreeNodeRow({
         }}
       >
         {node.entry.isDirectory && (
-          <span style={{ color: '#6b7280', flexShrink: 0, display: 'inline-flex' }}>
+          <span style={{ color: '#81748F', flexShrink: 0, display: 'inline-flex' }}>
             <i className={`codicon ${node.isOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} style={{ fontSize: '14px' }} />
           </span>
         )}
@@ -262,15 +262,15 @@ function TreeNodeRow({
             onBlur={() => onRenameSubmit(node.entry)}
             className="text-xs px-1 rounded flex-1 min-w-0"
             style={{
-              background: '#1a0a2e',
-              color: '#d4d4d4',
+              background: '#160B24',
+              color: '#F5F0FA',
               border: '1px solid #a855f7',
               fontFamily: 'Segoe UI, sans-serif',
               outline: 'none',
             }}
           />
         ) : (
-          <span className="truncate" style={{ color: badge ? badge.color : '#a7adc5' }}>
+          <span className="truncate" style={{ color: badge ? badge.color : '#B8AFC2' }}>
             {node.entry.name}
           </span>
         )}
@@ -283,7 +283,7 @@ function TreeNodeRow({
           </span>
         )}
         {node.isLoading && (
-          <span style={{ color: '#6b7280', fontSize: '10px', marginLeft: '4px' }}>...</span>
+          <span style={{ color: '#81748F', fontSize: '10px', marginLeft: '4px' }}>...</span>
         )}
       </button>
 
@@ -366,7 +366,7 @@ function TreeNodeRow({
               style={{
                 paddingLeft: `${(depth + 1) * 12 + 8}px`,
                 fontSize: '11px',
-                color: '#2d1b4e',
+                color: '#81748F',
                 minHeight: '20px',
                 display: 'flex',
                 alignItems: 'center',
@@ -703,10 +703,10 @@ export default function Sidebar({
     : null;
 
   return (
-    <div className="flex flex-col h-full w-52 overflow-hidden" style={{ background: '#1a0a2e' }}>
+    <div className="flex flex-col h-full w-52 overflow-hidden" style={{ background: '#160B24' }}>
       {/* Header - Violet Theme */}
-      <div className="px-3 py-2 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid #2d1b4e' }}>
-        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}>
+      <div className="px-3 py-2 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.16)' }}>
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
           Explorer
         </span>
         <div className="flex items-center gap-0.5">
@@ -748,7 +748,7 @@ export default function Sidebar({
       {/* Selected folder indicator */}
       <div 
         className="px-3 py-0.5 text-[10px] truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
-        style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif', borderBottom: '1px solid #2d1b4e' }}
+        style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif', borderBottom: '1px solid rgba(168, 85, 247, 0.16)' }}
         onClick={() => setSelectedFolder(folderName)}
         title="Click to select root folder"
       >
@@ -760,9 +760,9 @@ export default function Sidebar({
         <div 
           className="px-3 py-1 text-xs truncate shrink-0 cursor-pointer hover:bg-[#a855f7]/10"
           style={{
-            color: selectedFolder === folderName ? '#a855f7' : '#d4d4d4',
+            color: selectedFolder === folderName ? '#a855f7' : '#F5F0FA',
             fontFamily: 'Segoe UI, sans-serif',
-            borderBottom: '1px solid #2d1b4e'
+            borderBottom: '1px solid rgba(168, 85, 247, 0.16)'
           }}
           onClick={() => setSelectedFolder(folderName)}
         >
@@ -777,7 +777,7 @@ export default function Sidebar({
         onScroll={handleTreeScroll}
       >
         {tree.length === 0 && !folderName && (
-          <div className="px-3 py-4 text-xs text-center" style={{ color: '#2d1b4e' }}>
+          <div className="px-3 py-4 text-xs text-center" style={{ color: '#81748F' }}>
             Open a folder to start
           </div>
         )}
@@ -846,10 +846,10 @@ export default function Sidebar({
       </div>
 
       {/* Status Bar */}
-      <div className="px-3 py-1.5 shrink-0" style={{ borderTop: '1px solid #2d1b4e', background: '#1a0a2e' }}>
+      <div className="px-3 py-1.5 shrink-0" style={{ borderTop: '1px solid rgba(168, 85, 247, 0.16)', background: '#160B24' }}>
         <span
           className="text-[10px] px-1.5 py-0.5 rounded"
-          style={{ background: '#2d1b4e', color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+          style={{ background: '#180C29', color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
         >
           {activeFilename ? getLanguageTag(activeFilename) : 'No file open'}
         </span>
@@ -863,8 +863,8 @@ export default function Sidebar({
           style={{
             left: `${contextMenu.x}px`,
             top: `${contextMenu.y}px`,
-            background: '#1a0a2e',
-            border: '1px solid #2d1b4e',
+            background: '#160B24',
+            border: '1px solid rgba(168, 85, 247, 0.16)',
             minWidth: '160px',
           }}
         >
@@ -876,7 +876,7 @@ export default function Sidebar({
                 setContextMenu(null);
               }}
               className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
-              style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+              style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
             >
               Open
             </button>
@@ -889,7 +889,7 @@ export default function Sidebar({
               setContextMenu(null);
             }}
             className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             New File
           </button>
@@ -901,7 +901,7 @@ export default function Sidebar({
               setContextMenu(null);
             }}
             className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             New Folder
           </button>
@@ -926,7 +926,7 @@ export default function Sidebar({
               setContextMenu(null);
             }}
             className="text-left text-xs px-3 py-1 hover:bg-[#a855f7]/10"
-            style={{ color: '#a7adc5', fontFamily: 'Segoe UI, sans-serif' }}
+            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}
           >
             Rename
           </button>

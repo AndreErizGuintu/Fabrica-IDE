@@ -127,7 +127,7 @@ export default function MirrorButton({ udid }: MirrorButtonProps) {
         className="text-sm px-4 py-1.5 rounded-lg transition-all duration-200 hover:bg-white/10"
         style={{
           background: isMirroring ? 'rgba(168, 85, 247, 0.2)' : 'transparent',
-          color: isMirroring ? '#a855f7' : '#a7adc5',
+          color: isMirroring ? '#a855f7' : '#B8AFC2',
           border: isMirroring ? '1px solid #a855f7' : 'none',
         }}
       >
@@ -163,18 +163,18 @@ export default function MirrorButton({ udid }: MirrorButtonProps) {
             // height: 100% instead of collapsing.
             bottom: '16px',
             width: PANEL_WIDTH,
-            background: '#2d1b4e',
-            border: '1px solid #3d2b5e',
+            background: '#180C29',
+            border: '1px solid rgba(168, 85, 247, 0.24)',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
           }}
         >
           <div
             className="flex items-center justify-between px-3 py-1.5 shrink-0"
-            style={{ borderBottom: '1px solid #3d2b5e' }}
+            style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}
           >
             <span
               className="text-xs"
-              style={{ color: '#a7adc5', fontFamily: 'Space Mono, monospace' }}
+              style={{ color: '#B8AFC2', fontFamily: 'Space Mono, monospace' }}
             >
               Device Mirror
             </span>
@@ -186,7 +186,7 @@ export default function MirrorButton({ udid }: MirrorButtonProps) {
               }}
               aria-label="Stop mirroring"
               className="w-5 h-5 rounded flex items-center justify-center transition-colors hover:bg-white/10"
-              style={{ color: '#a7adc5' }}
+              style={{ color: '#B8AFC2' }}
             >
               <svg
                 className="w-3 h-3"

@@ -4,7 +4,7 @@
 @import "devicon/devicon.min.css";
 
 /* Devicon dark-on-dark fixes: five language brand colors are too dark/gray to
-   read on the #2d1b4e panel. Lighten just these; scoped to their .colored class
+   read on the #180C29 panel. Lighten just these; scoped to their .colored class
    on <i>, so no other devicon icon or codicon fallback is affected. Covers both
    the sidebar tree and the tab bar (both render <i class="devicon-… colored">). */
 i.devicon-rust-plain.colored        { color: #dea584; } /* black      → Rust tan     */
@@ -20,7 +20,7 @@ i.devicon-c-plain.colored           { color: #7fa8d4; } /* gray       → lighte
 
 	/* Neutral surface/border/text tokens -- reuses the existing #a855f7 accent
 	   (no accent change), used to migrate Explorer/Preview-chrome/AI-chrome off
-	   the violet-black palette (#1a0a2e/#2d1b4e/#12081f) onto true neutrals.
+	   the old deep-violet palette onto true neutrals. (Deep-violet is back as the app's actual theme -- see body background above: #100718/#0F0616.)
 	   Supersedes the old unused --accent/--text-muted declarations above (both
 	   were dead: never consumed via var() anywhere in the codebase). */
 	--bg-app: #0D0D0F;
@@ -45,9 +45,9 @@ i.devicon-c-plain.colored           { color: #7fa8d4; } /* gray       → lighte
 
 body {
 	margin: 0;
-	background: radial-gradient(1200px 600px at 10% 5%, #1f1e3a 0%, transparent 60%),
-							radial-gradient(900px 500px at 80% 15%, #13193a 0%, transparent 65%),
-							linear-gradient(140deg, #0a0b12 0%, #0e101c 60%, #0b0c16 100%);
+	background: radial-gradient(1200px 600px at 10% 5%, #1c0e2e 0%, transparent 60%),
+							radial-gradient(900px 500px at 80% 15%, #1a0a26 0%, transparent 65%),
+							linear-gradient(140deg, #100718 0%, #0F0616 60%, #0a0410 100%);
 	font-family: 'IBM Plex Sans', sans-serif;
 	color: #ffffff;
 }

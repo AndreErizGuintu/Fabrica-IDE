@@ -1051,6 +1051,11 @@ const createWindow = async () => {
  */
 
 app.on('before-quit', () => {
+  // TEMP DIAGNOSTIC (duplicate-session investigation, remove once confirmed):
+  // before-quit fires on every dev save to src/main/** (electronmon hot-reload,
+  // see comment below) as well as on a real app quit -- this line tells the
+  // two apart in the terminal output.
+  console.log(`[STATS] before-quit fired at=${new Date().toISOString()}`);
   endSession();
   stopEngineSession();
   // PART 2 of the utility-process migration (DECISIONS.md §9). Covers BOTH
