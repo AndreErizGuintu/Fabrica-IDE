@@ -56,6 +56,7 @@ const PROJECT_TEMPLATES: ProjectTemplate[] = [
   },
   {
     id: 'csharp',
+    
     name: 'C#',
     description: 'Program.cs using top-level statements. No .csproj needed on .NET 10.',
     icon: '🟦',

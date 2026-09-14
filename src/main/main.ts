@@ -382,6 +382,11 @@ ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string)
 ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
+    console.log(
+      `[TREE DEBUG][main] fs:readDir dirPath=${dirPath} at=${new Date().toISOString()} ` +
+      `dirsReturned=${JSON.stringify(entries.filter((e) => e.isDirectory()).map((e) => e.name))}`,
+    );
     return {
       success: true,
       files: entries.map((entry) => ({
@@ -391,6 +396,8 @@ ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
       })),
     };
   } catch (err) {
+    // TEMP DEBUG
+    console.log(`[TREE DEBUG][main] fs:readDir FAILED dirPath=${dirPath} error=${String(err)}`);
     return { success: false, error: String(err) };
   }
 });

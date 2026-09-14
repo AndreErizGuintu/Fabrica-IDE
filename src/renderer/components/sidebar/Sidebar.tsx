@@ -74,6 +74,11 @@ async function loadChildren(dirPath: string): Promise<TreeNode[]> {
     if (!a.isDirectory && b.isDirectory) return 1;
     return a.name.localeCompare(b.name);
   });
+  // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
+  console.log(
+    `[TREE DEBUG][Sidebar] loadChildren dirPath=${dirPath} at=${new Date().toISOString()} ` +
+    `dirsReturned=${JSON.stringify(sorted.filter((e) => e.isDirectory).map((e) => e.name))}`,
+  );
   return sorted.map((entry) => ({ entry }));
 }
 
@@ -439,12 +444,25 @@ export default function Sidebar({
   }, []);
 
   const loadFolder = async (folderPath: string) => {
+    // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
+    console.log(`[TREE DEBUG][Sidebar] loadFolder CALLED folderPath=${folderPath} prevFolderName=${folderName}`);
     setFolderName(folderPath);
     const nodes = await loadChildren(folderPath);
     setTree(nodes);
   };
 
+  // TEMP DEBUG -- proves whether Sidebar is a fresh mount (tree/folderName
+  // starting empty) or a persisting instance still holding prior state.
   useEffect(() => {
+    console.log(`[TREE DEBUG][Sidebar] MOUNT instanceId set, initial tree.length=${tree.length}`);
+    return () => {
+      console.log('[TREE DEBUG][Sidebar] UNMOUNT');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    console.log(`[TREE DEBUG][Sidebar] initialFolder effect fired, initialFolder=${initialFolder}`);
     if (initialFolder) {
       void loadFolder(initialFolder);
       setSelectedFolder(initialFolder);
@@ -452,6 +470,7 @@ export default function Sidebar({
   }, [initialFolder]);
 
   useEffect(() => {
+    console.log(`[TREE DEBUG][Sidebar] refreshSignal effect fired, refreshSignal=${refreshSignal}, folderName=${folderName}`);
     if (folderName && refreshSignal !== undefined) {
       void loadFolder(folderName);
     }
@@ -506,6 +525,11 @@ export default function Sidebar({
           if (node.isOpen) {
             return { ...node, isOpen: false };
           }
+          // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
+          console.log(
+            `[TREE DEBUG][Sidebar] toggleNode EXPAND path=${targetPath} ` +
+            `cacheHit=${node.children !== undefined} cachedChildCount=${node.children?.length ?? 'n/a'}`,
+          );
           const children = node.children ?? await loadChildren(node.entry.path);
           return { ...node, isOpen: true, children };
         }
