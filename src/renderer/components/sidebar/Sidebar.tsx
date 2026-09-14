@@ -553,6 +553,11 @@ export default function Sidebar({
     return Promise.all(
       nodes.map(async (node) => {
         if (node.entry.path === targetPath) {
+          // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
+          console.log(
+            `[TREE DEBUG][Sidebar] openNode path=${targetPath} ` +
+            `cacheHit=${node.children !== undefined} cachedChildCount=${node.children?.length ?? 'n/a'}`,
+          );
           const children = node.children ?? await loadChildren(node.entry.path);
           return { ...node, isOpen: true, children };
         }
