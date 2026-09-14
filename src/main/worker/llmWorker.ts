@@ -39,7 +39,6 @@
 
 import fs from 'fs';
 import os from 'os';
-import modelConfig from '../modelConfig.json';
 import {
   GenerationPriority,
   ModelBusyError,
@@ -57,13 +56,6 @@ import {
 // or a negative). Passed as `maxThreads` to getLlama() and `threads` to
 // createContext().
 const MAX_INFERENCE_THREADS = Math.max(1, os.cpus().length - 2);
-
-// Single swap point: change modelFile in src/main/modelConfig.json and drop the new
-// .gguf into resources/models/ to switch models. scripts/benchmark.mjs and
-// scripts/test-gpu-layers.mjs read the same file, so this is the only place to edit.
-// Kept here purely for the error message below -- the path itself is resolved by
-// `llm.ts` in the main process and arrives as a fork argument.
-const MODEL_FILE = modelConfig.modelFile;
 
 // "auto" adapts layer count to available VRAM at load time (see node-llama-cpp's
 // LlamaModelOptions.gpuLayers docs). Set GPU_LAYERS env var to override with a fixed count.
@@ -136,7 +128,8 @@ const readModelPathArg = (): string => {
   if (!arg) {
     throw new Error(
       `[llmWorker] No ${MODEL_PATH_ARG} fork argument was provided. The main process ` +
-        `(llm.ts) is responsible for resolving and passing the absolute path to ${MODEL_FILE}.`,
+        `(llm.ts) is responsible for resolving and passing the absolute path to the active model ` +
+        `(deepseek or the cpuFallback entry in modelConfig.json).`,
     );
   }
 

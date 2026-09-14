@@ -117,6 +117,27 @@ const probeGpuDeviceNames = async (): Promise<string[]> => {
   }
 };
 
+// What the probe concluded, for callers that care whether a GPU is actually
+// usable (see main.ts's CPU-fallback-model switch). 'isolated' is never
+// actually returned to a caller -- that branch calls app.exit() first -- but
+// is named for completeness/documentation.
+export type GpuIsolationStatus =
+  | 'already-isolated' // relaunched process, GGML_VK_VISIBLE_DEVICES already set -- a GPU is in use
+  | 'no-gpu' // probe succeeded but enumerated zero devices
+  | 'probe-failed' // Vulkan device enumeration itself threw
+  | 'single-gpu' // exactly one device, isolation not needed, GPU usable
+  | 'ambiguous' // 2+ devices, dedicated one not unambiguously identifiable
+  | 'isolated'; // set the env var and is about to relaunch
+
+// =====================================================================
+// TEMPORARY TEST STUB -- DO NOT SHIP. Forces ensureGpuDeviceIsolation() to
+// return this status instead of actually probing, so the CPU-fallback path
+// can be exercised end-to-end without a real no-GPU machine. Set to `null`
+// (or delete this block and the check below) once the fallback switch,
+// getActiveModelName(), the sidebar labels, and a real Qwen inference call
+// have all been confirmed against real terminal output.
+const FORCE_STATUS_FOR_TESTING: GpuIsolationStatus | null = 'no-gpu';
+
 /**
  * Call once, at app startup, before createWindow(). If this process is a
  * relaunch that already carries GGML_VK_VISIBLE_DEVICES, it's a fast no-op.
@@ -124,8 +145,21 @@ const probeGpuDeviceNames = async (): Promise<string[]> => {
  * unambiguously identified alongside an iGPU, sets the env var and relaunches
  * the app so the new process picks it up from creation. Never returns
  * normally in that case (app.exit() terminates the process).
+ *
+ * The returned status lets main.ts tell "no usable GPU" (no-gpu / probe-failed)
+ * apart from "a GPU exists" (every other status), which is what decides
+ * whether the CPU-fallback model (llm.ts's setActiveModel('cpuFallback'))
+ * should take over before the inference worker is ever spawned.
  */
-export const ensureGpuDeviceIsolation = async (): Promise<void> => {
+export const ensureGpuDeviceIsolation = async (): Promise<GpuIsolationStatus> => {
+  if (FORCE_STATUS_FOR_TESTING) {
+    console.log(
+      `[gpu-isolation] TEST STUB ACTIVE: forcing status='${FORCE_STATUS_FOR_TESTING}' instead of probing. ` +
+        'Remove FORCE_STATUS_FOR_TESTING in gpuIsolation.ts before shipping.',
+    );
+    return FORCE_STATUS_FOR_TESTING;
+  }
+
   // Loop-guard: this is the branch the relaunched process takes. In dev,
   // GGML_VK_VISIBLE_DEVICES is normally already set by the time this runs --
   // resolved once by scripts/resolve-gpu-isolation.mjs before electronmon/
@@ -140,7 +174,7 @@ export const ensureGpuDeviceIsolation = async (): Promise<void> => {
   // the app silently spinning.
   if (process.env.GGML_VK_VISIBLE_DEVICES) {
     console.log(`[gpu-isolation] GGML_VK_VISIBLE_DEVICES already set (${process.env.GGML_VK_VISIBLE_DEVICES}), skipping isolation probe.`);
-    return;
+    return 'already-isolated';
   }
 
   let deviceNames: string[];
@@ -150,14 +184,19 @@ export const ensureGpuDeviceIsolation = async (): Promise<void> => {
     console.warn('[gpu-isolation] GPU device probe failed; skipping device isolation, relying on gpuLayers fallback instead.');
     console.warn('[gpu-isolation]   err.message:', err instanceof Error ? err.message : String(err));
     console.warn('[gpu-isolation]   err.stack:', err instanceof Error ? err.stack : '(no stack)');
-    return;
+    return 'probe-failed';
   }
 
   console.log('[gpu-isolation] Detected GPU device(s):', deviceNames);
 
-  if (deviceNames.length <= 1) {
-    console.log('[gpu-isolation] Single (or no) GPU device detected; no isolation needed.');
-    return;
+  if (deviceNames.length === 0) {
+    console.log('[gpu-isolation] No GPU device detected.');
+    return 'no-gpu';
+  }
+
+  if (deviceNames.length === 1) {
+    console.log('[gpu-isolation] Single GPU device detected; no isolation needed.');
+    return 'single-gpu';
   }
 
   const dedicatedCandidates = deviceNames
@@ -170,7 +209,7 @@ export const ensureGpuDeviceIsolation = async (): Promise<void> => {
       `(${dedicatedCandidates.length} non-iGPU-looking candidate(s)). Skipping device isolation; ` +
       'relying on the gpuLayers step-down retry as a fallback.',
     );
-    return;
+    return 'ambiguous';
   }
 
   const chosen = dedicatedCandidates[0];
@@ -182,4 +221,5 @@ export const ensureGpuDeviceIsolation = async (): Promise<void> => {
 
   app.relaunch();
   app.exit(0);
+  return 'isolated'; // unreachable -- app.exit() above terminates the process; satisfies the return type
 };

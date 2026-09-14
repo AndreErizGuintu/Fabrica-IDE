@@ -49,8 +49,65 @@ export type { GenerationPriority };
 
 // Single swap point: change modelFile in src/main/modelConfig.json and drop the new
 // .gguf into resources/models/ to switch models. scripts/benchmark.mjs and
-// scripts/test-gpu-layers.mjs read the same file, so this is the only place to edit.
-const MODEL_FILE = modelConfig.modelFile;
+// scripts/test-gpu-layers.mjs read the same file (its flat modelFile/displayName
+// fields are untouched by cpuFallback below), so this is the only place to edit.
+type ModelEntry = { modelFile: string; displayName: string };
+
+const PRIMARY_MODEL: ModelEntry = {
+  modelFile: modelConfig.modelFile,
+  displayName: modelConfig.displayName,
+};
+const CPU_FALLBACK_MODEL: ModelEntry = modelConfig.cpuFallback;
+
+export type ModelKey = 'primary' | 'cpuFallback';
+
+// Mutated by setActiveModel() below. Everything that resolves "which model"
+// (getModelPath, getActiveModelName) reads this instead of PRIMARY_MODEL
+// directly, so the two can never disagree about which model is actually
+// active.
+let activeModel: ModelEntry = PRIMARY_MODEL;
+
+// Two callers, two different timing guarantees:
+//   1. main.ts's startup sequence, when ensureGpuDeviceIsolation() (see
+//      gpuIsolation.ts) reports no usable GPU. Called before the worker is
+//      ever forked -- the worker only forks lazily on first use
+//      (ensureWorker() below), and getModelPath() reads `activeModel` at that
+//      point, so a boot-time call always wins the race with no extra
+//      plumbing and no restart needed.
+//   2. The model:setActiveModel IPC handler (main.ts), triggered by the
+//      Settings dropdown, which runs long after a worker may already be
+//      resident. That caller MUST follow this with
+//      restartWorkerForModelSwitch() -- this function only flips which model
+//      the NEXT fork will load, it does not touch any worker already running
+//      the old one.
+export const setActiveModel = (modelKey: ModelKey): void => {
+  activeModel = modelKey === 'cpuFallback' ? CPU_FALLBACK_MODEL : PRIMARY_MODEL;
+  console.log(
+    `[llm] Active model set to: ${activeModel.displayName} (${activeModel.modelFile}).`,
+  );
+};
+
+// Renderer-facing label for whichever model is currently active. Reads the
+// same `activeModel` that resolves the real load path, so it can never drift
+// from what's actually loaded -- nothing renderer-side should ever hardcode a
+// model name.
+export const getActiveModelName = (): string => activeModel.displayName;
+
+// Reference equality against the two module-level constants -- both are
+// created once at module load and never reassigned, so this can never
+// misreport which key is active. Lets the dropdown mark the correct option
+// selected without the renderer having to match on displayName strings.
+export const getActiveModelKey = (): ModelKey =>
+  activeModel === CPU_FALLBACK_MODEL ? 'cpuFallback' : 'primary';
+
+// Backs the Settings dropdown's option list. Reads modelConfig.json (already
+// the single source of truth this file imports) rather than have main.ts or
+// the renderer import it separately -- one place that knows the two entries
+// exist.
+export const listModelOptions = (): { key: ModelKey; displayName: string }[] => [
+  { key: 'primary', displayName: PRIMARY_MODEL.displayName },
+  { key: 'cpuFallback', displayName: CPU_FALLBACK_MODEL.displayName },
+];
 
 // NOTE: `GPU_LAYERS` and the gpuLayers step-down ladder moved to
 // `llmWorker.ts` -- they configure model loading, which no longer happens in
@@ -60,8 +117,8 @@ const MODEL_FILE = modelConfig.modelFile;
 
 const getModelPath = () => {
   const modelPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'models', MODEL_FILE)
-    : path.join(app.getAppPath(), 'resources', 'models', MODEL_FILE);
+    ? path.join(process.resourcesPath, 'models', activeModel.modelFile)
+    : path.join(app.getAppPath(), 'resources', 'models', activeModel.modelFile);
 
   if (!fs.existsSync(modelPath)) {
     throw new Error(`Model file not found. Expected at: ${modelPath}`);
@@ -449,6 +506,10 @@ const spawnWorker = (): Promise<WorkerHandle> =>
     const modelPath = getModelPath();
 
     console.log('[llm] forking inference utility process:', workerPath);
+    // Names which model this fork will actually load -- the direct check for
+    // "did the CPU fallback really take effect" instead of inferring it from
+    // GGUF metadata or load timing after the fact.
+    console.log(`[llm] active model for this worker: ${activeModel.displayName} (${activeModel.modelFile}) -> ${modelPath}`);
 
     // `--parent-pid` is the backstop for the one teardown path main cannot cover
     // from JS: if main is hard-killed (Task Manager, or electronmon's
@@ -697,6 +758,26 @@ const ensureWorker = (): Promise<WorkerHandle> => {
     });
   }
   return workerPromise;
+};
+
+// Manual model-switch respawn (Settings dropdown, via model:setActiveModel).
+// Reuses killWorker() -- the same primitive the ready-timeout, dev hot-reload
+// recycle, and app-quit teardown paths already use -- rather than
+// shutdownWorker(), which latches `shuttingDown` permanently and would brick
+// every subsequent generate() for the rest of the session.
+//
+// Caller contract: call setActiveModel(modelKey) FIRST. This function does not
+// touch `activeModel` itself -- it only kills whatever worker is currently
+// running (if any) and lets ensureWorker() fork a fresh one, which reads
+// `activeModel` at that point via getModelPath(). Resolves once the new
+// worker's 'ready' handshake completes; the caller (the IPC handler) is
+// responsible for the warmup generate() that actually loads the model before
+// telling the renderer the switch is done.
+export const restartWorkerForModelSwitch = async (): Promise<void> => {
+  if (activeWorker) {
+    killWorker(activeWorker, `model switch to ${activeModel.displayName}`);
+  }
+  await ensureWorker();
 };
 
 // ---------------------------------------------------------------------------

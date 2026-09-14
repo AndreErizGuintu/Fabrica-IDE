@@ -17,7 +17,17 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import * as pty from 'node-pty';
 import MenuBuilder from './menu';
-import { generate, shutdownWorker } from './llm';
+import {
+  generate,
+  shutdownWorker,
+  getActiveModelName,
+  getActiveModelKey,
+  listModelOptions,
+  setActiveModel,
+  restartWorkerForModelSwitch,
+  GenerationAbortedError,
+  type ModelKey,
+} from './llm';
 import { ensureRequiredImports } from './translateImports';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
@@ -523,6 +533,49 @@ ipcMain.handle(
 );
 
 ipcMain.handle('codeInference:getConfig', () => getCodeInferenceConfig());
+
+ipcMain.handle('model:getActiveModel', () => ({
+  success: true,
+  name: getActiveModelName(),
+  key: getActiveModelKey(),
+}));
+
+ipcMain.handle('model:listModels', () => ({
+  success: true,
+  models: listModelOptions(),
+}));
+
+// Manual model switch from the Settings dropdown. Kills and respawns the
+// inference worker (restartWorkerForModelSwitch), then fires the SAME
+// throwaway warmup generate() used at startup (main.ts:1142ish) -- awaited
+// this time, not fire-and-forget, so the promise the renderer is awaiting
+// only resolves once the new model is actually resident. A visibly-slow
+// "Switching..." state is preferable to a fast-looking switch that then
+// hangs the student's first real prompt on the ~14s cold load.
+//
+// 'opportunistic' priority, mirroring the startup warmup: if a real request
+// somehow lands in the tiny window right after respawn, it preempts this and
+// this call rejects with GenerationAbortedError. That is not a failed switch
+// -- the model load is shared via initLlama()'s cached promise (see the
+// startup warmup's comment), so the model is still resident, just via the
+// request that preempted us. Any OTHER error (corrupt model, OOM, crashed
+// worker) is a real failure and is reported back to the dropdown as such.
+ipcMain.handle('model:setActiveModel', async (_event, modelKey: ModelKey) => {
+  try {
+    setActiveModel(modelKey);
+    await restartWorkerForModelSwitch();
+    try {
+      await generate('hi', undefined, undefined, { maxTokens: 1, priority: 'opportunistic' });
+    } catch (warmupErr) {
+      if (!(warmupErr instanceof GenerationAbortedError)) {
+        throw warmupErr;
+      }
+    }
+    return { success: true, name: getActiveModelName() };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
 
 // Debug-only handlers backing the temporary StatsDebugPanel UI.
 ipcMain.handle('stats:getCurrentSession', () => getCurrentSession());
@@ -1121,7 +1174,17 @@ app
     // Must run before createWindow(): if isolation is needed, this relaunches
     // the whole app (app.relaunch() + app.exit()) so the fresh process
     // inherits GGML_VK_VISIBLE_DEVICES from creation. See gpuIsolation.ts.
-    await ensureGpuDeviceIsolation();
+    const gpuStatus = await ensureGpuDeviceIsolation();
+
+    // No usable GPU (enumeration itself failed, or it succeeded but found
+    // nothing) -- DeepSeek-6.7B on pure CPU would be unusably slow, so switch
+    // to the small CPU-friendly Qwen model before the worker is ever spawned.
+    // Every other status still has a GPU (single/ambiguous/already-isolated),
+    // so the existing gpuLayers step-down ladder in llmWorker.ts is what
+    // handles those, unchanged.
+    if (gpuStatus === 'no-gpu' || gpuStatus === 'probe-failed') {
+      setActiveModel('cpuFallback');
+    }
     createWindow();
 
     // Fire-and-forget model warmup: forces the worker fork, the model load and

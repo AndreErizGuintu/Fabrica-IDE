@@ -10,6 +10,7 @@ import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
+import copyMonacoVs from './copyMonacoVs';
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
 // at the dev webpack config is not accidentally run in a production environment
@@ -36,6 +37,14 @@ if (
     ),
   );
   execSync('npm run postinstall');
+}
+
+// Same guard as the DLL check above: webpack.config.eslint.ts requires this
+// file directly for import resolution, so an unguarded call here would copy
+// the ~28MB vs folder on every lint run / IDE ESLint pass, not just real
+// dev-server starts.
+if (!skipDLLs) {
+  copyMonacoVs();
 }
 
 const configuration: webpack.Configuration = {
@@ -190,6 +199,12 @@ const configuration: webpack.Configuration = {
     hot: true,
     headers: { 'Access-Control-Allow-Origin': '*' },
     static: {
+      // webpack-dev-middleware only serves its in-memory compilation under
+      // `output.path`'s URL -- it does not fall through to disk. Monaco's
+      // `vs` folder is copied straight onto disk (copyMonacoVs, above), not
+      // emitted by webpack, so it needs this explicit `directory` to be
+      // served at all; without it, requests to /vs/loader.js 404.
+      directory: webpackPaths.distRendererPath,
       publicPath: '/',
     },
     historyApiFallback: {

@@ -1,4 +1,5 @@
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
+import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
 
 interface AIPanelProps {
   selectedCode: string;
@@ -127,6 +128,15 @@ function getCompletionErrorText(error?: string) {
 }
 
 export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile, panelState }: AIPanelProps) {
+  const {
+    activeKey: modelKey,
+    modelName,
+    models,
+    switching: modelSwitching,
+    error: modelError,
+    selectModel,
+  } = useModelSelector();
+
   const {
     activeTab, setActiveTab,
     response, setResponse,
@@ -371,6 +381,48 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
           );
         })}
       </div>
+
+      {/* Model selector — applies to all tabs, one model backs every mode */}
+      <div
+        className="flex items-center justify-between gap-2 px-3 py-1.5 shrink-0"
+        style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.16)' }}
+      >
+        <span
+          className="text-[9px] uppercase tracking-widest text-[#B8AFC2]"
+          style={{ fontFamily: 'Segoe UI, sans-serif' }}
+        >
+          Model
+        </span>
+        {modelSwitching ? (
+          <span className="text-[10px] flex items-center gap-1.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+            Switching…
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full animate-spin"
+              style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }}
+            />
+          </span>
+        ) : (
+          <select
+            value={modelKey ?? ''}
+            onChange={(e) => selectModel(e.target.value as ModelOption['key'])}
+            disabled={models.length === 0}
+            className="text-[10px] px-2 py-0.5 rounded bg-[#1C0F30] text-[#F5F0FA] max-w-[150px]"
+            style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}
+          >
+            {models.length === 0 && <option value="">{modelName}</option>}
+            {models.map((m) => (
+              <option key={m.key} value={m.key} className="bg-[#1C0F30]">
+                {m.displayName}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {modelError && (
+        <div className="px-3 pt-1 text-[9px] shrink-0" style={{ color: '#f87171', fontFamily: 'Segoe UI, sans-serif' }}>
+          {modelError}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 flex flex-col gap-1.5 px-3 py-2 overflow-hidden min-h-0">

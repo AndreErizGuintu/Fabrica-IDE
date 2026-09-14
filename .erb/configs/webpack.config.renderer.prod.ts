@@ -14,9 +14,11 @@ import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
+import copyMonacoVs from './copyMonacoVs';
 
 checkNodeEnv('production');
 deleteSourceMaps();
+copyMonacoVs();
 
 const configuration: webpack.Configuration = {
   devtool: 'source-map',

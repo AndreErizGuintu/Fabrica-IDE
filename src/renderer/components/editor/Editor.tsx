@@ -1,6 +1,21 @@
-import MonacoEditor from '@monaco-editor/react';
+import MonacoEditor, { loader } from '@monaco-editor/react';
 import type { Monaco } from '@monaco-editor/react';
 import './editor.css';
+
+// @monaco-editor/react's loader defaults to fetching Monaco's AMD bundle from
+// cdn.jsdelivr.net at runtime. `node_modules/monaco-editor/min/vs` is an AMD
+// bundle meant to be requested as static files by its own loader.js, NOT
+// imported through webpack's require() -- that was tried first and broke the
+// build, because webpack's require() can't statically analyze the AMD
+// module's internal require() calls. Instead, copyMonacoVs()
+// (.erb/configs/copyMonacoVs.ts) copies that folder next to the renderer's
+// index.html at build time (both dev and prod), and this points the loader
+// at it as a plain relative path so it resolves against wherever index.html
+// itself is being served/loaded from -- no CDN, no dev/prod branching needed
+// here since 'vs' always sits alongside index.html in both modes. Must run
+// once at module load, before the first <Editor> mount ever calls
+// MonacoEditor's internal loader.
+loader.config({ paths: { vs: 'vs' } });
 
 export interface EditorProps {
   language: string;

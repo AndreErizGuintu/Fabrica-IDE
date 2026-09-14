@@ -59,6 +59,16 @@ contextBridge.exposeInMainWorld('runner', {
   checkSDK: (runtime: string) => ipcRenderer.invoke('run:checkSDK', runtime),
 });
 
+contextBridge.exposeInMainWorld('model', {
+  getActiveModel: () => ipcRenderer.invoke('model:getActiveModel'),
+  listModels: () => ipcRenderer.invoke('model:listModels'),
+  // Kills and respawns the inference worker, then warms it up with a
+  // throwaway generation before resolving -- can take several seconds
+  // (mirrors the ~14s cold-load warmup already done once at app startup).
+  setActiveModel: (modelKey: 'primary' | 'cpuFallback') =>
+    ipcRenderer.invoke('model:setActiveModel', modelKey),
+});
+
 contextBridge.exposeInMainWorld('stats', {
   startSession: (projectPath: string) => ipcRenderer.invoke('stats:startSession', projectPath),
   activity: () => ipcRenderer.send('stats:activity'),

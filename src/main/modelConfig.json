@@ -1,3 +1,8 @@
 {
-  "modelFile": "deepseek-coder-6.7b-instruct-quantfactory.Q4_K_M.gguf"
+  "modelFile": "deepseek-coder-6.7b-instruct-quantfactory.Q4_K_M.gguf",
+  "displayName": "DeepSeek Coder 6.7B",
+  "cpuFallback": {
+    "modelFile": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+    "displayName": "Qwen2.5 Coder 1.5B"
+  }
 }
