@@ -523,7 +523,7 @@ export default function Sidebar({
       nodes.map(async (node) => {
         if (node.entry.path === targetPath) {
           if (node.isOpen) {
-            return { ...node, isOpen: false };
+            return { ...node, isOpen: false, children: undefined };
           }
           // TEMP DEBUG (deleted-folder-survives-reopen investigation, remove after)
           console.log(
