@@ -1,4 +1,13 @@
 import { useEffect, useState } from 'react';
+import {
+  Globe,
+  Code2,
+  Smartphone,
+  Sparkles,
+  FolderOpen,
+  Link as LinkIcon,
+  Settings as SettingsIcon,
+} from 'lucide-react';
 import logo from '../assets/log.png';
 import './App.css';
 import EditorLayout from './screens/EditorLayout';
@@ -28,7 +37,7 @@ type ProjectTemplate = {
   id: TemplateId;
   name: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
 };
 
 const PROJECT_TEMPLATES: ProjectTemplate[] = [
@@ -36,19 +45,19 @@ const PROJECT_TEMPLATES: ProjectTemplate[] = [
     id: 'web',
     name: 'Web',
     description: 'index.html, style.css and script.js. Static files, no build step.',
-    icon: '🌐',
+    icon: <Globe size={28} strokeWidth={1.6} />,
   },
   {
     id: 'csharp',
     name: 'C#',
     description: 'Program.cs using top-level statements. No .csproj needed on .NET 10.',
-    icon: '🟦',
+    icon: <Code2 size={28} strokeWidth={1.6} />,
   },
   {
     id: 'flutter',
     name: 'Flutter (Windows)',
     description: 'Full Windows desktop preview app via flutter create. Desktop only.',
-    icon: '💙',
+    icon: <Smartphone size={28} strokeWidth={1.6} />,
   },
 ];
 
@@ -229,9 +238,9 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
 function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings: () => void }) {
   const modelName = useActiveModel();
   const templates = [
-    { id: 'web', name: 'Web App Blank', description: 'Templates included', icon: '🌐' },
-    { id: 'mobile', name: 'Mobile App', description: 'Templates included', icon: '📱' },
-    { id: 'backend', name: 'Backend/API', description: 'Templates included', icon: '⚙️' },
+    { id: 'web', name: 'Web App Blank', description: 'Templates included', icon: <Globe size={28} strokeWidth={1.6} /> },
+    { id: 'mobile', name: 'Mobile App', description: 'Templates included', icon: <Smartphone size={28} strokeWidth={1.6} /> },
+    { id: 'backend', name: 'Backend/API', description: 'Templates included', icon: <SettingsIcon size={28} strokeWidth={1.6} /> },
   ];
 
   return (
@@ -277,7 +286,19 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
               <div key={template.id}
                 className="p-4 rounded-lg transition-colors hover:bg-white/5"
                 style={{ backgroundColor: '#180C29', border: '1px solid rgba(168, 85, 247, 0.24)' }}>
-                <div className="text-3xl mb-2">{template.icon}</div>
+                <div
+                  className="mb-3 flex items-center justify-center"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: 'rgba(168, 85, 247, 0.08)',
+                    border: '1px solid rgba(168, 85, 247, 0.2)',
+                    color: '#a855f7',
+                  }}
+                >
+                  {template.icon}
+                </div>
                 <div className="text-sm font-medium"
                   style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
                   {template.name}
@@ -372,7 +393,20 @@ function NewProjectScreen({
                         e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.24)';
                       }
                     }}>
-                    <div className="text-2xl sm:text-3xl mb-2">{template.icon}</div>
+                    <div
+                      className="mb-3 flex items-center justify-center"
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        background: isSelected ? 'rgba(168, 85, 247, 0.15)' : 'rgba(168, 85, 247, 0.08)',
+                        border: `1px solid ${isSelected ? 'rgba(168, 85, 247, 0.5)' : 'rgba(168, 85, 247, 0.2)'}`,
+                        color: isSelected ? '#c084fc' : '#a855f7',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {template.icon}
+                    </div>
                     <div className="text-sm sm:text-base font-medium"
                       style={{ color: isSelected ? '#ffffff' : '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
                       {template.name}
@@ -427,7 +461,7 @@ function NewProjectScreen({
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }} />
               <p className="text-xs mt-1.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                 Leave blank to just initialise a local repository. If filled, the
-                project is also wired to this remote as “origin” and gets an
+                project is also wired to this remote as "origin" and gets an
                 initial commit.
               </p>
             </div>
@@ -548,7 +582,7 @@ function MainMenu({
                 border: '1px solid rgba(168, 85, 247, 0.3)',
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
-              <span>✨</span> New Project
+              <Sparkles size={14} strokeWidth={2} /> New Project
             </button>
             <button onClick={onOpenFolder}
               className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
@@ -559,7 +593,7 @@ function MainMenu({
                 border: '1px solid rgba(168, 85, 247, 0.24)',
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
-              <span>📂</span> Open Folder
+              <FolderOpen size={14} strokeWidth={2} /> Open Folder
             </button>
             <button onClick={openCloneDialog}
               className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
@@ -570,7 +604,7 @@ function MainMenu({
                 border: '1px solid rgba(168, 85, 247, 0.24)',
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
-              <span>🔗</span> Clone Repository
+              <LinkIcon size={14} strokeWidth={2} /> Clone Repository
             </button>
           </div>
 
@@ -579,7 +613,15 @@ function MainMenu({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
             {recentProjects.length === 0 ? (
               <div className="col-span-full text-center py-12">
-                <div className="text-4xl mb-3 opacity-30">📂</div>
+                <div className="mb-3 flex items-center justify-center mx-auto"
+                  style={{
+                    width: 56, height: 56, borderRadius: 14,
+                    background: 'rgba(168, 85, 247, 0.05)',
+                    border: '1px solid rgba(168, 85, 247, 0.15)',
+                    color: 'rgba(168, 85, 247, 0.4)',
+                  }}>
+                  <FolderOpen size={28} strokeWidth={1.5} />
+                </div>
                 <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
                   No projects yet
                 </div>
@@ -598,9 +640,15 @@ function MainMenu({
                     overflow: 'hidden',
                   }}>
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded flex items-center justify-center text-base sm:text-lg"
-                      style={{ backgroundColor: '#100718' }}>
-                      📁
+                    <div
+                      className="flex items-center justify-center shrink-0"
+                      style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        background: 'rgba(168, 85, 247, 0.1)',
+                        color: '#a855f7',
+                      }}
+                    >
+                      <FolderOpen size={16} strokeWidth={1.8} />
                     </div>
                     <div>
                       <div className="text-xs sm:text-sm font-medium"
