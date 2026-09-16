@@ -29,6 +29,7 @@ import {
   type ModelKey,
 } from './llm';
 import { ensureRequiredImports } from './translateImports';
+import { appendDeprecatedApiGuard, applyDeprecatedApiFixes } from './deprecatedApiGuard';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
 import { registerAndroidSdkIpc } from './androidSdk';
@@ -1247,7 +1248,11 @@ ipcMain.handle('ai:complete', async (event, prompt: string) => {
 
 ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selectedCode: string; language: string }) => {
   try {
-    const systemPrompt = `You are a code translator. Translate the following code into ${payload.language}. Always return ONLY the translated code, with no explanation, no commentary, and no markdown fencing unless the code itself requires it. If the translated code uses any functions, types, or classes that require an import in ${payload.language} (for example, dart:math for min/max/sqrt in Dart, or System/System.Linq for C#), you MUST include the necessary import statement(s) at the top of the output — even if the original source code did not need an equivalent import. Before finalizing your answer, check your own output for any function calls or types that require an import and make sure every one of them is imported. If the code is already valid ${payload.language}, return it unchanged — do not explain why.`;
+    const baseSystemPrompt = `You are a code translator. Translate the following code into ${payload.language}. Always return ONLY the translated code, with no explanation, no commentary, and no markdown fencing unless the code itself requires it. If the translated code uses any functions, types, or classes that require an import in ${payload.language} (for example, dart:math for min/max/sqrt in Dart, or System/System.Linq for C#), you MUST include the necessary import statement(s) at the top of the output — even if the original source code did not need an equivalent import. Before finalizing your answer, check your own output for any function calls or types that require an import and make sure every one of them is imported. If the code is already valid ${payload.language}, return it unchanged — do not explain why.`;
+    // Per-language deprecated-API guard, appended ONLY for the language this
+    // call actually targets (see src/main/deprecatedApiGuard.ts). No-op for
+    // any language outside the guarded four.
+    const systemPrompt = appendDeprecatedApiGuard(baseSystemPrompt, payload.language);
     const userPrompt = [
       `Language: ${payload.language}`,
       payload.prompt.trim() ? `Prompt: ${payload.prompt.trim()}` : `Prompt: Translate the selected code into ${payload.language}.`,
@@ -1271,13 +1276,26 @@ ipcMain.handle('ai:translate', async (event, payload: { prompt: string; selected
     // decision needs the whole output: whether an import is required cannot be
     // known until every symbol has been seen.
     const rawResponse = fullText || result;
-    const finalResponse = ensureRequiredImports(rawResponse, payload.language);
+    const importsFixed = ensureRequiredImports(rawResponse, payload.language);
 
-    if (finalResponse !== rawResponse) {
+    if (importsFixed !== rawResponse) {
       console.log(
         '[ai:translate] deterministic import repair APPLIED',
         `language=${payload.language}`,
-        `addedChars=${finalResponse.length - rawResponse.length}`,
+        `addedChars=${importsFixed.length - rawResponse.length}`,
+      );
+    }
+
+    // Deterministic deprecated-API fixups (2026-09-15). Same "mechanical
+    // guarantee over prompt wording" reasoning as the import repair above.
+    // Runs regardless of whether the prompt guard fired. See
+    // src/main/deprecatedApiGuard.ts.
+    const finalResponse = applyDeprecatedApiFixes(importsFixed, payload.language);
+
+    if (finalResponse !== importsFixed) {
+      console.log(
+        '[ai:translate] deterministic deprecated-API fix APPLIED',
+        `language=${payload.language}`,
       );
     }
 

@@ -14,7 +14,6 @@ import EditorLayout from './screens/EditorLayout';
 import StatsDashboard from './screens/StatsDashboard';
 import SettingsScreen from './screens/SettingsScreen';
 import AppSidebar from './components/AppSidebar';
-import MirrorTest from './components/MirrorTest';
 import { ThemeProvider } from './theme/ThemeContext';
 
 // ── Shared theme palette (matches EditorLayout) ──
@@ -610,8 +609,6 @@ function MainMenu({
               <LinkIcon size={14} strokeWidth={2} /> Clone Repository
             </button>
           </div>
-
-          <MirrorTest />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4">
             {recentProjects.length === 0 ? (

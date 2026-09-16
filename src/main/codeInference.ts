@@ -3,6 +3,7 @@ import { generate } from './llm';
 import { incrementAiCallCount } from './stats';
 import { onAiCall } from './adaptiveEngine';
 import config from './codeInference.config.json';
+import { appendDeprecatedApiGuard, applyDeprecatedApiFixes } from './deprecatedApiGuard';
 
 // ---------------------------------------------------------------------------
 // Code Inference - confirmation-based boilerplate completion.
@@ -568,9 +569,15 @@ export async function requestCodeInference(
   ciLog(`--- prompt sent to the model ---\n${prompt}\n--- end prompt ---`);
   const startedAt = Date.now();
 
+  // Per-language deprecated-API guard, appended ONLY for the language this
+  // call actually targets -- not all four every time. See
+  // src/main/deprecatedApiGuard.ts. No-op for any language outside the
+  // guarded four (e.g. html, css), which is most Code Inference traffic.
+  const systemPrompt = appendDeprecatedApiGuard(SYSTEM_PROMPT, language);
+
   let raw: string;
   try {
-    raw = await generate(prompt, SYSTEM_PROMPT, undefined, {
+    raw = await generate(prompt, systemPrompt, undefined, {
       maxTokens: config.maxTokens,
       contextSize: config.contextSize,
       // REVERSED FROM THE ORIGINAL DESIGN: was 'opportunistic'. That priority
@@ -623,9 +630,17 @@ export async function requestCodeInference(
   ciLog(
     `sanitize() -> ${sanitized === null ? 'NULL (rejected)' : `${sanitized.length} chars ${preview(sanitized, 200)}`}`,
   );
+
+  // Deterministic deprecated-API fixups (2026-09-15), applied to the finalized
+  // completion regardless of whether the prompt guard fired. Pure string
+  // substitution, no model call. See src/main/deprecatedApiGuard.ts.
+  const fixed = sanitized === null ? null : applyDeprecatedApiFixes(sanitized, language);
+  if (fixed !== null && fixed !== sanitized) {
+    ciLog(`deterministic deprecated-API fix APPLIED language=${language}`);
+  }
   ciLog('EXIT: returning to IPC handler');
 
-  return { suggestion: sanitized };
+  return { suggestion: fixed };
 }
 
 // --- Test-only exports ------------------------------------------------------
