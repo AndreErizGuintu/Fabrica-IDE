@@ -19,6 +19,7 @@ coverage
 
 # Dependencies
 node_modules
+node_modules copy/
 
 # Build output
 dist
@@ -31,6 +32,7 @@ release/build
 .erb/dll
 .erb/webpack
 .erb/out
+asar-extracted/
 
 # Environment files
 .env

@@ -16,6 +16,10 @@
   },
   "dependencies": {
     "node-llama-cpp": "3.20.0",
-    "node-pty": "^1.1.0"
+    "node-pty": "^1.1.0",
+    "intelephense": "^1.13.0",
+    "monaco-languageclient": "^9.4.0",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-jsonrpc": "^8.2.0"
   }
 }

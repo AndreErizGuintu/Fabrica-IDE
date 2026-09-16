@@ -184,6 +184,20 @@ contextBridge.exposeInMainWorld('androidSdk', {
   },
 });
 
+contextBridge.exposeInMainWorld('lsp', {
+  onMessage: (id: string, cb: (msg: string) => void) =>
+    ipcRenderer.on(`lsp:${id}:message`, (_e, msg) => cb(msg)),
+  send: (id: string, msg: string) => ipcRenderer.send(`lsp:${id}:send`, msg),
+  startDart: () => ipcRenderer.invoke('lsp:startDart'),
+  startPhp: () => ipcRenderer.invoke('lsp:startPhp'),
+});
+
+contextBridge.exposeInMainWorld('lint', {
+  csharp: (csprojPath: string) => ipcRenderer.invoke('lint:csharp', csprojPath),
+  dart: (projectPath: string) => ipcRenderer.invoke('lint:dart', projectPath),
+  php: (filePath: string) => ipcRenderer.invoke('lint:php', filePath),
+});
+
 contextBridge.exposeInMainWorld('git', {
   init: (cwd: string) => ipcRenderer.invoke('git:init', cwd),
   status: (cwd: string) => ipcRenderer.invoke('git:status', cwd),

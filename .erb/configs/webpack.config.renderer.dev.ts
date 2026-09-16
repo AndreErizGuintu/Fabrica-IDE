@@ -240,4 +240,18 @@ const configuration: webpack.Configuration = {
   },
 };
 
-export default merge(baseConfig, configuration);
+const finalConfig = merge(baseConfig, configuration);
+
+// baseConfig.externals lists every release/app/package.json dependency so the
+// main-process bundle can require() its native deps (node-llama-cpp, etc.) at
+// runtime instead of bundling them. Merging that in here wrongly excludes the
+// LSP client libs too -- they have no Node require() available in the
+// renderer and fall back to an undefined UMD external. intelephense stays
+// excluded: it's only spawned via require.resolve() from the main process.
+const RENDERER_BUNDLED_PACKAGES = ['vscode-jsonrpc', 'vscode-languageclient', 'monaco-languageclient'];
+const baseExternals = Array.isArray(baseConfig.externals) ? baseConfig.externals : [];
+finalConfig.externals = baseExternals.filter(
+  (item) => !(typeof item === 'string' && RENDERER_BUNDLED_PACKAGES.includes(item)),
+);
+
+export default finalConfig;

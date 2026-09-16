@@ -71,6 +71,10 @@ import {
   checkCodeInferenceTrigger,
   getCodeInferenceConfig,
 } from './codeInference';
+import { startLanguageServer } from './lspBridge';
+import { lintCSharp } from './csharpLint';
+import { lintDart } from './dartLint';
+import { lintPhp } from './phpLint';
 
 // package.json's root "name" is still "electron-react-boilerplate" (only
 // build.productName is "ElectronReact", which Electron itself never reads),
@@ -457,6 +461,50 @@ ipcMain.handle('stats:startSession', async (_event, projectPath: string) => {
   startSession(projectPath);
   startEngineSession();
   return { success: true };
+});
+
+// Fired alongside stats:startSession from the same "project opened" effect in
+// EditorLayout -- that's the one reliable signal main has for project open,
+// since recent-project reopen bypasses dialog:openFolder entirely.
+ipcMain.handle('lsp:startDart', async () => {
+  if (!mainWindow) {
+    return { success: false, error: 'No active window' };
+  }
+  startLanguageServer(
+    'dart',
+    getBundledRuntimeBinary('dart'),
+    ['language-server', '--client-id=fabrica'],
+    mainWindow.webContents,
+  );
+  return { success: true };
+});
+
+ipcMain.handle('lsp:startPhp', async () => {
+  if (!mainWindow) {
+    return { success: false, error: 'No active window' };
+  }
+  startLanguageServer(
+    'php',
+    getBundledRuntimeBinary('node'),
+    [require.resolve('intelephense/lib/intelephense.js'), '--stdio'],
+    mainWindow.webContents,
+  );
+  return { success: true };
+});
+
+ipcMain.handle('lint:csharp', async (_event, csprojPath: string) => {
+  const errors = await lintCSharp(getBundledRuntimeBinary('dotnet'), csprojPath);
+  return { success: true, errors };
+});
+
+ipcMain.handle('lint:dart', async (_event, projectPath: string) => {
+  const errors = await lintDart(getBundledRuntimeBinary('dart'), projectPath);
+  return { success: true, errors };
+});
+
+ipcMain.handle('lint:php', async (_event, filePath: string) => {
+  const errors = await lintPhp(getBundledRuntimeBinary('php'), filePath);
+  return { success: true, errors };
 });
 
 ipcMain.on('stats:activity', () => {

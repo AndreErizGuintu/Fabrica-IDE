@@ -20,6 +20,35 @@ type StoreBridge = {
 
 type FlutterTarget = { id: string; name: string; platform: string };
 
+// Hand-duplicated from src/main/csharpLint.ts's ParsedError -- same rationale
+// as the adaptive-engine types below (preload stays free of main-process imports).
+type ParsedCSharpError = {
+  file: string;
+  line: number;
+  column: number;
+  severity: string;
+  code: string;
+  message: string;
+};
+
+// Hand-duplicated from src/main/dartLint.ts's DartError.
+type ParsedDartError = {
+  file: string;
+  line: number;
+  column: number;
+  endColumn: number;
+  severity: string;
+  code: string;
+  message: string;
+};
+
+// Hand-duplicated from src/main/phpLint.ts's PhpError.
+type ParsedPhpError = {
+  file: string;
+  line: number;
+  message: string;
+};
+
 // Hand-duplicated from src/main/adaptiveEngine.ts (Scenario, Suggestion,
 // AdaptiveDebugState) and src/main/errorClassifier.ts (ErrorCategory). These
 // drifted out of sync once already — scenarioFireCounts was returned by main
@@ -260,6 +289,17 @@ declare global {
       currentBranch: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       pushSetUpstream: (cwd: string, branch: string) => Promise<{ success: boolean; output: string; error?: string }>;
       onProgress: (cb: (data: string) => void) => () => void;
+    };
+    lsp: {
+      onMessage: (id: string, cb: (msg: string) => void) => void;
+      send: (id: string, msg: string) => void;
+      startDart: () => Promise<{ success: boolean; error?: string }>;
+      startPhp: () => Promise<{ success: boolean; error?: string }>;
+    };
+    lint: {
+      csharp: (csprojPath: string) => Promise<{ success: boolean; errors?: ParsedCSharpError[]; error?: string }>;
+      dart: (projectPath: string) => Promise<{ success: boolean; errors?: ParsedDartError[]; error?: string }>;
+      php: (filePath: string) => Promise<{ success: boolean; errors?: ParsedPhpError[]; error?: string }>;
     };
   }
 }

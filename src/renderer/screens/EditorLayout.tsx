@@ -18,6 +18,7 @@ import FlutterTargetSelector, {
 import MirrorButton from '../components/mirror/MirrorButton';
 import SourceControlPanel from '../components/git/SourceControlPanel';
 import AndroidSdkButton from '../components/AndroidSdkButton';
+import { lintCSharpFile, lintDartFile, lintPhpFile } from '../lsp/csharpLint';
 import { Tab } from '../types/index';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -406,6 +407,9 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [selectedCode, setSelectedCode] = useState('');
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
   const flutterHotReloadTimerRef = useRef<number | null>(null);
+  const csharpLintTimerRef = useRef<number | null>(null);
+  const dartLintTimerRef = useRef<number | null>(null);
+  const phpLintTimerRef = useRef<number | null>(null);
   const [showAI, setShowAI] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
@@ -486,6 +490,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   useEffect(() => {
     if (initialFolder) {
       window.stats?.startSession(initialFolder);
+      window.lsp?.startDart();
+      window.lsp?.startPhp();
       showNotification(`Workspace opened: ${initialFolder.split(/[\\/]/).pop()}`, 'success');
     }
   }, [initialFolder]);
@@ -723,6 +729,27 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     flutterHotReloadTimerRef.current = window.setTimeout(() => { void window.terminal.hotReload(); }, 400);
   }, []);
 
+  const triggerCSharpLint = useCallback((filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext !== 'cs') return;
+    if (csharpLintTimerRef.current !== null) window.clearTimeout(csharpLintTimerRef.current);
+    csharpLintTimerRef.current = window.setTimeout(() => { void lintCSharpFile(filePath); }, 400);
+  }, []);
+
+  const triggerDartLint = useCallback((filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext !== 'dart') return;
+    if (dartLintTimerRef.current !== null) window.clearTimeout(dartLintTimerRef.current);
+    dartLintTimerRef.current = window.setTimeout(() => { void lintDartFile(filePath); }, 400);
+  }, []);
+
+  const triggerPhpLint = useCallback((filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext !== 'php') return;
+    if (phpLintTimerRef.current !== null) window.clearTimeout(phpLintTimerRef.current);
+    phpLintTimerRef.current = window.setTimeout(() => { void lintPhpFile(filePath); }, 400);
+  }, []);
+
   const handleSaveTranslatedFile = useCallback(
     async (content: string, language: string): Promise<{ success: boolean; error?: string; skipped?: boolean }> => {
       const activePath = tabs[activeTabIndex]?.path;
@@ -787,13 +814,16 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     const result = await window.fileSystem.writeFile(activeTab.path, activeTab.content);
     if (result.success) {
       triggerFlutterHotReload(activeTab.path);
+      triggerCSharpLint(activeTab.path);
+      triggerDartLint(activeTab.path);
+      triggerPhpLint(activeTab.path);
       setTabs((prev) => prev.map((tab, index) => index === activeTabIndex ? { ...tab, isDirty: false } : tab));
       setGitRefreshToken((n) => n + 1);
       showNotification(`Saved ${activeTab.filename}`, 'success');
     } else {
       showNotification(`Failed to save ${activeTab.filename}`, 'error');
     }
-  }, [activeTab, activeTabIndex, triggerFlutterHotReload]);
+  }, [activeTab, activeTabIndex, triggerFlutterHotReload, triggerCSharpLint, triggerDartLint, triggerPhpLint]);
 
   const handleRun = useCallback(async () => {
     if (!activeTab?.path) {
@@ -872,7 +902,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, handleSave]);
+  }, [activeTab, handleSave, triggerDartLint, triggerPhpLint]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
