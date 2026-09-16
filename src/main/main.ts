@@ -824,11 +824,13 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
   ) as Record<string, string>;
 
   // `flutter run` is long-lived by design — it stays attached serving hot
-  // reload/restart keystrokes (DECISIONS.md 2026-07-30) and only ends when the
-  // app window is closed. A sentinel would therefore not resolve until app
-  // shutdown, and buffering would grow for the whole session, so Flutter runs
-  // are left as pure passthrough: no sentinel appended, no capture started.
-  const capturesOutput = language !== 'flutter';
+  // reload/restart keystrokes (DECISIONS.md 2026-07-30) — but it DOES return
+  // control to the shell prompt once it exits (e.g. the target app window is
+  // closed), same as any other command. The sentinel/capture pipeline below
+  // now runs for every language, Flutter included, so that exit is detected
+  // and terminal:run-complete fires to unstick the Run button. Classification
+  // (onRunError) is still skipped for Flutter below — a dev-driven hot-reload
+  // session ending isn't a pass/fail result the way a script exiting is.
 
   try {
     // Spawn a persistent cmd.exe shell as the pty's root process (like VS Code's
@@ -848,9 +850,7 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
       activeFlutterSessionId = sessionId;
     }
 
-    if (capturesOutput) {
-      startCapture(sessionId);
-    }
+    startCapture(sessionId);
 
     ptyProcess.onData((data) => {
       // Passthrough first — the capture below is a read-only tap and must never
@@ -859,31 +859,32 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
       // wrote, colour included, is forwarded untouched.
       event.sender.send('terminal:output', {
         sessionId,
-        data: capturesOutput ? stripSentinelForDisplay(data) : data,
+        data: stripSentinelForDisplay(data),
       });
 
-      if (capturesOutput) {
-        // Deliberately the raw chunk, not the filtered one — the sentinel is
-        // the capture's completion signal.
-        const completion = feedCapture(sessionId, data);
-        if (completion) {
-          event.sender.send('terminal:run-complete', completion);
+      // Deliberately the raw chunk, not the filtered one — the sentinel is
+      // the capture's completion signal.
+      const completion = feedCapture(sessionId, data);
+      if (completion) {
+        event.sender.send('terminal:run-complete', completion);
 
-          // Classification happens HERE, in main, not round-tripped through the
-          // renderer: `language` is already in scope from this handler's own
-          // payload, and the Adaptive Engine lives in main anyway. onRun() has
-          // already fired unconditionally for this run (top of the handler);
-          // onRunError is strictly additional and only for a real, classified
-          // failure — an unclassifiable one deliberately says nothing.
-          const category = classifyError({
-            language,
-            output: completion.output,
-            exitCode: completion.exitCode,
-          });
+        // Classification happens HERE, in main, not round-tripped through the
+        // renderer: `language` is already in scope from this handler's own
+        // payload, and the Adaptive Engine lives in main anyway. onRun() has
+        // already fired unconditionally for this run (top of the handler);
+        // onRunError is strictly additional and only for a real, classified
+        // failure — an unclassifiable one deliberately says nothing. Flutter
+        // is excluded here specifically: a hot-reload session ending (the dev
+        // closed the target app window) isn't a pass/fail result, so it never
+        // gets classified or surfaced as a run error.
+        const category = language !== 'flutter' ? classifyError({
+          language,
+          output: completion.output,
+          exitCode: completion.exitCode,
+        }) : null;
 
-          if (category) {
-            onRunError(category, completion.output);
-          }
+        if (category) {
+          onRunError(category, completion.output);
         }
       }
     });
@@ -900,7 +901,7 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
     });
 
     const commandLine = buildCommandLine(config.cmd, config.args);
-    ptyProcess.write(`${commandLine}${capturesOutput ? RUN_SENTINEL_SUFFIX : ''}\r`);
+    ptyProcess.write(`${commandLine}${RUN_SENTINEL_SUFFIX}\r`);
 
     return { success: true, sessionId };
   } catch (err) {

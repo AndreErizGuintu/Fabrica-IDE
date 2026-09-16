@@ -428,7 +428,7 @@ export default function Sidebar({
   const toggleNode = async (targetPath: string, nodes: TreeNode[]): Promise<TreeNode[]> => {
     return Promise.all(nodes.map(async (node) => {
       if (node.entry.path === targetPath) {
-        if (node.isOpen) return { ...node, isOpen: false };
+        if (node.isOpen) return { ...node, isOpen: false, children: undefined };
         const children = node.children ?? await loadChildren(node.entry.path);
         return { ...node, isOpen: true, children };
       }

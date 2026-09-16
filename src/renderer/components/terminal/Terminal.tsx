@@ -195,9 +195,15 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
         setRunningState(false);
       }
     });
+    const removeRunComplete = window.terminal.onRunComplete(({ sessionId }) => {
+      if (sessionId === sessionIdRef.current) {
+        setRunningState(false);
+      }
+    });
     return () => {
       removeOutput();
       removeExit();
+      removeRunComplete();
     };
   }, [setRunningState]);
 

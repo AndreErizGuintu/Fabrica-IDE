@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
 
@@ -50,6 +51,36 @@ function LoadingIndicator() {
   );
 }
 
+// section.content is already fence-stripped by the regex in renderResponseContent
+// (capture group 2 sits between the ```lang line and the closing ```), so this
+// copies only the code itself — no markdown fence lines.
+function CodeBlockCopyButton({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content.replace(/\n$/, ''));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard write failed (permissions, unsupported context) — no toast,
+      // matches the low-visual-weight, non-intrusive intent of this control.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? 'Copied' : 'Copy code'}
+      className="flex items-center justify-center p-1 rounded transition-colors hover:bg-[rgba(168,85,247,0.12)]"
+      style={{ color: copied ? '#4ade80' : '#81748F' }}
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
 function renderResponseContent(response: string) {
   const sections: Array<{
     type: 'text' | 'code';
@@ -93,6 +124,9 @@ function renderResponseContent(response: string) {
               <pre className="m-0 overflow-x-auto p-2 text-[10px] text-[#F5F0FA]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
                 <code>{section.content}</code>
               </pre>
+              <div className="flex items-center justify-end px-1 py-0.5 border-t border-[rgba(168,85,247,0.16)]">
+                <CodeBlockCopyButton content={section.content} />
+              </div>
             </div>
           );
         }
