@@ -1,67 +1,113 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+const C = {
+  bgPreviewAI: '#0C0922',
+  bgCard: '#12102D',
+  border: '#29204A',
+  accentAI: '#A855F7',
+  codePurple: '#C084FC',
+  textPrimary: '#F4F1FF',
+  textSecondary: '#A9A3C7',
+  textMuted: '#77718F',
+};
 
 export type DeviceType = 'desktop' | 'tablet' | 'mobile';
 
 interface PreviewProps {
-  html: string
-  isHtmlFile: boolean
-  zoom?: number
-  device?: DeviceType
-  refreshKey?: number
+  html: string;
+  isHtmlFile: boolean;
+  zoom?: number;
+  device?: DeviceType;
+  refreshKey?: number;
 }
 
-export default function Preview({ html, isHtmlFile, zoom = 1, device = 'desktop', refreshKey = 0 }: PreviewProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+export default function Preview({
+  html,
+  isHtmlFile,
+  zoom = 1,
+  device = 'desktop',
+  refreshKey = 0,
+}: PreviewProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  const [iframeKey, setIframeKey] = useState(0);
   useEffect(() => {
-    if (iframeRef.current && isHtmlFile) {
-      iframeRef.current.srcdoc = html
-    }
-  }, [html, isHtmlFile, refreshKey])
+    setIframeKey((k) => k + 1);
+  }, [refreshKey]);
+
+  const hasExternalResources = useMemo(() => {
+    if (!isHtmlFile) return false;
+    return /https?:\/\/[^\s"']+\.(css|js)/i.test(html);
+  }, [html, isHtmlFile]);
 
   const getDeviceWidth = () => {
     switch (device) {
-      case 'desktop': return '100%'
-      case 'tablet': return '768px'
-      case 'mobile': return '375px'
+      case 'desktop': return '100%';
+      case 'tablet': return '768px';
+      case 'mobile': return '375px';
     }
-  }
+  };
 
-  return (
-    <div className="flex flex-col h-full w-full"
-      style={{ background: '#180C29', borderLeft: '1px solid rgba(168, 85, 247, 0.16)' }}>
-
-      {/* Preview area */}
-      {isHtmlFile ? (
-        <div className="flex-1 overflow-auto flex items-center justify-center" style={{ background: '#180C29' }}>
-          <div style={{ width: getDeviceWidth(), height: '100%', transition: 'width 0.3s ease' }}>
-            <iframe
-              ref={iframeRef}
-              className="w-full h-full border-none block"
-              style={{
-                background: '#ffffff',
-                transform: zoom === 1 ? undefined : `scale(${zoom})`,
-                transformOrigin: 'top left',
-                width: zoom === 1 ? '100%' : `${100 / zoom}%`,
-                height: zoom === 1 ? '100%' : `${100 / zoom}%`,
-              }}
-              sandbox="allow-scripts allow-same-origin"
-              title="Live Preview"
-            />
-          </div>
-        </div>
-      ) : (
+  if (!isHtmlFile) {
+    return (
+      <div className="flex flex-col h-full w-full" style={{ background: C.bgPreviewAI }}>
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div>
-            <div className="text-4xl mb-4">🚫</div>
-            <div className="text-sm text-gray-500"
-              style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+            <div
+              className="mx-auto mb-4 flex items-center justify-center"
+              style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: 'rgba(168, 85, 247, 0.08)',
+                border: `1px solid ${C.border}`,
+                color: C.accentAI, fontSize: 22,
+              }}
+            >
+              ⃠
+            </div>
+            <div className="text-sm" style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
               Preview not available
-              <br/>for this file type
+              <br />for this file type
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full w-full" style={{ background: C.bgPreviewAI }}>
+      {hasExternalResources && (
+        <div className="px-3 py-1 text-[10px] shrink-0"
+          style={{
+            background: C.bgCard,
+            borderBottom: `1px solid ${C.border}`,
+            color: C.textMuted,
+            fontFamily: 'Segoe UI, sans-serif',
+          }}>
+          ⚠ External CSS/JS detected
+        </div>
       )}
+
+      <div className="flex-1 overflow-auto flex items-start justify-center"
+        style={{ background: C.bgPreviewAI }}>
+        <div style={{ width: getDeviceWidth(), height: '100%', transition: 'width 0.3s ease' }}>
+          <iframe
+            key={iframeKey}
+            ref={iframeRef}
+            srcDoc={html}
+            className="w-full h-full border-none block"
+            style={{
+              background: '#ffffff',
+              transform: zoom === 1 ? undefined : `scale(${zoom})`,
+              transformOrigin: 'top left',
+              width: zoom === 1 ? '100%' : `${100 / zoom}%`,
+              height: zoom === 1 ? '100%' : `${100 / zoom}%`,
+            }}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
+            title="Live Preview"
+          />
+        </div>
+      </div>
     </div>
-  )
+  );
 }

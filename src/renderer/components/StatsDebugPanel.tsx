@@ -94,11 +94,15 @@ function ChartCard({
   icon,
   legend,
   children,
+  delay = 0,
+  isEntering,
 }: {
   title: string;
   icon: React.ReactNode;
   legend?: React.ReactNode;
   children: React.ReactNode;
+  delay?: number;
+  isEntering: boolean;
 }) {
   return (
     <div
@@ -110,6 +114,9 @@ function ChartCard({
         display: 'flex',
         flexDirection: 'column',
         minHeight: 260,
+        opacity: isEntering ? 0 : 1,
+        transform: isEntering ? 'translateY(12px)' : 'translateY(0)',
+        transition: `opacity 0.4s ease-out ${delay}ms, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${delay}ms`,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -177,6 +184,18 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
   const [adaptive, setAdaptive] = useState<Awaited<ReturnType<typeof window.adaptive.getDebugState>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [samples, setSamples] = useState<StatsSample[]>([]);
+
+  // Panel open animation — staggered reveal of all cards
+  const [isEntering, setIsEntering] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setIsEntering(true);
+      const t = setTimeout(() => setIsEntering(false), 420);
+      return () => clearTimeout(t);
+    }
+    setIsEntering(false);
+    return undefined;
+  }, [open]);
 
   const loadData = async () => {
     setError(null);
@@ -257,6 +276,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
     fontSize: 12,
     fontFamily: UI_FONT,
     cursor: 'pointer',
+    transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
   };
 
   const tableLabelStyle: React.CSSProperties = {
@@ -288,9 +308,12 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
         fontFamily: UI_FONT,
         fontSize: 13,
         overflow: 'hidden',
+        opacity: isEntering ? 0 : 1,
+        transform: isEntering ? 'scale(0.985) translateY(10px)' : 'scale(1) translateY(0)',
+        transition: 'opacity 0.3s ease-out, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
-      {/* ── Top bar (menu row removed; only actions + Live) ── */}
+      {/* ── Top bar ── */}
       <div
         style={{
           display: 'flex',
@@ -298,6 +321,9 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
           justifyContent: 'flex-end',
           padding: '12px 24px',
           borderBottom: `1px solid ${BORDER}`,
+          opacity: isEntering ? 0 : 1,
+          transform: isEntering ? 'translateY(-8px)' : 'translateY(0)',
+          transition: 'opacity 0.35s ease-out 60ms, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) 60ms',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -315,7 +341,17 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
               fontWeight: 600,
             }}
           >
-            <Dot color={COLOR_GREEN} /> Live
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: COLOR_GREEN,
+                display: 'inline-block',
+                animation: 'fabricaPulse 2s ease-in-out infinite',
+              }}
+            />
+            {' '}Live
           </span>
           <button type="button" onClick={loadData} style={headerIconBtn}>
             ⟳ Refresh
@@ -334,13 +370,23 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
         </div>
       </div>
 
-      {/* ── Panel title ─────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px 4px' }}>
+      {/* ── Panel title ── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '20px 24px 4px',
+          opacity: isEntering ? 0 : 1,
+          transform: isEntering ? 'translateY(-6px)' : 'translateY(0)',
+          transition: 'opacity 0.35s ease-out 100ms, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) 100ms',
+        }}
+      >
         <span style={{ color: ACCENT, fontSize: 18 }}>📈</span>
         <span style={{ fontWeight: 700, fontSize: 20, color: TEXT_PRIMARY }}>Stats Debug</span>
       </div>
 
-      {/* ── Scrollable body ─────────────────────────────────── */}
+      {/* ── Scrollable body ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 24px' }}>
         {error && (
           <pre
@@ -360,7 +406,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
           </pre>
         )}
 
-        {/* Row 1 — 4 chart/status cards */}
+        {/* Row 1 — 4 cards with staggered entrance */}
         <div
           style={{
             display: 'grid',
@@ -372,6 +418,8 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
           <ChartCard
             title="Activity Over Time"
             icon={<span>📈</span>}
+            delay={140}
+            isEntering={isEntering}
             legend={
               <ChartLegend
                 items={[
@@ -398,8 +446,8 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                   <XAxis dataKey="label" stroke={CHART_AXIS} tick={{ fontSize: 10, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
                   <YAxis stroke={CHART_AXIS} tick={{ fontSize: 10, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Area type="monotone" dataKey="aiCalls" name="AI calls" stroke={COLOR_CALLS} strokeWidth={2} fill="url(#aiGrad)" isAnimationActive={false} />
-                  <Area type="monotone" dataKey="idleMinutes" name="Idle (min)" stroke={COLOR_RUNS} strokeWidth={2} fill="url(#idleGrad)" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="aiCalls" name="AI calls" stroke={COLOR_CALLS} strokeWidth={2} fill="url(#aiGrad)" animationDuration={900} animationEasing="ease-out" />
+                  <Area type="monotone" dataKey="idleMinutes" name="Idle (min)" stroke={COLOR_RUNS} strokeWidth={2} fill="url(#idleGrad)" animationDuration={900} animationEasing="ease-out" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -409,45 +457,103 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             )}
           </ChartCard>
 
-          <ChartCard
-            title="Actions / Events (current)"
-            icon={<span>⚡</span>}
-            legend={
-              <ChartLegend
-                items={[
-                  { color: COLOR_CALLS, label: 'Actions' },
-                  { color: COLOR_RUNS, label: 'Events' },
-                ]}
-              />
-            }
-          >
-            {activityData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={170}>
-                <LineChart data={activityData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
-                  <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="elapsed" unit="s" stroke={CHART_AXIS} tick={{ fontSize: 10, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
-                  <YAxis stroke={CHART_AXIS} tick={{ fontSize: 10, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="sessionCalls" name="Actions" stroke={COLOR_CALLS} strokeWidth={2} dot={{ r: 3, fill: COLOR_CALLS, strokeWidth: 0 }} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="sessionRuns" name="Events" stroke={COLOR_RUNS} strokeWidth={2} dot={{ r: 3, fill: COLOR_RUNS, strokeWidth: 0 }} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ color: TEXT_DIM, fontSize: 12, padding: '40px 0', textAlign: 'center' }}>
-                Collecting… (samples every 1s)
-              </div>
-            )}
+          {/* ── Actions / Events — animated vertical bars ── */}
+          <ChartCard title="Actions / Events (current)" icon={<span>⚡</span>} delay={220} isEntering={isEntering}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'space-around',
+                height: 170,
+                padding: '24px 20px 12px',
+                gap: 20,
+              }}
+            >
+              {[
+                { label: 'Actions', value: adaptive?.scenario4.sessionCallCount ?? 0, color: COLOR_CALLS },
+                { label: 'Events', value: adaptive?.scenario4.sessionRunCount ?? 0, color: COLOR_RUNS },
+              ].map((bar, idx) => {
+                const max = Math.max(
+                  adaptive?.scenario4.sessionCallCount ?? 0,
+                  adaptive?.scenario4.sessionRunCount ?? 0,
+                  1,
+                );
+                const pct = bar.value === 0 ? 8 : Math.max((bar.value / max) * 100, 20);
+                return (
+                  <div
+                    key={bar.label}
+                    style={{
+                      flex: 1,
+                      maxWidth: 100,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 10,
+                      height: '100%',
+                      justifyContent: 'flex-end',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: bar.color,
+                        fontSize: 26,
+                        fontFamily: MONO_FONT,
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        transition: 'color 0.3s ease',
+                      }}
+                    >
+                      {bar.value}
+                    </span>
+                    <div
+                      style={{
+                        width: '100%',
+                        height: `${pct}%`,
+                        minHeight: 12,
+                        background: `linear-gradient(180deg, ${bar.color} 0%, ${bar.color}80 100%)`,
+                        borderRadius: 12,
+                        boxShadow: `0 0 16px ${bar.color}40`,
+                        opacity: bar.value > 0 ? 1 : 0.3,
+                        transition: `height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${idx * 80}ms, opacity 0.4s ease`,
+                      }}
+                    />
+                    <span
+                      style={{
+                        color: TEXT_MUTED,
+                        fontSize: 11,
+                        fontFamily: UI_FONT,
+                        fontWeight: 600,
+                        letterSpacing: 0.6,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {bar.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </ChartCard>
 
-          <ChartCard title="Activity Categories (session files)" icon={<span>📁</span>}>
+          <ChartCard title="Activity Categories (session files)" icon={<span>📁</span>} delay={300} isEntering={isEntering}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 6 }}>
               {[
                 { label: 'Total sessions', value: aggregate?.totalSessionCount ?? 0, color: COLOR_CALLS },
                 { label: 'Total AI calls', value: aggregate?.totalAiCallCount ?? 0, color: COLOR_RUNS },
                 { label: 'Active minutes', value: Math.round((aggregate?.totalIdleTimeMs ?? 0) / 60000), color: COLOR_GREEN },
                 { label: 'Idle minutes', value: Math.round((currentSession?.idleTimeMs ?? 0) / 60000), color: COLOR_PINK },
-              ].map((row) => (
-                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              ].map((row, idx) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    opacity: isEntering ? 0 : 1,
+                    transform: isEntering ? 'translateX(-6px)' : 'translateX(0)',
+                    transition: `opacity 0.35s ease-out ${380 + idx * 60}ms, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) ${380 + idx * 60}ms`,
+                  }}
+                >
                   <span style={{ display: 'inline-flex', alignItems: 'center', color: TEXT_PRIMARY, fontSize: 13 }}>
                     <Dot color={row.color} /> {row.label}
                   </span>
@@ -459,7 +565,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             </div>
           </ChartCard>
 
-          <ChartCard title="Session Status" icon={<span>📡</span>}>
+          <ChartCard title="Session Status" icon={<span>📡</span>} delay={380} isEntering={isEntering}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: TEXT_PRIMARY, fontSize: 13 }}>Suspension</span>
@@ -471,6 +577,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                     border: `1px solid ${adaptive?.suggestionActive ? COLOR_GREEN : 'rgba(129,116,143,0.3)'}`,
                     color: adaptive?.suggestionActive ? COLOR_GREEN : TEXT_MUTED,
                     fontSize: 12, fontWeight: 600,
+                    transition: 'background 0.3s ease, border-color 0.3s ease, color 0.3s ease',
                   }}
                 >
                   <Dot color={adaptive?.suggestionActive ? COLOR_GREEN : TEXT_MUTED} />
@@ -487,6 +594,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                     border: `1px solid ${adaptive?.cooldown.active ? COLOR_YELLOW : COLOR_GREEN}`,
                     color: adaptive?.cooldown.active ? COLOR_YELLOW : COLOR_GREEN,
                     fontSize: 12, fontWeight: 600,
+                    transition: 'background 0.3s ease, border-color 0.3s ease, color 0.3s ease',
                   }}
                 >
                   <Dot color={adaptive?.cooldown.active ? COLOR_YELLOW : COLOR_GREEN} />
@@ -505,6 +613,9 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             borderRadius: 14,
             padding: '18px 20px',
             marginBottom: 16,
+            opacity: isEntering ? 0 : 1,
+            transform: isEntering ? 'translateY(12px)' : 'translateY(0)',
+            transition: 'opacity 0.4s ease-out 440ms, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 440ms',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -547,6 +658,9 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             borderRadius: 14,
             padding: '18px 20px',
             marginBottom: 16,
+            opacity: isEntering ? 0 : 1,
+            transform: isEntering ? 'translateY(12px)' : 'translateY(0)',
+            transition: 'opacity 0.4s ease-out 520ms, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 520ms',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -567,6 +681,7 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                 border: `1px solid ${adaptive ? ACCENT : 'rgba(129,116,143,0.3)'}`,
                 color: adaptive ? ACCENT : TEXT_MUTED,
                 fontSize: 11, fontWeight: 600,
+                transition: 'background 0.3s ease, border-color 0.3s ease, color 0.3s ease',
               }}
             >
               <Dot color={adaptive ? ACCENT : TEXT_MUTED} /> {adaptive ? 'Active' : 'Idle'}
@@ -693,7 +808,17 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             gap: 16,
           }}
         >
-          <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '18px 20px' }}>
+          <div
+            style={{
+              background: BG_CARD,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 14,
+              padding: '18px 20px',
+              opacity: isEntering ? 0 : 1,
+              transform: isEntering ? 'translateY(12px)' : 'translateY(0)',
+              transition: 'opacity 0.4s ease-out 600ms, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 600ms',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <span style={{ color: ACCENT, fontSize: 15 }}>🗄️</span>
               <span style={{ color: TEXT_PRIMARY, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
@@ -726,7 +851,17 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
             )}
           </div>
 
-          <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '18px 20px' }}>
+          <div
+            style={{
+              background: BG_CARD,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 14,
+              padding: '18px 20px',
+              opacity: isEntering ? 0 : 1,
+              transform: isEntering ? 'translateY(12px)' : 'translateY(0)',
+              transition: 'opacity 0.4s ease-out 680ms, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 680ms',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <span style={{ color: ACCENT, fontSize: 15 }}>🕐</span>
               <span style={{ color: TEXT_PRIMARY, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
@@ -747,8 +882,15 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((entry) => (
-                      <tr key={entry.fileName}>
+                    {history.map((entry, idx) => (
+                      <tr
+                        key={entry.fileName}
+                        style={{
+                          opacity: isEntering ? 0 : 1,
+                          transform: isEntering ? 'translateX(-6px)' : 'translateX(0)',
+                          transition: `opacity 0.35s ease-out ${720 + idx * 40}ms, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) ${720 + idx * 40}ms`,
+                        }}
+                      >
                         <td style={{ ...tableValueStyle, color: TEXT_MUTED, fontFamily: UI_FONT, fontSize: 11 }}>{entry.fileName}</td>
                         <td style={{ ...tableValueStyle, fontSize: 11 }}>{formatTime(entry.sessionStart)}</td>
                         <td style={{ ...tableValueStyle, fontSize: 11 }}>{formatMs(entry.idleTimeMs)}</td>
@@ -762,6 +904,18 @@ export default function StatsDebugPanel({ projectPath, open, onClose }: StatsDeb
           </div>
         </div>
       </div>
+
+      {/* ── Global keyframes ── */}
+      <style>{`
+        @keyframes fabricaPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.85); }
+        }
+        @keyframes fabricaShimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
     </div>
   );
 }

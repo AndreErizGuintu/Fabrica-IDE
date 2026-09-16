@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import MonacoEditor, { loader } from '@monaco-editor/react';
 import type { Monaco } from '@monaco-editor/react';
+import { useTheme } from '../../theme/ThemeContext';
 import './editor.css';
 
 // @monaco-editor/react's loader defaults to fetching Monaco's AMD bundle from
@@ -125,6 +127,42 @@ function registerHtml5BoilerplateSnippet(monaco: Monaco) {
 }
 
 export default function Editor({ language, value, path, onChange, onSelectionChange }: EditorProps) {
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    loader.init().then((monaco) => {
+      const themeId = `fabrica-${theme.id}`;
+      monaco.editor.defineTheme(themeId, {
+        base: theme.isDark ? 'vs-dark' : 'vs',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: theme.monaco.tokens.comment.replace('#', '') },
+          { token: 'keyword', foreground: theme.monaco.tokens.keyword.replace('#', '') },
+          { token: 'string', foreground: theme.monaco.tokens.string.replace('#', '') },
+          { token: 'number', foreground: theme.monaco.tokens.number.replace('#', '') },
+          { token: 'function', foreground: theme.monaco.tokens.function.replace('#', '') },
+          { token: 'type', foreground: theme.monaco.tokens.type.replace('#', '') },
+          { token: 'tag', foreground: theme.monaco.tokens.tag.replace('#', '') },
+          { token: 'attribute.name', foreground: theme.monaco.tokens.attributeName.replace('#', '') },
+          { token: 'attribute.value', foreground: theme.monaco.tokens.attributeValue.replace('#', '') },
+          { token: 'delimiter', foreground: theme.monaco.tokens.delimiter.replace('#', '') },
+          { token: 'variable', foreground: theme.monaco.tokens.variable.replace('#', '') },
+        ],
+        colors: {
+          'editor.background': theme.monaco.background,
+          'editor.foreground': theme.monaco.foreground,
+          'editorLineNumber.foreground': theme.monaco.lineNumber,
+          'editorLineNumber.activeForeground': theme.monaco.lineNumberActive,
+          'editor.selectionBackground': theme.monaco.selection,
+          'editor.lineHighlightBackground': theme.monaco.lineHighlight,
+          'editorCursor.foreground': theme.monaco.cursor,
+          'editorGutter.background': theme.monaco.background,
+        },
+      });
+      monaco.editor.setTheme(themeId);
+    });
+  }, [theme]);
+
   return (
     <div className="flex-1 h-full overflow-hidden">
       <MonacoEditor
@@ -150,8 +188,92 @@ export default function Editor({ language, value, path, onChange, onSelectionCha
         // writing tab state. Nothing does this today: the only writer of
         // tab.content is the student typing through onChange.
         defaultValue={value}
-        theme="vs-dark"
-        beforeMount={registerHtml5BoilerplateSnippet}
+        theme={`fabrica-${theme.id}`}
+        beforeMount={(monaco) => {
+          registerHtml5BoilerplateSnippet(monaco);
+          monaco.editor.defineTheme('fabrica-dark', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+              // Comments — muted violet-gray, italic
+              { token: 'comment', foreground: '77718F', fontStyle: 'italic' },
+              { token: 'comment.line', foreground: '77718F', fontStyle: 'italic' },
+              { token: 'comment.block', foreground: '77718F', fontStyle: 'italic' },
+              // Keywords (body, function, const, if, return) — light violet
+              { token: 'keyword', foreground: 'C084FC' },
+              { token: 'keyword.control', foreground: 'C084FC' },
+              // Strings — mint green
+              { token: 'string', foreground: '4ADE80' },
+              { token: 'string.quoted', foreground: '4ADE80' },
+              { token: 'string.quoted.double', foreground: '4ADE80' },
+              { token: 'string.quoted.single', foreground: '4ADE80' },
+              // Numbers — orange
+              { token: 'number', foreground: 'FB923C' },
+              { token: 'number.hex', foreground: 'FB923C' },
+              // Functions — cyan
+              { token: 'function', foreground: '38BDF8' },
+              { token: 'identifier', foreground: 'F4F1FF' },
+              // Types, tags, selectors — light violet
+              { token: 'type', foreground: 'C084FC' },
+              { token: 'tag', foreground: 'C084FC' },
+              { token: 'metatag', foreground: 'C084FC' },
+              // Attributes — soft white / green for values
+              { token: 'attribute.name', foreground: 'F4F1FF' },
+              { token: 'attribute.value', foreground: '4ADE80' },
+              // CSS-specific
+              { token: 'attribute.name.css', foreground: 'F4F1FF' },
+              { token: 'attribute.value.css', foreground: '4ADE80' },
+              { token: 'attribute.value.hex.css', foreground: 'FB923C' },
+              { token: 'attribute.value.number.css', foreground: 'FB923C' },
+              { token: 'attribute.value.unit.css', foreground: 'FB923C' },
+              { token: 'selector.css', foreground: 'C084FC' },
+              { token: 'tag.css', foreground: 'C084FC' },
+              { token: 'keyword.css', foreground: 'C084FC' },
+              { token: 'variable.css', foreground: '38BDF8' },
+              // HTML-specific
+              { token: 'tag.html', foreground: 'C084FC' },
+              { token: 'attribute.name.html', foreground: 'F4F1FF' },
+              { token: 'attribute.value.html', foreground: '4ADE80' },
+              { token: 'delimiter.html', foreground: 'A9A3C7' },
+              // Delimiters / punctuation — muted
+              { token: 'delimiter', foreground: 'A9A3C7' },
+              { token: 'operator', foreground: 'A9A3C7' },
+              // Variables — soft white
+              { token: 'variable', foreground: 'F4F1FF' },
+              { token: 'variable.predefined', foreground: 'C084FC' },
+              { token: 'variable.parameter', foreground: 'F4F1FF' },
+            ],
+            colors: {
+              'editor.background': '#080719',
+              'editor.foreground': '#F4F1FF',
+              'editorLineNumber.foreground': '#77718F',
+              'editorLineNumber.activeForeground': '#C084FC',
+              'editor.selectionBackground': '#3B1D72',
+              'editor.lineHighlightBackground': '#0C0922',
+              'editorCursor.foreground': '#A855F7',
+              'editorGutter.background': '#080719',
+              'editorWidget.background': '#12102D',
+              'editorWidget.border': '#29204A',
+              'editorSuggestWidget.background': '#12102D',
+              'editorSuggestWidget.selectedBackground': '#3B1D72',
+              'minimap.background': '#080719',
+              'minimap.selectionHighlight': '#3B1D72',
+              'minimap.errorHighlight': '#F87171',
+              'minimap.warningHighlight': '#FBBF24',
+              'minimap.findMatchHighlight': '#A855F7',
+              'minimap.selectionOccurrenceHighlight': 'rgba(168, 85, 247, 0.2)',
+              'minimapGutter.addedBackground': '#22C55E',
+              'minimapGutter.modifiedBackground': '#A855F7',
+              'minimapGutter.deletedBackground': '#F87171',
+              'minimapSlider.background': 'rgba(168, 85, 247, 0.15)',
+              'minimapSlider.hoverBackground': 'rgba(168, 85, 247, 0.25)',
+              'minimapSlider.activeBackground': 'rgba(168, 85, 247, 0.35)',
+              'scrollbarSlider.background': 'rgba(168, 85, 247, 0.15)',
+              'scrollbarSlider.hoverBackground': 'rgba(168, 85, 247, 0.25)',
+              'scrollbarSlider.activeBackground': 'rgba(168, 85, 247, 0.35)',
+            },
+          });
+        }}
         onMount={(editor, monaco) => {
           scheduleFontRemeasure(monaco);
           editor.onDidChangeCursorSelection(() => {
@@ -166,11 +288,28 @@ export default function Editor({ language, value, path, onChange, onSelectionCha
         options={{
           fontSize: 14,
           fontFamily: EDITOR_FONT_FAMILY,
-          minimap: { enabled: false },
+          minimap: {
+            enabled: true,
+            renderCharacters: false,
+            maxColumn: 120,
+            showSlider: 'mouseover',
+            size: 'proportional',
+            side: 'right',
+          },
           scrollBeyondLastLine: false,
           wordWrap: 'on',
           lineNumbers: 'on',
           renderLineHighlight: 'all',
+          renderWhitespace: 'selection',
+          smoothScrolling: true,
+          cursorBlinking: 'smooth',
+          cursorSmoothCaretAnimation: 'on',
+          bracketPairColorization: { enabled: true },
+          guides: {
+            bracketPairs: true,
+            indentation: true,
+          },
+          lineHeight: 22,
           padding: { top: 16 },
         }}
       />

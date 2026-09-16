@@ -15,6 +15,24 @@ import StatsDashboard from './screens/StatsDashboard';
 import SettingsScreen from './screens/SettingsScreen';
 import AppSidebar from './components/AppSidebar';
 import MirrorTest from './components/MirrorTest';
+import { ThemeProvider } from './theme/ThemeContext';
+
+// ── Shared theme palette (matches EditorLayout) ──
+const C = {
+  bgApp: '#080719',
+  bgTopBar: '#100A24',
+  bgCard: '#12102D',
+  bgInput: '#17133A',
+  border: '#29204A',
+  bgSelected: '#3B1D72',
+  btnPrimary: '#7C3AED',
+  btnHover: '#8B5CF6',
+  accentAI: '#A855F7',
+  textPrimary: '#F4F1FF',
+  textSecondary: '#A9A3C7',
+  textMuted: '#77718F',
+  success: '#22C55E',
+};
 
 type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates' | 'settings' | 'stats-dashboard';
 
@@ -209,17 +227,17 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
   }, [onDone]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4" style={{ backgroundColor: '#100718' }}>
+    <div className="min-h-screen w-full flex items-center justify-center p-4" style={{ backgroundColor: C.bgApp }}>
       <div className="w-full max-w-xl text-center flex flex-col items-center gap-6">
         <img src={logo} alt="Fabrica IDE Logo" className="w-24 h-24 object-contain" />
-        <div className="text-3xl font-bold" style={{ fontFamily: 'Syne, sans-serif', color: '#ffffff' }}>
+        <div className="text-3xl font-bold" style={{ fontFamily: 'Syne, sans-serif', color: C.textPrimary }}>
           Fabrica IDE
         </div>
-        <div className="text-gray-400 text-base">
+        <div className="text-base" style={{ color: C.textSecondary }}>
           Code Smarter. Work Offline. Build Anything.
         </div>
-        <div className="w-96 h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#180C29' }}>
-          <div className="h-full rounded-full animate-progress" style={{ backgroundColor: '#a855f7' }} />
+        <div className="w-96 h-2 rounded-full overflow-hidden" style={{ backgroundColor: C.bgCard }}>
+          <div className="h-full rounded-full animate-progress" style={{ backgroundColor: C.btnPrimary }} />
         </div>
         <style>{`
           @keyframes progress {
@@ -244,7 +262,7 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: C.bgApp, color: C.textPrimary }}>
       <AppSidebar
         active="main"
         onNavigate={(screen) => {
@@ -254,18 +272,18 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
         bottomSlot={
           <>
             <div className="text-[10px] uppercase tracking-wider mb-1.5"
-              style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+              style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
               Offline model
             </div>
             <div className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
               style={{
-                backgroundColor: '#100718',
-                color: '#F5F0FA',
+                backgroundColor: C.bgApp,
+                color: C.textPrimary,
                 fontFamily: 'Segoe UI, sans-serif',
-                border: '1px solid rgba(168, 85, 247, 0.24)',
+                border: `1px solid ${C.border}`,
               }}>
               <span>{modelName}</span>
-              <span style={{ color: '#B8AFC2' }}>▼</span>
+              <span style={{ color: C.textSecondary }}>▼</span>
             </div>
           </>
         }
@@ -273,9 +291,9 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
+          style={{ borderBottom: `1px solid ${C.border}` }}>
           <h1 className="text-base sm:text-lg font-semibold"
-            style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
             Templates
           </h1>
         </div>
@@ -284,33 +302,32 @@ function TemplatesScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpe
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {templates.map((template) => (
               <div key={template.id}
-                className="p-4 rounded-lg transition-colors hover:bg-white/5"
-                style={{ backgroundColor: '#180C29', border: '1px solid rgba(168, 85, 247, 0.24)' }}>
+                className="p-4 rounded-lg transition-colors"
+                style={{ backgroundColor: C.bgCard, border: `1px solid ${C.border}` }}>
                 <div
                   className="mb-3 flex items-center justify-center"
                   style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background: 'rgba(168, 85, 247, 0.08)',
-                    border: '1px solid rgba(168, 85, 247, 0.2)',
-                    color: '#a855f7',
+                    width: 40, height: 40, borderRadius: 10,
+                    background: 'rgba(168, 85, 247, 0.1)',
+                    border: `1px solid rgba(168, 85, 247, 0.25)`,
+                    color: C.accentAI,
                   }}
                 >
                   {template.icon}
                 </div>
                 <div className="text-sm font-medium"
-                  style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+                  style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                   {template.name}
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-xs mt-1"
+                  style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                   {template.description}
                 </div>
-                <button className="mt-3 px-3 py-1 text-xs font-medium rounded transition-colors hover:bg-purple-500"
+                <button className="mt-3 px-3 py-1 text-xs font-medium rounded transition-colors"
                   style={{
                     backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                    color: '#a855f7',
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                    color: C.accentAI,
+                    border: `1px solid rgba(168, 85, 247, 0.35)`,
                   }}>
                   Create from template
                 </button>
@@ -345,7 +362,7 @@ function NewProjectScreen({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: C.bgApp, color: C.textPrimary }}>
       <AppSidebar
         active="main"
         onNavigate={(screen) => {
@@ -356,16 +373,16 @@ function NewProjectScreen({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
+          style={{ borderBottom: `1px solid ${C.border}` }}>
           <h1 className="text-base sm:text-lg font-semibold"
-            style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
             New Project
           </h1>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="max-w-3xl mx-auto">
-            <p className="text-sm mb-6" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+            <p className="text-sm mb-6" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
               Choose a language to scaffold a starter project you can run straight away.
             </p>
 
@@ -376,47 +393,33 @@ function NewProjectScreen({
                   <button key={template.id} onClick={() => setSelectedTemplate(template.id)}
                     className="p-3 sm:p-4 rounded-lg text-left transition-all duration-200"
                     style={{
-                      backgroundColor: isSelected ? '#100718' : '#180C29',
-                      border: isSelected ? '2px solid #a855f7' : '1px solid rgba(168, 85, 247, 0.24)',
+                      backgroundColor: isSelected ? C.bgApp : C.bgCard,
+                      border: isSelected ? `2px solid ${C.accentAI}` : `1px solid ${C.border}`,
                       transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                      boxShadow: isSelected ? '0 0 20px rgba(168, 85, 247, 0.2)' : 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#1C0F30';
-                        e.currentTarget.style.borderColor = '#4d3b6e';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = '#180C29';
-                        e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.24)';
-                      }
+                      boxShadow: isSelected ? '0 0 20px rgba(168, 85, 247, 0.25)' : 'none',
                     }}>
                     <div
                       className="mb-3 flex items-center justify-center"
                       style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 10,
-                        background: isSelected ? 'rgba(168, 85, 247, 0.15)' : 'rgba(168, 85, 247, 0.08)',
-                        border: `1px solid ${isSelected ? 'rgba(168, 85, 247, 0.5)' : 'rgba(168, 85, 247, 0.2)'}`,
-                        color: isSelected ? '#c084fc' : '#a855f7',
+                        width: 40, height: 40, borderRadius: 10,
+                        background: isSelected ? 'rgba(168, 85, 247, 0.18)' : 'rgba(168, 85, 247, 0.08)',
+                        border: isSelected ? `1px solid rgba(168, 85, 247, 0.55)` : `1px solid rgba(168, 85, 247, 0.2)`,
+                        color: isSelected ? C.codePurple : C.accentAI,
                         transition: 'all 0.15s ease',
                       }}
                     >
                       {template.icon}
                     </div>
                     <div className="text-sm sm:text-base font-medium"
-                      style={{ color: isSelected ? '#ffffff' : '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
+                      style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                       {template.name}
                     </div>
                     <div className="text-xs sm:text-sm"
-                      style={{ color: isSelected ? '#a855f7' : '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                      style={{ color: isSelected ? C.accentAI : C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                       {template.description}
                     </div>
                     {isSelected && (
-                      <div className="mt-2 text-xs font-medium" style={{ color: '#a855f7' }}>
+                      <div className="mt-2 text-xs font-medium" style={{ color: C.accentAI }}>
                         ✓ Selected
                       </div>
                     )}
@@ -427,16 +430,16 @@ function NewProjectScreen({
 
             <div className="mb-6">
               <label className="text-sm font-medium block mb-1.5"
-                style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
+                style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Project Name
               </label>
               <input type="text" value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
+                className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none"
                 style={{
-                  backgroundColor: '#100718',
-                  color: '#F5F0FA',
-                  border: '1px solid rgba(168, 85, 247, 0.24)',
+                  backgroundColor: C.bgInput,
+                  color: C.textPrimary,
+                  border: `1px solid ${C.border}`,
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
@@ -445,21 +448,21 @@ function NewProjectScreen({
 
             <div className="mb-6">
               <label className="text-sm font-medium block mb-1.5"
-                style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
+                style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Git remote URL (optional)
               </label>
               <input type="text" value={remoteUrl}
                 onChange={(e) => setRemoteUrl(e.target.value)}
                 placeholder="https://github.com/user/repo.git"
-                className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
+                className="w-full px-3 sm:px-4 py-2 rounded text-sm outline-none"
                 style={{
-                  backgroundColor: '#100718',
-                  color: '#F5F0FA',
-                  border: '1px solid rgba(168, 85, 247, 0.24)',
+                  backgroundColor: C.bgInput,
+                  color: C.textPrimary,
+                  border: `1px solid ${C.border}`,
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }} />
-              <p className="text-xs mt-1.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+              <p className="text-xs mt-1.5" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Leave blank to just initialise a local repository. If filled, the
                 project is also wired to this remote as "origin" and gets an
                 initial commit.
@@ -469,9 +472,9 @@ function NewProjectScreen({
             {progress && (
               <pre className="mb-4 p-3 rounded text-xs overflow-y-auto whitespace-pre-wrap"
                 style={{
-                  backgroundColor: '#180C29',
-                  color: '#B8AFC2',
-                  border: '1px solid rgba(168, 85, 247, 0.24)',
+                  backgroundColor: C.bgCard,
+                  color: C.textSecondary,
+                  border: `1px solid ${C.border}`,
                   maxHeight: '160px',
                   fontFamily: 'Space Mono, monospace',
                 }}>
@@ -481,9 +484,9 @@ function NewProjectScreen({
 
             <div className="flex justify-end gap-2">
               <button onClick={onBack} disabled={busy}
-                className="px-4 py-2 text-sm rounded transition-colors hover:bg-white/5"
+                className="px-4 py-2 text-sm rounded transition-colors"
                 style={{
-                  color: '#B8AFC2',
+                  color: C.textSecondary,
                   fontFamily: 'Segoe UI, sans-serif',
                   opacity: busy ? 0.5 : 1,
                   cursor: busy ? 'not-allowed' : 'pointer',
@@ -491,10 +494,10 @@ function NewProjectScreen({
                 Cancel
               </button>
               <button onClick={handleCreate} disabled={busy || !projectName.trim()}
-                className="px-4 py-2 text-sm font-medium rounded transition-colors hover:bg-purple-500"
+                className="px-4 py-2 text-sm font-medium rounded transition-colors"
                 style={{
-                  backgroundColor: busy || !projectName.trim() ? '#1C0F30' : '#a855f7',
-                  color: busy || !projectName.trim() ? '#B8AFC2' : '#ffffff',
+                  backgroundColor: busy || !projectName.trim() ? C.bgCard : C.btnPrimary,
+                  color: busy || !projectName.trim() ? C.textMuted : '#ffffff',
                   fontFamily: 'Segoe UI, sans-serif',
                   cursor: busy || !projectName.trim() ? 'not-allowed' : 'pointer',
                 }}>
@@ -552,7 +555,7 @@ function MainMenu({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: C.bgApp, color: C.textPrimary }}>
       <AppSidebar
         active="main"
         onNavigate={(screen) => {
@@ -564,9 +567,9 @@ function MainMenu({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
+          style={{ borderBottom: `1px solid ${C.border}` }}>
           <h1 className="text-base sm:text-lg font-semibold"
-            style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
             Projects
           </h1>
         </div>
@@ -578,30 +581,30 @@ function MainMenu({
               style={{
                 height: '48px',
                 backgroundColor: 'rgba(168, 85, 247, 0.15)',
-                color: '#ffffff',
-                border: '1px solid rgba(168, 85, 247, 0.3)',
+                color: C.textPrimary,
+                border: `1px solid rgba(168, 85, 247, 0.4)`,
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
               <Sparkles size={14} strokeWidth={2} /> New Project
             </button>
             <button onClick={onOpenFolder}
-              className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] flex items-center justify-center gap-2"
               style={{
                 height: '48px',
-                backgroundColor: '#180C29',
-                color: '#ffffff',
-                border: '1px solid rgba(168, 85, 247, 0.24)',
+                backgroundColor: C.bgCard,
+                color: C.textPrimary,
+                border: `1px solid ${C.border}`,
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
               <FolderOpen size={14} strokeWidth={2} /> Open Folder
             </button>
             <button onClick={openCloneDialog}
-              className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:bg-white/5 hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="flex-1 px-5 py-3 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-[1.02] flex items-center justify-center gap-2"
               style={{
                 height: '48px',
-                backgroundColor: '#180C29',
-                color: '#ffffff',
-                border: '1px solid rgba(168, 85, 247, 0.24)',
+                backgroundColor: C.bgCard,
+                color: C.textPrimary,
+                border: `1px solid ${C.border}`,
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
               <LinkIcon size={14} strokeWidth={2} /> Clone Repository
@@ -616,26 +619,26 @@ function MainMenu({
                 <div className="mb-3 flex items-center justify-center mx-auto"
                   style={{
                     width: 56, height: 56, borderRadius: 14,
-                    background: 'rgba(168, 85, 247, 0.05)',
-                    border: '1px solid rgba(168, 85, 247, 0.15)',
-                    color: 'rgba(168, 85, 247, 0.4)',
+                    background: 'rgba(168, 85, 247, 0.08)',
+                    border: `1px solid ${C.border}`,
+                    color: C.textMuted,
                   }}>
                   <FolderOpen size={28} strokeWidth={1.5} />
                 </div>
-                <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-sm" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                   No projects yet
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="text-xs mt-1" style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
                   Click "New Project" to get started
                 </div>
               </div>
             ) : (
               recentProjects.map((project, index) => (
                 <div key={project.path} onClick={() => onOpenProject(project)}
-                  className="p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/10 hover:-translate-y-1"
+                  className="p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 hover:-translate-y-1"
                   style={{
-                    backgroundColor: '#180C29',
-                    border: '1px solid rgba(168, 85, 247, 0.24)',
+                    backgroundColor: C.bgCard,
+                    border: `1px solid ${C.border}`,
                     position: 'relative',
                     overflow: 'hidden',
                   }}>
@@ -644,26 +647,26 @@ function MainMenu({
                       className="flex items-center justify-center shrink-0"
                       style={{
                         width: 32, height: 32, borderRadius: 8,
-                        background: 'rgba(168, 85, 247, 0.1)',
-                        color: '#a855f7',
+                        background: 'rgba(168, 85, 247, 0.12)',
+                        color: C.accentAI,
                       }}
                     >
                       <FolderOpen size={16} strokeWidth={1.8} />
                     </div>
                     <div>
                       <div className="text-xs sm:text-sm font-medium"
-                        style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+                        style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                         {project.name}
                       </div>
                       <div className="text-[10px] sm:text-xs"
-                        style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                        style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                         {index === 0 ? '2 hours ago' : index === 1 ? 'Yesterday' : '3 days ago'}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded"
-                      style={{ backgroundColor: '#100718', color: '#B8AFC2' }}>
+                      style={{ backgroundColor: C.bgApp, color: C.textSecondary }}>
                       Local
                     </span>
                   </div>
@@ -672,17 +675,17 @@ function MainMenu({
             )}
           </div>
 
-          <div className="p-3 rounded-lg transition-all duration-200 hover:border-purple-500"
+          <div className="p-3 rounded-lg transition-all duration-200"
             style={{
-              backgroundColor: '#180C29',
-              border: '1px solid rgba(168, 85, 247, 0.24)',
+              backgroundColor: C.bgCard,
+              border: `1px solid ${C.border}`,
             }}>
             <div className="text-[10px] sm:text-xs font-medium"
-              style={{ color: '#a855f7', fontFamily: 'Segoe UI, sans-serif' }}>
+              style={{ color: C.accentAI, fontFamily: 'Segoe UI, sans-serif' }}>
               WHAT'S NEW
             </div>
             <div className="text-xs sm:text-sm mt-1"
-              style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
+              style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
               Offline AI completion for Rust and Go · Faster indexing · Terminal fixes
             </div>
           </div>
@@ -691,7 +694,7 @@ function MainMenu({
 
       {showCloneDialog && (
         <div className="fixed inset-0 flex items-center justify-center z-50"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
           onClick={() => {
             if (!cloneLoading) {
               setShowCloneDialog(false);
@@ -700,14 +703,14 @@ function MainMenu({
           }}>
           <div className="rounded-lg p-6 w-[480px] max-w-[90vw]"
             style={{
-              backgroundColor: '#180C29',
-              border: '1px solid rgba(168, 85, 247, 0.24)',
+              backgroundColor: C.bgCard,
+              border: `1px solid ${C.border}`,
               boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
             }}
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold"
-                style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+                style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Clone Repository
               </h2>
               <button type="button"
@@ -717,27 +720,27 @@ function MainMenu({
                     setCloneNotice('');
                   }
                 }}
-                className="text-[#B8AFC2] hover:text-white transition-colors">
+                style={{ color: C.textSecondary }}>
                 ✕
               </button>
             </div>
 
-            <p className="text-sm mb-4" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+            <p className="text-sm mb-4" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
               Enter the repository URL to clone from GitHub or Git.
             </p>
 
             <div className="mb-4">
               <label className="text-sm font-medium block mb-1.5"
-                style={{ color: '#F5F0FA', fontFamily: 'Segoe UI, sans-serif' }}>
+                style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Repository URL
               </label>
               <input type="text" placeholder="https://github.com/user/repo.git"
                 value={cloneUrl} onChange={(e) => setCloneUrl(e.target.value)}
-                className="w-full px-3 py-2 rounded text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-[#a855f7]"
+                className="w-full px-3 py-2 rounded text-sm outline-none"
                 style={{
-                  backgroundColor: '#100718',
-                  color: '#F5F0FA',
-                  border: '1px solid rgba(168, 85, 247, 0.24)',
+                  backgroundColor: C.bgInput,
+                  color: C.textPrimary,
+                  border: `1px solid ${C.border}`,
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleClone(); }}
@@ -746,7 +749,7 @@ function MainMenu({
 
             {cloneNotice && (
               <div className="mb-4 text-sm"
-                style={{ color: cloneNotice.startsWith('✓') ? '#4ade80' : '#f87171' }}>
+                style={{ color: cloneNotice.startsWith('✓') ? C.success : '#f87171' }}>
                 {cloneNotice}
               </div>
             )}
@@ -759,16 +762,16 @@ function MainMenu({
                     setCloneNotice('');
                   }
                 }}
-                className="px-4 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
-                style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                className="px-4 py-1.5 text-sm rounded transition-colors"
+                style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                 Cancel
               </button>
               <button type="button" disabled={cloneLoading || !cloneUrl.trim()}
                 onClick={handleClone}
-                className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:bg-purple-500"
+                className="px-4 py-1.5 text-sm font-medium rounded transition-colors"
                 style={{
-                  backgroundColor: cloneLoading || !cloneUrl.trim() ? '#1C0F30' : '#a855f7',
-                  color: cloneLoading || !cloneUrl.trim() ? '#B8AFC2' : '#ffffff',
+                  backgroundColor: cloneLoading || !cloneUrl.trim() ? C.bgCard : C.btnPrimary,
+                  color: cloneLoading || !cloneUrl.trim() ? C.textMuted : '#ffffff',
                   cursor: cloneLoading || !cloneUrl.trim() ? 'not-allowed' : 'pointer',
                 }}>
                 {cloneLoading ? 'Cloning...' : 'Clone'}
@@ -781,7 +784,7 @@ function MainMenu({
   );
 }
 
-export default function App() {
+function App() {
   const [screen, setScreen] = useState<Screen>('splash');
   const [editorFolder, setEditorFolder] = useState<string | undefined>(undefined);
   const [createBusy, setCreateBusy] = useState(false);
@@ -854,16 +857,12 @@ export default function App() {
           const idx = file.relativePath.lastIndexOf('/');
           if (idx > 0) dirs.add(file.relativePath.slice(0, idx));
         });
-        // eslint-disable-next-line no-restricted-syntax
         for (const dir of Array.from(dirs)) {
-          // eslint-disable-next-line no-await-in-loop
           await window.fileSystem.createFolder(`${fullPath}${sep}${dir.split('/').join(sep)}`);
         }
 
-        // eslint-disable-next-line no-restricted-syntax
         for (const file of files) {
           const target = `${fullPath}${sep}${file.relativePath.split('/').join(sep)}`;
-          // eslint-disable-next-line no-await-in-loop
           const written = await window.fileSystem.writeFile(target, file.content);
           if (!written.success) {
             log(`✗ Failed to write ${file.relativePath}: ${written.error ?? 'unknown error'}\n`);
@@ -985,5 +984,13 @@ export default function App() {
       onOpenSettings={() => setScreen('settings')}
       onOpenStats={() => setScreen('stats-dashboard')}
     />
+  );
+}
+
+export default function AppRoot() {
+  return (
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   );
 }

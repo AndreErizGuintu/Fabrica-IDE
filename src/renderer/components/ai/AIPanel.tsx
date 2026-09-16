@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
 
@@ -20,6 +21,34 @@ const LANGUAGES = [
   'Java',
   'TypeScript'
 ];
+
+const LOADING_MESSAGES = [
+  'Analyzing your code...',
+  'Reading context...',
+  'Considering options...',
+  'Generating response...',
+];
+
+function LoadingIndicator() {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex((i) => (i + 1) % LOADING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-[#B8AFC2]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+      <span
+        className="inline-block w-2.5 h-2.5 rounded-full animate-spin shrink-0"
+        style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }}
+      />
+      {LOADING_MESSAGES[messageIndex]}
+    </div>
+  );
+}
 
 function renderResponseContent(response: string) {
   const sections: Array<{
@@ -78,12 +107,13 @@ function renderResponseContent(response: string) {
   );
 }
 
-function renderChatThread(messages: ChatMessage[]) {
+function renderChatThread(messages: ChatMessage[], loading?: boolean) {
   return (
     <div className="flex flex-col gap-2">
       {messages.length ? (
         messages.map((message, index) => {
           const isUser = message.role === 'user';
+          const isPendingAssistant = !isUser && loading && !message.content && index === messages.length - 1;
 
           return (
             <div key={`${message.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -96,7 +126,7 @@ function renderChatThread(messages: ChatMessage[]) {
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
-                {isUser ? message.content : renderResponseContent(message.content)}
+                {isUser ? message.content : isPendingAssistant ? <LoadingIndicator /> : renderResponseContent(message.content)}
               </div>
             </div>
           );
@@ -429,7 +459,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
         {activeTab === 'ask' && (
           <>
             <div className="flex-1 overflow-y-auto rounded bg-[#180C29] p-2 min-h-0" style={{ border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {renderChatThread(askMessages)}
+              {renderChatThread(askMessages, askLoading)}
             </div>
 
             <div className="shrink-0 flex flex-col gap-1.5">
@@ -474,7 +504,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
             </div>
 
             <div className="flex-1 overflow-y-auto rounded bg-[#180C29] p-2 min-h-0" style={{ border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {renderChatThread(planMessages)}
+              {renderChatThread(planMessages, planLoading)}
             </div>
 
             <div className="shrink-0 flex flex-col gap-1.5">
@@ -618,7 +648,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
             )}
 
             <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#1C0F30] text-[#F5F0FA] min-h-0" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {response ? renderResponseContent(response) : 'AI response will appear here...'}
+              {response ? renderResponseContent(response) : loading ? <LoadingIndicator /> : 'AI response will appear here...'}
             </div>
           </>
         )}
@@ -672,7 +702,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
             </div>
 
             <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#1C0F30] text-[#F5F0FA]" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {explainResponse ? renderResponseContent(explainResponse) : 'AI response will appear here...'}
+              {explainResponse ? renderResponseContent(explainResponse) : explainLoading ? <LoadingIndicator /> : 'AI response will appear here...'}
             </div>
           </>
         )}
