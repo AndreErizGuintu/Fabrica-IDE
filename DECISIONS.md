@@ -445,6 +445,52 @@ Import paths updated: `llm.ts` (`./llmProtocol` → `./worker/llmProtocol`) and 
 
 ## Resolved / decided
 
+- **[2026-09-18] Custom menu bar (File/Edit/View/Run/Terminal/Help) fully wired — every item except File's four actions had been a `console.log` placeholder until now.**
+
+  **View menu** — Sidebar/Terminal/AI/Stats/Preview/Source Control toggles now call the exact same setters already used elsewhere in `EditorLayout.tsx`, no new state introduced.
+
+  **Run/Stop** — routed to the same handler backing the top-bar Run button and to `TerminalTabs`' scoped kill, rather than a second run path.
+
+  **Edit** (Undo/Redo/Cut/Copy/Paste/Find) — routed through Monaco via `monaco.editor.getEditors()[0]`, since no Monaco ref existed on `Editor.tsx` and adding one was out of scope for this task.
+
+  **Terminal menu** required two new exports on `TerminalTabs`' imperative handle, `addShellTab` and `closeActiveTab`, plus a real fix: New Terminal was adding a tab to a still-hidden panel instead of opening the panel first.
+
+  **Help menu** is now an About modal (placeholder version string — `package.json` carries no real version, it's still the untouched electron-react-boilerplate template) and a Report Issue link. The link needed one new, minimal `main.ts` IPC handler (`shell:openIssuesPage`) since no renderer-callable external-link channel existed before — deliberately a fixed destination only, no arbitrary-URL passthrough from the renderer.
+
+  **Confirmed live:** all menu items tested individually per the live checklist, including the toggle-terminal fix.
+
+  **Known gap:** this repo's `tsconfig.json` only compiles `src/main`, so none of this renderer-side work has ever been type-checked by `tsc` — verified by hand against Monaco's real `.d.ts` instead.
+
+  **Files touched:** `src/renderer/screens/EditorLayout.tsx`, `src/renderer/components/terminal/TerminalTabs.tsx`, `src/main/main.ts` (new `shell:openIssuesPage` handler), `src/main/preload.ts` (new `appLinks` bridge), `src/renderer/preload.d.ts` (new `AppLinksBridge` type).
+
+- **[2026-09-18] Editor settings persistence — `SettingsScreen.tsx`'s Editor tab (fontSize, tabSize, indentType, wordWrap, lineNumbers) was fully inert local state, reset on every remount, never connected to the actual Monaco instance.**
+
+  New `EditorSettingsContext.tsx` modeled directly on the existing `ThemeContext.tsx` pattern — single localStorage key, try/catch read/write — wraps `App.tsx` alongside `ThemeProvider`.
+
+  `Editor.tsx`'s previously-hardcoded `fontSize`/`wordWrap`/`lineNumbers` literals now read from this context. `tabSize`/`insertSpaces` didn't exist as options at all before and were added.
+
+  General and Appearance tabs deliberately left as-is — honest stub text, not fake controls wired to nothing.
+
+  **Confirmed live:** settings change the open editor immediately, survive a full app restart, and apply consistently across multiple open tabs.
+
+  **Files touched:** `src/renderer/theme/EditorSettingsContext.tsx` (new), `src/renderer/App.tsx`, `src/renderer/components/editor/Editor.tsx`, `src/renderer/screens/SettingsScreen.tsx`.
+
+- **[2026-09-18] Android APK export, satisfying the adviser's ADB-deployment/installable-APK mandate.** New `android:buildApk` and `android:revealApk` IPC handlers in `main.ts`, alongside the existing SDK-fetch flow.
+
+  `buildToolEnv()` in `androidSdk.ts` exported (was private) and extended to include `GRADLE_USER_HOME`, which its own doc comment had flagged as a gap since it was written.
+
+  New `AndroidBuildApkModal.tsx` (React) presents a debug/release choice before starting, subscribes to a new `android:build-progress` push channel modeled on the existing `android:sdk-progress` shape, and streams real Gradle output line by line rather than faking a progress percentage.
+
+  Release builds precheck for `android/key.properties` and fail fast with a clear message and a link to Flutter's signing docs if it's missing, rather than silently producing a debug-signed file mislabeled as release. **Known gap:** does not verify `build.gradle.kts` actually references the key file if one exists.
+
+  `--offline` was initially passed to the build command by analogy with `flutter create`, and was removed after a real run failed at the flag-parse stage (exit 64, `"Could not find an option named --offline"`) — `flutter build apk` does not support it, unlike `pub get`/`create`. This build path is intentionally online-capable, consistent with the thesis's low-connectivity rather than fully-offline framing.
+
+  **Confirmed live end to end for debug builds:** real streamed Gradle output, a genuine `assembleDebug` success line, real elapsed time (485.3s cold), and a verified `app-debug.apk` on disk.
+
+  **NOT yet independently confirmed:** Reveal in Folder actually opening Explorer with the file selected, a second consecutive build in the same session resetting state cleanly, and the release path's signing-key error actually firing against a real project (built and diffed, not yet run).
+
+  **Files touched:** `src/renderer/components/AndroidBuildApkModal.tsx` (new), `src/main/androidSdk.ts`, `src/main/main.ts` (new `android:buildApk`/`android:revealApk` handlers), `src/main/preload.ts` (new `androidBuild` bridge), `src/renderer/preload.d.ts` (new `AndroidBuild*` types).
+
 - **[2026-09-10] NSIS packaging is permanently impossible for this project — 32-bit `makensis.exe` vs. a ~9.66GB payload. Switched `build.win.target` to `dir` for the defense.** `npm run package` failed consistently at the installer step with `File: failed creating mmap of release\build\electron-react-boilerplate-4.6.0-x64.nsis.7z`, followed by a cascade of macro errors in `installSection.nsh`. The macro errors are downstream noise from `File` aborting, not separate faults.
 
   **Root cause (confirmed by reading the PE header of the binary itself, not inferred):** electron-builder's bundled NSIS 3.0.4.1 `makensis.exe` (`%LOCALAPPDATA%\electron-builder\Cache\nsis\nsis-3.0.4.1\Bin\`) is `Machine 0x014C` / `PE32` — a 32-bit process — **with `LARGE_ADDRESS_AWARE` unset**, giving it a ~2GB user address space (not even the ~4GB a LAA-flagged 32-bit process would get). Its `File` command memory-maps the payload archive whole in order to embed it. This project's `build.extraResources` payload measures **~9.66GB**: `resources/models` 3.80GB (the `deepseek-coder-6.7b-instruct` Q4_K_M gguf), `resources/runtimes` 4.83GB (flutter 3.03, dotnet 0.74, dart 0.55, jdk 0.30, node 0.11, php 0.09, ws-scrcpy 0.01), plus `release/app` 0.85GB. The `ESTIMATED_SIZE=10130054` that electron-builder passes on the makensis command line is in KB = **9.661GB**, an exact match confirming the payload figure independently. A multi-GB `.7z` cannot be mapped into a 2GB address space **regardless of installed RAM or free disk** — this is deterministic, which is exactly why it reproduced every run. NSIS additionally caps total installer size at ~2GB, so even a successful mmap would not have produced a working installer.

@@ -32,7 +32,7 @@ import { ensureRequiredImports } from './translateImports';
 import { appendDeprecatedApiGuard, applyDeprecatedApiFixes } from './deprecatedApiGuard';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
-import { registerAndroidSdkIpc } from './androidSdk';
+import { registerAndroidSdkIpc, checkAndroidSdk, buildToolEnv } from './androidSdk';
 import { resolveHtmlPath } from './util';
 import {
   RUN_SENTINEL_SUFFIX,
@@ -286,7 +286,7 @@ ipcMain.handle(
       const commandLine = buildCommandLine(getFlutterBinary(), [
         'create',
         '--offline',
-        '--platforms=windows',
+        '--platforms=windows,android',
         '--project-name',
         projectName,
         projectPath,
@@ -824,6 +824,12 @@ ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
   }
 });
 
+// Help > Report Issue. Fixed destination only -- no arbitrary URL passthrough
+// from the renderer.
+ipcMain.handle('shell:openIssuesPage', () => {
+  shell.openExternal('https://github.com/AndreErizGuintu/Fabrica-IDE/issues');
+});
+
 // Integrated terminal — every language (including Flutter's project-level `flutter
 // run`) is spawned through node-pty via getRunConfig, replacing the old run:file /
 // code:run child_process paths and the Flutter-only shell:true spawn. ConPTY (used
@@ -1049,6 +1055,141 @@ ipcMain.handle('mirror:stop', async () => stopMirrorServer());
 // initiated and APK-building is the only feature that depends on it; mirroring
 // and every other part of the IDE work with the SDK absent.
 registerAndroidSdkIpc();
+
+// APK build flow. Self-contained: does not touch getRunConfig/terminal:run
+// (those are single-file language execution; this is a multi-minute Gradle
+// build with its own progress protocol) and does not reimplement the SDK
+// presence check -- it reuses checkAndroidSdk() from androidSdk.ts.
+export type AndroidBuildPhase = 'idle' | 'checking' | 'building' | 'done' | 'error';
+
+export type AndroidBuildProgress = {
+  phase: AndroidBuildPhase;
+  message: string;
+};
+
+const ANDROID_BUILD_PROGRESS_CHANNEL = 'android:build-progress';
+
+// Same broadcast-to-all-windows pattern as PROGRESS_CHANNEL in androidSdk.ts.
+const emitAndroidBuildProgress = (progress: AndroidBuildProgress): void => {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send(ANDROID_BUILD_PROGRESS_CHANNEL, progress);
+    }
+  });
+};
+
+ipcMain.handle('android:buildApk', async (
+  _event,
+  { projectPath, buildType }: { projectPath: string; buildType: 'debug' | 'release' },
+) => {
+  emitAndroidBuildProgress({ phase: 'checking', message: 'Checking project...' });
+
+  const pubspecPath = path.join(projectPath, 'pubspec.yaml');
+  const androidDirPath = path.join(projectPath, 'android');
+  if (!fs.existsSync(pubspecPath) || !fs.existsSync(androidDirPath)) {
+    const error =
+      'This folder does not look like a Flutter project (missing pubspec.yaml or an android folder).';
+    emitAndroidBuildProgress({ phase: 'error', message: error });
+    return { success: false, error };
+  }
+
+  const sdkStatus = await checkAndroidSdk();
+  if (!sdkStatus.installed) {
+    const error = 'Android SDK not installed yet';
+    emitAndroidBuildProgress({ phase: 'error', message: error });
+    return { success: false, error };
+  }
+
+  // Known gap: this only checks that key.properties exists, not that
+  // build.gradle.kts actually references it -- a release build can still come
+  // out debug-signed if the properties file is present but unwired.
+  if (buildType === 'release') {
+    const keyPropertiesPath = path.join(projectPath, 'android', 'key.properties');
+    if (!fs.existsSync(keyPropertiesPath)) {
+      const error =
+        'Release build needs a signing key. Create android/key.properties (storeFile, storePassword, keyAlias, keyPassword) and reference it in android/app/build.gradle.kts. See Flutter\'s official signing guide: https://docs.flutter.dev/deployment/android#signing-the-app';
+      emitAndroidBuildProgress({ phase: 'error', message: error });
+      return { success: false, error, errorCode: 'missing-signing-key' };
+    }
+  }
+
+  emitAndroidBuildProgress({ phase: 'building', message: 'Building APK...' });
+
+  return new Promise<{ success: boolean; apkPath?: string; error?: string; errorCode?: string; log?: string[] }>(
+    (resolve) => {
+      const lines: string[] = [];
+      let buffer = '';
+
+      const handleChunk = (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const parts = buffer.split('\n');
+        buffer = parts.pop() ?? '';
+        parts.forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
+          lines.push(trimmed);
+          emitAndroidBuildProgress({ phase: 'building', message: trimmed });
+        });
+      };
+
+      // No --offline: unlike `flutter create`/`pub get`, `flutter build apk` rejects it (confirmed via real run, exit code 64, "Could not find an option named --offline") -- this path is intentionally online-capable, framing is low connectivity, not fully offline.
+      const child = spawn(getFlutterBinary(), ['build', 'apk', buildType === 'release' ? '--release' : '--debug'], {
+        cwd: projectPath,
+        env: buildToolEnv(),
+        shell: process.platform === 'win32',
+      });
+
+      child.stdout?.on('data', handleChunk);
+      child.stderr?.on('data', handleChunk);
+
+      child.on('error', (err) => {
+        const message = err.message;
+        emitAndroidBuildProgress({ phase: 'error', message });
+        resolve({ success: false, error: message, log: lines.slice(-30) });
+      });
+
+      child.on('close', (code) => {
+        if (buffer.trim()) {
+          lines.push(buffer.trim());
+        }
+
+        if (code === 0) {
+          const apkPath = path.join(
+            projectPath,
+            'build',
+            'app',
+            'outputs',
+            'flutter-apk',
+            buildType === 'release' ? 'app-release.apk' : 'app-debug.apk',
+          );
+          if (!fs.existsSync(apkPath)) {
+            const error = 'Build reported success but the APK was not found.';
+            emitAndroidBuildProgress({ phase: 'error', message: error });
+            resolve({ success: false, error, log: lines.slice(-30) });
+            return;
+          }
+
+          emitAndroidBuildProgress({ phase: 'done', message: 'APK built successfully.' });
+          resolve({ success: true, apkPath });
+          return;
+        }
+
+        const error = `flutter build apk exited with code ${code}`;
+        emitAndroidBuildProgress({ phase: 'error', message: error });
+        resolve({ success: false, error, log: lines.slice(-30) });
+      });
+    },
+  );
+});
+
+ipcMain.handle('android:revealApk', (_event, apkPath: string) => {
+  if (typeof apkPath !== 'string' || !apkPath.endsWith('.apk') || !fs.existsSync(apkPath)) {
+    return { success: false, error: 'Invalid APK path.' };
+  }
+
+  shell.showItemInFolder(apkPath);
+  return { success: true };
+});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');

@@ -167,7 +167,7 @@ const getBundledRuntimeRoot = (): string => {
  * gitignored like every other bundled runtime and has to be repopulated locally
  * before packaging; until it is, this resolves to the system JDK.
  */
-const resolveJavaHome = (): string | null => {
+export const resolveJavaHome = (): string | null => {
   const bundled = path.join(getBundledRuntimeRoot(), 'jdk');
   if (fs.existsSync(path.join(bundled, 'bin', 'java.exe'))) {
     return bundled;
@@ -430,13 +430,14 @@ const verifyToolsUrlPinned = (): void => {
 // ---------------------------------------------------------------------------
 // Download.
 
-const buildToolEnv = (): NodeJS.ProcessEnv => {
+export const buildToolEnv = (): NodeJS.ProcessEnv => {
   const javaHome = resolveJavaHome();
   return {
     ...process.env,
     ...(javaHome ? { JAVA_HOME: javaHome } : {}),
     ANDROID_HOME: getAndroidSdkRoot(),
     ANDROID_SDK_ROOT: getAndroidSdkRoot(),
+    GRADLE_USER_HOME: getGradleUserHome(),
   };
 };
 

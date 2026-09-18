@@ -196,6 +196,37 @@ type AndroidSdkBridge = {
   onProgress: (cb: (progress: AndroidSdkProgress) => void) => () => void;
 };
 
+// APK build flow. Separate from AndroidSdkBridge above -- that one fetches the
+// toolchain, this one runs `flutter build apk` once the toolchain is present.
+type AndroidBuildPhase = 'idle' | 'checking' | 'building' | 'done' | 'error';
+
+type AndroidBuildProgress = {
+  phase: AndroidBuildPhase;
+  message: string;
+};
+
+type AndroidBuildResult = {
+  success: boolean;
+  apkPath?: string;
+  error?: string;
+  // Set on specific, actionable failures (e.g. a release build missing its
+  // signing key) so the renderer can branch without string-matching `error`.
+  errorCode?: string;
+  log?: string[];
+};
+
+type AndroidBuildBridge = {
+  build: (projectPath: string, buildType: 'debug' | 'release') => Promise<AndroidBuildResult>;
+  onProgress: (cb: (progress: AndroidBuildProgress) => void) => () => void;
+  revealApk: (apkPath: string) => Promise<{ success: boolean; error?: string }>;
+};
+
+type AppLinksBridge = {
+  // Fixed destination only (Help > Report Issue) -- not a general-purpose
+  // external-URL opener.
+  openIssues: () => Promise<void>;
+};
+
 declare global {
   // eslint-disable-next-line no-unused-vars
   interface Window {
@@ -272,6 +303,8 @@ declare global {
     flutter: FlutterBridge;
     mirror: MirrorBridge;
     androidSdk: AndroidSdkBridge;
+    androidBuild: AndroidBuildBridge;
+    appLinks: AppLinksBridge;
     git: {
       init: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;
       status: (cwd: string) => Promise<{ success: boolean; output: string; error?: string }>;

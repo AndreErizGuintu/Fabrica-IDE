@@ -184,6 +184,18 @@ contextBridge.exposeInMainWorld('androidSdk', {
   },
 });
 
+contextBridge.exposeInMainWorld('androidBuild', {
+  build: (projectPath: string, buildType: 'debug' | 'release') =>
+    ipcRenderer.invoke('android:buildApk', { projectPath, buildType }),
+  // Same unsubscribe-returning shape as androidSdk.onProgress.
+  onProgress: (cb: (progress: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, progress: unknown) => cb(progress);
+    ipcRenderer.on('android:build-progress', handler);
+    return () => ipcRenderer.removeListener('android:build-progress', handler);
+  },
+  revealApk: (apkPath: string) => ipcRenderer.invoke('android:revealApk', apkPath),
+});
+
 contextBridge.exposeInMainWorld('lsp', {
   onMessage: (id: string, cb: (msg: string) => void) =>
     ipcRenderer.on(`lsp:${id}:message`, (_e, msg) => cb(msg)),
@@ -221,6 +233,10 @@ contextBridge.exposeInMainWorld('git', {
     ipcRenderer.on('git:progress', handler);
     return () => ipcRenderer.removeListener('git:progress', handler);
   },
+});
+
+contextBridge.exposeInMainWorld('appLinks', {
+  openIssues: () => ipcRenderer.invoke('shell:openIssuesPage'),
 });
 
 

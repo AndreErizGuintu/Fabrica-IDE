@@ -32,6 +32,14 @@ type TerminalTab = {
   kind: TabKind;
 };
 
+// TerminalHandle (from Terminal.tsx) plus tab-bar-level operations that a
+// single Terminal has no concept of -- EditorLayout's Terminal menu drives
+// these via this wider ref type.
+export type TerminalTabsHandle = TerminalHandle & {
+  addShellTab: () => string;
+  closeActiveTab: () => Promise<void>;
+};
+
 type TerminalTabsProps = {
   onClose?: () => void;
   onRunningChange?: (running: boolean) => void;
@@ -53,7 +61,7 @@ function nextShellTitle(): string {
 
 const RUN_TAB_TITLE = 'Terminal';
 
-const TerminalTabs = forwardRef<TerminalHandle, TerminalTabsProps>(({ onClose, onRunningChange, cwd }, ref) => {
+const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClose, onRunningChange, cwd }, ref) => {
   // One id shared by both initializers so the first tab is active on the very
   // first render (no blank frame before an effect could seed it).
   const initialTabRef = useRef<TerminalTab | null>(null);
@@ -184,7 +192,9 @@ const TerminalTabs = forwardRef<TerminalHandle, TerminalTabsProps>(({ onClose, o
     focus: () => {
       handleRefs.current.get(activeIdRef.current)?.current?.focus();
     },
-  }), []);
+    addShellTab,
+    closeActiveTab: () => closeTab(activeIdRef.current),
+  }), [addShellTab, closeTab]);
 
   const activeRunning = !!runningByTab[activeId];
 

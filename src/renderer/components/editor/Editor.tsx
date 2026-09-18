@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import MonacoEditor, { loader } from '@monaco-editor/react';
 import type { Monaco } from '@monaco-editor/react';
 import { useTheme } from '../../theme/ThemeContext';
+import { useEditorSettings } from '../../theme/EditorSettingsContext';
 import './editor.css';
 
 // @monaco-editor/react's loader defaults to fetching Monaco's AMD bundle from
@@ -128,6 +129,7 @@ function registerHtml5BoilerplateSnippet(monaco: Monaco) {
 
 export default function Editor({ language, value, path, onChange, onSelectionChange }: EditorProps) {
   const { theme } = useTheme();
+  const { fontSize, tabSize, indentType, wordWrap, lineNumbers } = useEditorSettings();
 
   useEffect(() => {
     loader.init().then((monaco) => {
@@ -286,7 +288,9 @@ export default function Editor({ language, value, path, onChange, onSelectionCha
         }}
         onChange={onChange}
         options={{
-          fontSize: 14,
+          fontSize,
+          tabSize,
+          insertSpaces: indentType === 'spaces',
           fontFamily: EDITOR_FONT_FAMILY,
           minimap: {
             enabled: true,
@@ -297,8 +301,8 @@ export default function Editor({ language, value, path, onChange, onSelectionCha
             side: 'right',
           },
           scrollBeyondLastLine: false,
-          wordWrap: 'on',
-          lineNumbers: 'on',
+          wordWrap: wordWrap ? 'on' : 'off',
+          lineNumbers: lineNumbers ? 'on' : 'off',
           renderLineHighlight: 'all',
           renderWhitespace: 'selection',
           smoothScrolling: true,

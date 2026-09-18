@@ -3,6 +3,7 @@ import AppSidebar from '../components/AppSidebar';
 import useModelSelector, { ModelOption } from '../hooks/useModelSelector';
 import { themes } from '../theme/themes';
 import { useTheme } from '../theme/ThemeContext';
+import { useEditorSettings } from '../theme/EditorSettingsContext';
 
 type SettingsCategory = 'general' | 'appearance' | 'editor' | 'themes';
 
@@ -70,11 +71,7 @@ function AppearanceSettingsCategory() {
 }
 
 function EditorSettingsCategory() {
-  const [fontSize, setFontSize] = useState(14);
-  const [tabSize, setTabSize] = useState(2);
-  const [indentType, setIndentType] = useState<'spaces' | 'tabs'>('spaces');
-  const [wordWrap, setWordWrap] = useState(true);
-  const [lineNumbers, setLineNumbers] = useState(true);
+  const { fontSize, tabSize, indentType, wordWrap, lineNumbers, setFontSize, setTabSize, setIndentType, setWordWrap, setLineNumbers } = useEditorSettings();
 
   return (
     <div className="max-w-2xl">

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo, Fragment } from 'react';
 import { Rnd } from 'react-rnd';
+import { loader } from '@monaco-editor/react';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
 import Sidebar from '../components/sidebar/Sidebar';
 import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
 import { useAIPanelState } from '../components/useAIPanelState';
-import { TerminalHandle } from '../components/terminal/Terminal';
-import TerminalTabs from '../components/terminal/TerminalTabs';
+import TerminalTabs, { TerminalTabsHandle } from '../components/terminal/TerminalTabs';
 import StatsDebugPanel from '../components/StatsDebugPanel';
 import AdaptiveToast from '../components/adaptive/AdaptiveToast';
 import CodeInferencePrompt from '../components/inference/CodeInferencePrompt';
@@ -18,6 +18,7 @@ import FlutterTargetSelector, {
 import MirrorButton from '../components/mirror/MirrorButton';
 import SourceControlPanel from '../components/git/SourceControlPanel';
 import AndroidSdkButton from '../components/AndroidSdkButton';
+import AndroidBuildApkModal from '../components/AndroidBuildApkModal';
 import { lintCSharpFile, lintDartFile, lintPhpFile } from '../lsp/csharpLint';
 import { Tab } from '../types/index';
 import { useTheme } from '../theme/ThemeContext';
@@ -65,6 +66,11 @@ function extractTranslatedCode(raw: string): string {
   return text;
 }
 
+// No build-versioning scheme exists yet for Fabrica itself (package.json is
+// still the untouched electron-react-boilerplate template and carries no
+// real version) -- shown as a plain label in the About modal until one does.
+const APP_VERSION = 'Development build';
+
 const DETACH_THRESHOLD = 6;
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 400;
@@ -78,12 +84,40 @@ interface MenuBarProps {
   onSave: () => void;
   onCloseEditor: () => void;
   onCloseFolder: () => void;
+  hasActiveTab: boolean;
+  onToggleSidebar: () => void;
+  onToggleTerminal: () => void;
+  onToggleAI: () => void;
+  onToggleStats: () => void;
+  onTogglePreview: () => void;
+  onToggleGit: () => void;
+  onRun: () => void;
+  onStop: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onCut: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  onFind: () => void;
+  onNewTerminalTab: () => void;
+  onKillActiveTerminalTab: () => void;
+  hasOpenTerminal: boolean;
+  isFlutterProject: boolean;
+  projectPath?: string;
 }
 
-function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: MenuBarProps) {
+function MenuBarComponent({
+  onOpenFile, onSave, onCloseEditor, onCloseFolder, hasActiveTab,
+  onToggleSidebar, onToggleTerminal, onToggleAI, onToggleStats, onTogglePreview, onToggleGit,
+  onRun, onStop, onUndo, onRedo, onCut, onCopy, onPaste, onFind,
+  onNewTerminalTab, onKillActiveTerminalTab, hasOpenTerminal,
+  isFlutterProject, projectPath,
+}: MenuBarProps) {
   const { theme } = useTheme();
   const C = theme.ui;
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [showBuildApkModal, setShowBuildApkModal] = useState(false);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const menus = {
@@ -104,42 +138,47 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
       { label: 'Exit', shortcut: '', disabled: true },
     ]},
     Edit: { items: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', action: () => console.log('Undo') },
-      { label: 'Redo', shortcut: 'Ctrl+Y', action: () => console.log('Redo') },
+      { label: 'Undo', shortcut: 'Ctrl+Z', action: onUndo, disabled: !hasActiveTab },
+      { label: 'Redo', shortcut: 'Ctrl+Y', action: onRedo, disabled: !hasActiveTab },
       { separator: true },
-      { label: 'Cut', shortcut: 'Ctrl+X', action: () => console.log('Cut') },
-      { label: 'Copy', shortcut: 'Ctrl+C', action: () => console.log('Copy') },
-      { label: 'Paste', shortcut: 'Ctrl+V', action: () => console.log('Paste') },
+      { label: 'Cut', shortcut: 'Ctrl+X', action: onCut, disabled: !hasActiveTab },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: onCopy, disabled: !hasActiveTab },
+      { label: 'Paste', shortcut: 'Ctrl+V', action: onPaste, disabled: !hasActiveTab },
       { separator: true },
-      { label: 'Find', shortcut: 'Ctrl+F', action: () => console.log('Find') },
-      { label: 'Replace', shortcut: 'Ctrl+H', action: () => console.log('Replace') },
+      { label: 'Find', shortcut: 'Ctrl+F', action: onFind, disabled: !hasActiveTab },
+      { label: 'Replace', shortcut: 'Ctrl+H', disabled: true },
     ]},
     View: { items: [
-      { label: 'Explorer', shortcut: 'Ctrl+Shift+E', action: () => console.log('Explorer') },
-      { label: 'Source Control', shortcut: 'Ctrl+Shift+G', action: () => console.log('Source Control') },
-      { label: 'AI Assistant', shortcut: 'Ctrl+Shift+A', action: () => console.log('AI Assistant') },
+      { label: 'Explorer', shortcut: 'Ctrl+Shift+E', action: onToggleSidebar },
+      { label: 'Source Control', shortcut: 'Ctrl+Shift+G', action: onToggleGit },
+      { label: 'AI Assistant', shortcut: 'Ctrl+Shift+A', action: onToggleAI },
+      { label: 'Preview', shortcut: '', action: onTogglePreview },
+      { label: 'Stats Dashboard', shortcut: '', action: onToggleStats },
       { separator: true },
-      { label: 'Toggle Sidebar', shortcut: 'Ctrl+B', action: () => console.log('Toggle Sidebar') },
-      { label: 'Toggle Terminal', shortcut: 'Ctrl+`', action: () => console.log('Toggle Terminal') },
-      { label: 'Toggle Fullscreen', shortcut: 'F11', action: () => console.log('Toggle Fullscreen') },
+      { label: 'Toggle Sidebar', shortcut: 'Ctrl+B', action: onToggleSidebar },
+      { label: 'Toggle Terminal', shortcut: 'Ctrl+`', action: onToggleTerminal },
+      { label: 'Toggle Fullscreen', shortcut: 'F11', disabled: true },
     ]},
     Run: { items: [
-      { label: 'Run', shortcut: 'F5', action: () => console.log('Run') },
-      { label: 'Stop', shortcut: 'Shift+F5', action: () => console.log('Stop') },
+      { label: 'Run', shortcut: 'F5', action: onRun, disabled: !hasActiveTab },
+      { label: 'Stop', shortcut: 'Shift+F5', action: onStop },
       { separator: true },
-      { label: 'Run Current File', shortcut: '', action: () => console.log('Run Current File') },
+      { label: 'Run Current File', shortcut: '', action: onRun, disabled: !hasActiveTab },
+      { separator: true },
+      { label: 'Build APK', shortcut: '', action: () => setShowBuildApkModal(true), disabled: !isFlutterProject },
     ]},
     Terminal: { items: [
-      { label: 'New Terminal', shortcut: 'Ctrl+`', action: () => console.log('New Terminal') },
-      { label: 'Kill Terminal', shortcut: '', action: () => console.log('Kill Terminal') },
+      { label: 'New Terminal', shortcut: 'Ctrl+`', action: onNewTerminalTab },
+      { label: 'Kill Terminal', shortcut: '', action: onKillActiveTerminalTab, disabled: !hasOpenTerminal },
       { separator: true },
-      { label: 'Run Active File', shortcut: '', action: () => console.log('Run Active File') },
+      { label: 'Run Active File', shortcut: '', action: onRun, disabled: !hasActiveTab },
     ]},
     Help: { items: [
-      { label: 'Documentation', shortcut: '', action: () => console.log('Documentation') },
-      { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+K Ctrl+S', action: () => console.log('Keyboard Shortcuts') },
+      { label: 'Documentation', shortcut: '', disabled: true },
+      { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+K Ctrl+S', disabled: true },
       { separator: true },
-      { label: 'About Fabrica', shortcut: '', action: () => console.log('About Fabrica') },
+      { label: 'About Fabrica', shortcut: '', action: () => setAboutOpen(true) },
+      { label: 'Report Issue', shortcut: '', action: () => { void window.appLinks.openIssues(); } },
     ]}
   };
 
@@ -185,39 +224,71 @@ function MenuBarComponent({ onOpenFile, onSave, onCloseEditor, onCloseFolder }: 
   };
 
   return (
-    <div className="menu-bar-container flex items-center gap-0.5 px-3 shrink-0"
-      style={{
-        background: C.bgTopBar,
-        fontFamily: 'Segoe UI, sans-serif',
-        fontSize: '13px',
-        color: C.textSecondary,
-        height: '38px',
-        userSelect: 'none',
-      }}>
-      {Object.keys(menus).map((menuName) => (
-        <div key={menuName} ref={(el) => { menuRefs.current[menuName] = el; }} className="relative">
-          <button type="button"
-            className="px-2.5 py-1 rounded transition-colors"
-            style={{
-              color: openMenu === menuName ? C.accentAI : C.textSecondary,
-              background: openMenu === menuName ? 'rgba(168, 85, 247, 0.12)' : 'transparent',
-            }}
-            onClick={() => toggleMenu(menuName)}>
-            {menuName}
-          </button>
-          {openMenu === menuName && (
-            <div className="absolute top-full left-0 mt-1 rounded-lg shadow-2xl z-50 py-1 min-w-[220px]"
+    <Fragment>
+      <div className="menu-bar-container flex items-center gap-0.5 px-3 shrink-0"
+        style={{
+          background: C.bgTopBar,
+          fontFamily: 'Segoe UI, sans-serif',
+          fontSize: '13px',
+          color: C.textSecondary,
+          height: '38px',
+          userSelect: 'none',
+        }}>
+        {Object.keys(menus).map((menuName) => (
+          <div key={menuName} ref={(el) => { menuRefs.current[menuName] = el; }} className="relative">
+            <button type="button"
+              className="px-2.5 py-1 rounded transition-colors"
               style={{
-                background: C.bgCard,
-                border: `1px solid ${C.border}`,
-                boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
-              }}>
-              {menus[menuName as keyof typeof menus].items.map((item, index) => renderMenuItem(item, index))}
-            </div>
-          )}
+                color: openMenu === menuName ? C.accentAI : C.textSecondary,
+                background: openMenu === menuName ? 'rgba(168, 85, 247, 0.12)' : 'transparent',
+              }}
+              onClick={() => toggleMenu(menuName)}>
+              {menuName}
+            </button>
+            {openMenu === menuName && (
+              <div className="absolute top-full left-0 mt-1 rounded-lg shadow-2xl z-50 py-1 min-w-[220px]"
+                style={{
+                  background: C.bgCard,
+                  border: `1px solid ${C.border}`,
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
+                }}>
+                {menus[menuName as keyof typeof menus].items.map((item, index) => renderMenuItem(item, index))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {aboutOpen && (
+        <div
+          role="presentation"
+          onClick={() => setAboutOpen(false)}
+          className="fixed inset-0 flex items-center justify-center z-200"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-lg shadow-2xl px-6 py-5 min-w-70"
+            style={{ background: C.bgCard, border: `1px solid ${C.border}` }}
+          >
+            <h2 className="text-sm font-semibold mb-1" style={{ color: C.textPrimary }}>Fabrica IDE</h2>
+            <p className="text-xs mb-1" style={{ color: C.textSecondary }}>{APP_VERSION}</p>
+            <p className="text-xs mb-4" style={{ color: C.textMuted }}>A capstone thesis project.</p>
+            <button type="button" onClick={() => setAboutOpen(false)}
+              className="text-xs px-3 py-1 rounded transition-colors"
+              style={{ border: `1px solid ${C.border}`, color: C.textSecondary }}>
+              Close
+            </button>
+          </div>
         </div>
-      ))}
-    </div>
+      )}
+
+      <AndroidBuildApkModal
+        isOpen={showBuildApkModal}
+        projectPath={projectPath ?? ''}
+        onClose={() => setShowBuildApkModal(false)}
+      />
+    </Fragment>
   );
 }
 
@@ -445,7 +516,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   // Hover state for VS Code-like toggle strips
   const [hoverStrip, setHoverStrip] = useState<'left' | 'right' | null>(null);
 
-  const terminalRef = useRef<TerminalHandle>(null);
+  const terminalRef = useRef<TerminalTabsHandle>(null);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
   const stripMouseDownRef = useRef<{ x: number; active: boolean; moved: boolean }>({ x: 0, active: false, moved: false });
@@ -646,6 +717,36 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     if (floatingPanel === 'preview' && isFloatMinimized) { setIsFloatMinimized(false); return; }
     setShowPreview((prev) => !prev);
   }, [floatingPanel, isFloatMinimized]);
+
+  // Editor.tsx never forwards a ref to its underlying Monaco instance, and
+  // adding one is out of scope here (components/ is off-limits for this
+  // change). monaco.editor.getEditors() is the module-level Monaco registry
+  // -- it works without a ref, and EditorLayout only ever mounts one <Editor>
+  // at a time, so [0] is always the live instance for the active tab.
+  const triggerMonacoAction = useCallback((actionId: string) => {
+    void loader.init().then((monaco) => {
+      monaco.editor.getEditors()[0]?.getAction(actionId)?.run();
+    });
+  }, []);
+
+  const triggerMonacoCommand = useCallback((commandId: 'undo' | 'redo') => {
+    void loader.init().then((monaco) => {
+      monaco.editor.getEditors()[0]?.trigger('menu', commandId, null);
+    });
+  }, []);
+
+  const handleMenuUndo = useCallback(() => triggerMonacoCommand('undo'), [triggerMonacoCommand]);
+  const handleMenuRedo = useCallback(() => triggerMonacoCommand('redo'), [triggerMonacoCommand]);
+  const handleMenuCut = useCallback(
+    () => triggerMonacoAction('editor.action.clipboardCutAction'), [triggerMonacoAction],
+  );
+  const handleMenuCopy = useCallback(
+    () => triggerMonacoAction('editor.action.clipboardCopyAction'), [triggerMonacoAction],
+  );
+  const handleMenuPaste = useCallback(
+    () => triggerMonacoAction('editor.action.clipboardPasteAction'), [triggerMonacoAction],
+  );
+  const handleMenuFind = useCallback(() => triggerMonacoAction('actions.find'), [triggerMonacoAction]);
 
   const handleDetachMouseDown = useCallback((panel: FloatingPanel) => (e: React.MouseEvent) => {
     if (floatingPanel === panel) return;
@@ -1015,6 +1116,26 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onSave={handleSave}
             onCloseEditor={() => { if (activeTab) handleCloseTab(activeTabIndex); }}
             onCloseFolder={onBack}
+            hasActiveTab={!!activeTab}
+            onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+            onToggleTerminal={() => setShowOutput((prev) => !prev)}
+            onToggleAI={handleToggleAI}
+            onToggleStats={() => setStatsOpen((prev) => !prev)}
+            onTogglePreview={handleTogglePreview}
+            onToggleGit={() => setShowGit((prev) => !prev)}
+            onRun={handleRun}
+            onStop={() => { void terminalRef.current?.kill(); }}
+            onUndo={handleMenuUndo}
+            onRedo={handleMenuRedo}
+            onCut={handleMenuCut}
+            onCopy={handleMenuCopy}
+            onPaste={handleMenuPaste}
+            onFind={handleMenuFind}
+            onNewTerminalTab={() => { setShowOutput(true); terminalRef.current?.addShellTab(); }}
+            onKillActiveTerminalTab={() => { void terminalRef.current?.closeActiveTab(); }}
+            hasOpenTerminal={showOutput}
+            isFlutterProject={isFlutterProject}
+            projectPath={initialFolder}
           />
         </div>
 

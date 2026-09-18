@@ -15,6 +15,7 @@ import StatsDashboard from './screens/StatsDashboard';
 import SettingsScreen from './screens/SettingsScreen';
 import AppSidebar from './components/AppSidebar';
 import { ThemeProvider } from './theme/ThemeContext';
+import { EditorSettingsProvider } from './theme/EditorSettingsContext';
 
 // ── Shared theme palette (matches EditorLayout) ──
 const C = {
@@ -987,7 +988,9 @@ function App() {
 export default function AppRoot() {
   return (
     <ThemeProvider>
-      <App />
+      <EditorSettingsProvider>
+        <App />
+      </EditorSettingsProvider>
     </ThemeProvider>
   );
 }
