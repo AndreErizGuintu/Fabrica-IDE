@@ -420,6 +420,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showOutput, setShowOutput] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [flutterTarget, setFlutterTarget] = useState<FlutterTarget>(WINDOWS_TARGET);
+  const [isFlutterProject, setIsFlutterProject] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [rightPanelWidth, setRightPanelWidth] = useState(DEFAULT_RIGHT_PANEL_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -495,6 +496,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       showNotification(`Workspace opened: ${initialFolder.split(/[\\/]/).pop()}`, 'success');
     }
   }, [initialFolder]);
+
+  // No existing Flutter-project detector -- useFlutterDevices.ts only polls
+  // connected devices, so this is the single check for "does the open folder
+  // have a pubspec.yaml at its root".
+  useEffect(() => {
+    let cancelled = false;
+    if (!initialFolder) { setIsFlutterProject(false); return; }
+    (async () => {
+      const result = await window.fileSystem.readDir(initialFolder);
+      if (cancelled) return;
+      const hasPubspec = !!result.success && !!result.files?.some(
+        (f) => !f.isDirectory && f.name.toLowerCase() === 'pubspec.yaml'
+      );
+      setIsFlutterProject(hasPubspec);
+    })();
+    return () => { cancelled = true; };
+  }, [initialFolder, sidebarRefreshToken]);
 
   const previewHtml = useMemo(() => {
     if (!activeTab) return '';
@@ -1023,13 +1041,38 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             Git
           </button>
 
-          <FlutterTargetSelector
-            disabled={!initialFolder}
-            isRunning={isRunning}
-            selected={flutterTarget}
-            onTargetChange={setFlutterTarget}
-            onRun={handleFlutterRun}
-          />
+          <button type="button" onClick={handleRun} disabled={!activeTab}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 8,
+              fontSize: 12.5,
+              fontFamily: 'Segoe UI, sans-serif',
+              fontWeight: 500,
+              background: isRunning ? 'transparent' : 'rgba(124, 58, 237, 0.25)',
+              color: isRunning ? C.textMuted : C.codePurple,
+              border: isRunning ? `1px solid ${C.border}` : `1px solid ${C.btnPrimary}`,
+              cursor: !activeTab ? 'not-allowed' : 'pointer',
+              opacity: !activeTab ? 0.4 : 1,
+              transition: 'all 0.2s ease',
+            }}>
+            <svg style={topPillIconStyle} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            {isRunning ? 'Running' : 'Run'}
+          </button>
+
+          {isFlutterProject && (
+            <FlutterTargetSelector
+              disabled={!initialFolder}
+              isRunning={isRunning}
+              selected={flutterTarget}
+              onTargetChange={setFlutterTarget}
+              onRun={handleFlutterRun}
+            />
+          )}
         </div>
       </div>
 
@@ -1504,22 +1547,6 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               height: 36,
             }}>
             <div className="flex items-center gap-3">
-              <button type="button" onClick={handleRun} disabled={!activeTab}
-                className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-md font-medium transition-all duration-200"
-                style={{
-                  background: isRunning ? 'transparent' : 'rgba(124, 58, 237, 0.25)',
-                  color: isRunning ? C.textMuted : C.codePurple,
-                  border: isRunning ? `1px solid ${C.border}` : `1px solid ${C.btnPrimary}`,
-                  cursor: !activeTab ? 'not-allowed' : 'pointer',
-                  opacity: !activeTab ? 0.4 : 1,
-                  fontFamily: 'Segoe UI, sans-serif',
-                }}>
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                {isRunning ? 'Running' : 'Run'}
-              </button>
-              <div style={{ width: 1, height: 14, background: C.border }} />
               <FlutterTargetSelector
                 disabled={!initialFolder}
                 isRunning={isRunning}
