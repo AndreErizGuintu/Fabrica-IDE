@@ -1,7 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { themes, DEFAULT_THEME_ID, Theme } from './themes';
-
-const STORAGE_KEY = 'fabrica.theme';
 
 function resolveTheme(id: string): Theme {
   const found = themes.find(t => t.id === id);
@@ -14,14 +12,19 @@ type ThemeContextValue = { theme: Theme; themeId: string; setTheme: (id: string)
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeId, setThemeId] = useState<string>(() => {
-    try { return localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME_ID; }
-    catch { return DEFAULT_THEME_ID; }
-  });
+  const [themeId, setThemeId] = useState<string>(DEFAULT_THEME_ID);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.settings.getTheme().then((result) => {
+      if (!cancelled && result.success && result.theme) setThemeId(result.theme);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const setTheme = (id: string) => {
     setThemeId(id);
-    try { localStorage.setItem(STORAGE_KEY, id); } catch {}
+    window.settings.setTheme(id).catch(() => {});
   };
 
   const theme = resolveTheme(themeId);

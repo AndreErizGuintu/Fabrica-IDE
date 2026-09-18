@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld('model', {
     ipcRenderer.invoke('model:setActiveModel', modelKey),
 });
 
+contextBridge.exposeInMainWorld('settings', {
+  getTheme: () => ipcRenderer.invoke('settings:getTheme'),
+  setTheme: (themeId: string) => ipcRenderer.invoke('settings:setTheme', themeId),
+});
+
 contextBridge.exposeInMainWorld('stats', {
   startSession: (projectPath: string) => ipcRenderer.invoke('stats:startSession', projectPath),
   activity: () => ipcRenderer.send('stats:activity'),

@@ -132,31 +132,36 @@ function EditorSettingsCategory() {
 function ThemesSettingsCategory() {
   const { themeId, setTheme } = useTheme();
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-      {themes.map((t) => {
-        const isActive = t.id === themeId;
-        return (
-          <button
-            key={t.id}
-            onClick={() => setTheme(t.id)}
-            style={{
-              padding: 16, borderRadius: 10,
-              background: isActive ? 'rgba(168, 85, 247, 0.1)' : '#12102D',
-              border: isActive ? '2px solid #A855F7' : '1px solid #29204A',
-              textAlign: 'left', cursor: 'pointer',
-              transition: 'border-color 0.15s ease, background 0.15s ease',
-            }}
-          >
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-              {[t.monaco.background, t.monaco.tokens.keyword, t.monaco.tokens.string, t.monaco.tokens.function, t.monaco.tokens.number].map((c, i) => (
-                <span key={i} style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />
-              ))}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#F4F1FF' }}>{t.name}</div>
-            {isActive && <div style={{ fontSize: 11, color: '#A855F7', marginTop: 4 }}>✓ Active</div>}
-          </button>
-        );
-      })}
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+        {themes.map((t) => {
+          const isActive = t.id === themeId;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTheme(t.id)}
+              style={{
+                padding: 16, borderRadius: 10,
+                background: isActive ? 'rgba(168, 85, 247, 0.1)' : '#12102D',
+                border: isActive ? '2px solid #A855F7' : '1px solid #29204A',
+                textAlign: 'left', cursor: 'pointer',
+                transition: 'border-color 0.15s ease, background 0.15s ease',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                {[t.monaco.background, t.monaco.tokens.keyword, t.monaco.tokens.string, t.monaco.tokens.function, t.monaco.tokens.number].map((c, i) => (
+                  <span key={i} style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />
+                ))}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#F4F1FF' }}>{t.name}</div>
+              {isActive && <div style={{ fontSize: 11, color: '#A855F7', marginTop: 4 }}>✓ Active</div>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="text-xs mt-3" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+        Applies to editor, preview, AI, and git panels
+      </div>
     </div>
   );
 }

@@ -130,13 +130,20 @@ export type GpuIsolationStatus =
   | 'isolated'; // set the env var and is about to relaunch
 
 // =====================================================================
-// TEMPORARY TEST STUB -- DO NOT SHIP. Forces ensureGpuDeviceIsolation() to
-// return this status instead of actually probing, so the CPU-fallback path
-// can be exercised end-to-end without a real no-GPU machine. Set to `null`
-// (or delete this block and the check below) once the fallback switch,
-// getActiveModelName(), the sidebar labels, and a real Qwen inference call
-// have all been confirmed against real terminal output.
-const FORCE_STATUS_FOR_TESTING: GpuIsolationStatus | null = 'no-gpu';
+// Manual override for exercising the CPU-fallback path (no-gpu / ambiguous /
+// etc.) without a real no-GPU machine. Read from an env var rather than a
+// hardcoded constant so a forced status can never accidentally ship active --
+// with no env var set (the shipped default), this is always `null` and
+// ensureGpuDeviceIsolation() runs its real probe. To force one manually:
+// FABRICA_FORCE_GPU_STATUS=no-gpu npm start
+const VALID_FORCE_STATUSES: readonly GpuIsolationStatus[] = [
+  'already-isolated', 'no-gpu', 'probe-failed', 'single-gpu', 'ambiguous', 'isolated',
+];
+const forceStatusEnv = process.env.FABRICA_FORCE_GPU_STATUS;
+const FORCE_STATUS_FOR_TESTING: GpuIsolationStatus | null =
+  forceStatusEnv !== undefined && VALID_FORCE_STATUSES.includes(forceStatusEnv as GpuIsolationStatus)
+    ? (forceStatusEnv as GpuIsolationStatus)
+    : null;
 
 /**
  * Call once, at app startup, before createWindow(). If this process is a

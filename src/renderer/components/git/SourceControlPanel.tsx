@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from '../../theme/ThemeContext';
 
 // How often to re-run `git status` while the panel is on screen. Saves inside
 // Fabrica refresh immediately via the refreshToken prop, so this interval only
@@ -126,6 +127,9 @@ export default function SourceControlPanel({
   onStatusChange,
   refreshToken = 0,
 }: SourceControlPanelProps) {
+  const { theme } = useTheme();
+  const C = theme.ui;
+
   const [statusLines, setStatusLines] = useState<string[]>([]);
   const [logLines, setLogLines] = useState<string[]>([]);
   const [commitMessage, setCommitMessage] = useState('');
@@ -302,19 +306,22 @@ export default function SourceControlPanel({
 
   if (!visible) return null;
 
+  // Git status letters (Modified/Added/Deleted/Renamed) use VS Code's own fixed
+  // status-color convention, not the app's cosmetic theme — same reasoning as
+  // the hardcoded error-red elsewhere in the app (EditorLayout's runError).
   const codeColor = (code: string) => {
     if (code === 'M') return '#fbbf24';
     if (code === 'A' || code === '?') return '#4ade80';
     if (code === 'D') return '#f87171';
     if (code === 'R') return '#60a5fa';
-    return '#81748F';
+    return C.textMuted;
   };
 
   const sectionHeaderStyle = {
-    color: '#81748F',
+    color: C.textMuted,
     fontFamily: 'Segoe UI, sans-serif',
-    background: '#0F0616',
-    borderTop: '1px solid rgba(168, 85, 247, 0.16)',
+    background: C.bgSidebar,
+    borderTop: `1px solid ${C.border}`,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
   };
@@ -341,7 +348,7 @@ export default function SourceControlPanel({
         onClick={onAction}
         title={actionTitle}
         className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"
-        style={{ color: '#81748F', cursor: disabled ? 'not-allowed' : 'pointer' }}
+        style={{ color: C.textMuted, cursor: disabled ? 'not-allowed' : 'pointer' }}
       >
         <i className={`codicon ${actionIcon}`} style={{ fontSize: '12px' }} />
       </button>
@@ -351,14 +358,14 @@ export default function SourceControlPanel({
   return (
     <div
       className="flex flex-col shrink-0 overflow-hidden border-l"
-      style={{ width: '260px', background: '#0F0616', borderColor: 'rgba(168, 85, 247, 0.16)' }}
+      style={{ width: '260px', background: C.bgSidebar, borderColor: C.border }}
     >
       <div
         className="px-4 py-2 text-[10px] font-medium tracking-wider shrink-0 flex items-center justify-between"
         style={{
-          color: '#B8AFC2',
+          color: C.textSecondary,
           fontFamily: 'Segoe UI, sans-serif',
-          borderBottom: '1px solid rgba(168, 85, 247, 0.16)',
+          borderBottom: `1px solid ${C.border}`,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
         }}
@@ -373,7 +380,7 @@ export default function SourceControlPanel({
           type="button"
           onClick={() => void refresh()}
           className="transition-colors hover:text-white"
-          style={{ color: '#81748F' }}
+          style={{ color: C.textMuted }}
           title="Refresh"
         >
           <i className="codicon codicon-refresh" style={{ fontSize: '13px' }} />
@@ -381,7 +388,7 @@ export default function SourceControlPanel({
       </div>
 
       {/* Commit — acts on staged files only */}
-      <div className="px-4 pt-2 pb-2 shrink-0 flex flex-col gap-1.5 border-b" style={{ borderColor: 'rgba(168, 85, 247, 0.16)' }}>
+      <div className="px-4 pt-2 pb-2 shrink-0 flex flex-col gap-1.5 border-b" style={{ borderColor: C.border }}>
         <input
           type="text"
           placeholder="Message (Ctrl+Enter to commit)"
@@ -392,9 +399,9 @@ export default function SourceControlPanel({
           }}
           className="w-full text-[10px] px-2.5 py-1.5 rounded transition-all duration-200 focus:ring-1 focus:ring-[#a855f7]"
           style={{
-            background: '#0F0616',
-            color: '#F5F0FA',
-            border: '1px solid rgba(168, 85, 247, 0.16)',
+            background: C.bgInput,
+            color: C.textPrimary,
+            border: `1px solid ${C.border}`,
             fontFamily: 'Segoe UI, sans-serif',
             outline: 'none',
           }}
@@ -406,9 +413,9 @@ export default function SourceControlPanel({
           className="text-[10px] px-3 py-1.5 rounded font-medium transition-all duration-200"
           style={{
             background:
-              disabled || !commitMessage.trim() || staged.length === 0 ? 'rgba(168, 85, 247, 0.16)' : '#a855f7',
+              disabled || !commitMessage.trim() || staged.length === 0 ? C.bgInput : C.accentAI,
             color:
-              disabled || !commitMessage.trim() || staged.length === 0 ? '#81748F' : '#ffffff',
+              disabled || !commitMessage.trim() || staged.length === 0 ? C.textMuted : '#ffffff',
             cursor:
               disabled || !commitMessage.trim() || staged.length === 0
                 ? 'not-allowed'
@@ -428,9 +435,9 @@ export default function SourceControlPanel({
             onClick={() => void handleSync()}
             className="text-[10px] px-3 py-1.5 rounded font-medium transition-all duration-200 flex items-center justify-center gap-1.5"
             style={{
-              background: '#0F0616',
-              color: disabled ? '#81748F' : '#a855f7',
-              border: '1px solid #a855f7',
+              background: C.bgSidebar,
+              color: disabled ? C.textMuted : C.accentAI,
+              border: `1px solid ${C.accentAI}`,
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontFamily: 'Segoe UI, sans-serif',
             }}
@@ -448,9 +455,9 @@ export default function SourceControlPanel({
                 onClick={() => setShowPublishInput(true)}
                 className="text-[10px] px-3 py-1.5 rounded font-medium transition-all duration-200 flex items-center justify-center gap-1.5"
                 style={{
-                  background: '#0F0616',
-                  color: disabled ? '#81748F' : '#4ade80',
-                  border: '1px solid #4ade80',
+                  background: C.bgSidebar,
+                  color: disabled ? C.textMuted : C.success,
+                  border: `1px solid ${C.success}`,
                   cursor: disabled ? 'not-allowed' : 'pointer',
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
@@ -473,9 +480,9 @@ export default function SourceControlPanel({
                   }}
                   className="w-full text-[10px] px-2.5 py-1.5 rounded focus:ring-1 focus:ring-[#4ade80]"
                   style={{
-                    background: '#0F0616',
-                    color: '#F5F0FA',
-                    border: '1px solid rgba(168, 85, 247, 0.16)',
+                    background: C.bgInput,
+                    color: C.textPrimary,
+                    border: `1px solid ${C.border}`,
                     fontFamily: 'Segoe UI, sans-serif',
                     outline: 'none',
                   }}
@@ -487,8 +494,8 @@ export default function SourceControlPanel({
                     onClick={() => void handlePublish()}
                     className="flex-1 text-[10px] py-1 rounded font-medium"
                     style={{
-                      background: disabled || !publishUrl.trim() ? '#1C0F30' : '#4ade80',
-                      color: disabled || !publishUrl.trim() ? '#81748F' : '#0F0616',
+                      background: disabled || !publishUrl.trim() ? C.bgInput : C.success,
+                      color: disabled || !publishUrl.trim() ? C.textMuted : C.bgSidebar,
                       border: 'none',
                       cursor: disabled || !publishUrl.trim() ? 'not-allowed' : 'pointer',
                       fontFamily: 'Segoe UI, sans-serif',
@@ -501,9 +508,9 @@ export default function SourceControlPanel({
                     onClick={() => setShowPublishInput(false)}
                     className="flex-1 text-[10px] py-1 rounded"
                     style={{
-                      background: '#0F0616',
-                      color: '#81748F',
-                      border: '1px solid rgba(168, 85, 247, 0.16)',
+                      background: C.bgSidebar,
+                      color: C.textMuted,
+                      border: `1px solid ${C.border}`,
                       fontFamily: 'Segoe UI, sans-serif',
                     }}
                   >
@@ -529,9 +536,9 @@ export default function SourceControlPanel({
               onClick={() => void run(label, fn)}
               className="flex-1 text-[9px] py-1 rounded transition-all duration-200 hover:bg-[#a855f7]/10"
               style={{
-                background: '#0F0616',
-                color: '#81748F',
-                border: '1px solid rgba(168, 85, 247, 0.16)',
+                background: C.bgSidebar,
+                color: C.textMuted,
+                border: `1px solid ${C.border}`,
                 opacity: disabled ? 0.4 : 1,
                 fontFamily: 'Segoe UI, sans-serif',
               }}
@@ -547,7 +554,7 @@ export default function SourceControlPanel({
         <div className="shrink-0">
           <div
             className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium"
-            style={{ ...sectionHeaderStyle, borderBottom: stagedOpen ? '1px solid rgba(168, 85, 247, 0.16)' : 'none' }}
+            style={{ ...sectionHeaderStyle, borderBottom: stagedOpen ? `1px solid ${C.border}` : 'none' }}
           >
             <button
               type="button"
@@ -564,7 +571,7 @@ export default function SourceControlPanel({
             {staged.length > 0 && (
               <span
                 className="text-[9px] px-1.5 py-0.5 rounded-full"
-                style={{ background: '#4ade80', color: '#0F0616' }}
+                style={{ background: C.success, color: C.bgSidebar }}
               >
                 {staged.length}
               </span>
@@ -573,7 +580,7 @@ export default function SourceControlPanel({
           {stagedOpen && (
             <div>
               {staged.length === 0 ? (
-                <div className="px-4 py-1.5 text-xs" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="px-4 py-1.5 text-xs" style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
                   Nothing staged
                 </div>
               ) : (
@@ -591,7 +598,7 @@ export default function SourceControlPanel({
         <div className="shrink-0">
           <div
             className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium"
-            style={{ ...sectionHeaderStyle, borderBottom: changesOpen ? '1px solid rgba(168, 85, 247, 0.16)' : 'none' }}
+            style={{ ...sectionHeaderStyle, borderBottom: changesOpen ? `1px solid ${C.border}` : 'none' }}
           >
             <button
               type="button"
@@ -613,13 +620,13 @@ export default function SourceControlPanel({
                   onClick={() => void run('Stage all', () => window.git.add(cwd!))}
                   title="Stage all changes"
                   className="transition-colors hover:text-white"
-                  style={{ color: '#81748F', cursor: disabled ? 'not-allowed' : 'pointer' }}
+                  style={{ color: C.textMuted, cursor: disabled ? 'not-allowed' : 'pointer' }}
                 >
                   <i className="codicon codicon-add" style={{ fontSize: '12px' }} />
                 </button>
                 <span
                   className="text-[9px] px-1.5 py-0.5 rounded-full"
-                  style={{ background: '#a855f7', color: '#0F0616' }}
+                  style={{ background: C.accentAI, color: C.bgSidebar }}
                 >
                   {unstaged.length}
                 </span>
@@ -629,7 +636,7 @@ export default function SourceControlPanel({
           {changesOpen && (
             <div>
               {unstaged.length === 0 ? (
-                <div className="px-4 py-1.5 text-xs" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="px-4 py-1.5 text-xs" style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
                   {cwd ? 'No changes' : 'No folder open'}
                 </div>
               ) : (
@@ -649,7 +656,7 @@ export default function SourceControlPanel({
             type="button"
             onClick={() => setHistoryOpen((p) => !p)}
             className="w-full flex items-center gap-1 px-4 py-1 text-[10px] font-medium transition-colors hover:bg-[#a855f7]/10"
-            style={{ ...sectionHeaderStyle, borderBottom: historyOpen ? '1px solid rgba(168, 85, 247, 0.16)' : 'none' }}
+            style={{ ...sectionHeaderStyle, borderBottom: historyOpen ? `1px solid ${C.border}` : 'none' }}
           >
             <i
               className={`codicon ${historyOpen ? 'codicon-chevron-down' : 'codicon-chevron-right'}`}
@@ -660,7 +667,7 @@ export default function SourceControlPanel({
           {historyOpen && (
             <div>
               {logLines.length === 0 ? (
-                <div className="px-4 py-1.5 text-xs" style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                <div className="px-4 py-1.5 text-xs" style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
                   No commits
                 </div>
               ) : (
@@ -672,11 +679,11 @@ export default function SourceControlPanel({
                   >
                     <span
                       className="shrink-0 px-1.5 py-0.5 rounded"
-                      style={{ background: '#180C29', color: '#a855f7', fontSize: '9px' }}
+                      style={{ background: C.bgCard, color: C.accentAI, fontSize: '9px' }}
                     >
                       {line.slice(0, 7)}
                     </span>
-                    <span className="truncate" style={{ color: '#81748F' }}>
+                    <span className="truncate" style={{ color: C.textMuted }}>
                       {line.slice(8)}
                     </span>
                   </div>

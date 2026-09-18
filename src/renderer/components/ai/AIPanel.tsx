@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
+import { useTheme } from '../../theme/ThemeContext';
+import type { ThemeUI } from '../../theme/themes';
 
 interface AIPanelProps {
   selectedCode: string;
@@ -30,7 +32,12 @@ const LOADING_MESSAGES = [
   'Generating response...',
 ];
 
-function LoadingIndicator() {
+// C (theme.ui) is threaded through as a prop/param rather than called via
+// useTheme() in here -- these are plain helper functions (renderResponseContent
+// and renderChatThread are invoked directly, not rendered as JSX), and calling
+// a hook from a conditionally-invoked plain function would break the rules of
+// hooks. Same signature convention used throughout.
+function LoadingIndicator({ C }: { C: ThemeUI }) {
   const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
@@ -41,10 +48,10 @@ function LoadingIndicator() {
   }, []);
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-[#B8AFC2]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+    <div className="flex items-center gap-1.5 text-xs" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
       <span
         className="inline-block w-2.5 h-2.5 rounded-full animate-spin shrink-0"
-        style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }}
+        style={{ border: `2px solid ${C.border}`, borderTopColor: C.accentAI }}
       />
       {LOADING_MESSAGES[messageIndex]}
     </div>
@@ -54,7 +61,7 @@ function LoadingIndicator() {
 // section.content is already fence-stripped by the regex in renderResponseContent
 // (capture group 2 sits between the ```lang line and the closing ```), so this
 // copies only the code itself — no markdown fence lines.
-function CodeBlockCopyButton({ content }: { content: string }) {
+function CodeBlockCopyButton({ content, C }: { content: string; C: ThemeUI }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -74,14 +81,14 @@ function CodeBlockCopyButton({ content }: { content: string }) {
       onClick={handleCopy}
       title={copied ? 'Copied' : 'Copy code'}
       className="flex items-center justify-center p-1 rounded transition-colors hover:bg-[rgba(168,85,247,0.12)]"
-      style={{ color: copied ? '#4ade80' : '#81748F' }}
+      style={{ color: copied ? C.success : C.textMuted }}
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
   );
 }
 
-function renderResponseContent(response: string) {
+function renderResponseContent(response: string, C: ThemeUI) {
   const sections: Array<{
     type: 'text' | 'code';
     content: string;
@@ -117,15 +124,15 @@ function renderResponseContent(response: string) {
       {sections.map((section, index) => {
         if (section.type === 'code') {
           return (
-            <div key={`${section.language}-${index}`} className="overflow-hidden rounded border border-[#a855f7] bg-[#180C29]">
-              <div className="border-b border-[rgba(168,85,247,0.16)] px-2 py-0.5 text-[9px] uppercase tracking-widest text-[#a855f7]" style={{ fontFamily: 'Space Mono, monospace' }}>
+            <div key={`${section.language}-${index}`} className="overflow-hidden rounded" style={{ border: `1px solid ${C.accentAI}`, background: C.bgCard }}>
+              <div className="px-2 py-0.5 text-[9px] uppercase tracking-widest" style={{ borderBottom: `1px solid ${C.border}`, color: C.accentAI, fontFamily: 'Space Mono, monospace' }}>
                 {section.language}
               </div>
-              <pre className="m-0 overflow-x-auto p-2 text-[10px] text-[#F5F0FA]" style={{ fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
+              <pre className="m-0 overflow-x-auto p-2 text-[10px]" style={{ color: C.textPrimary, fontFamily: 'Space Mono, monospace', whiteSpace: 'pre' }}>
                 <code>{section.content}</code>
               </pre>
-              <div className="flex items-center justify-end px-1 py-0.5 border-t border-[rgba(168,85,247,0.16)]">
-                <CodeBlockCopyButton content={section.content} />
+              <div className="flex items-center justify-end px-1 py-0.5" style={{ borderTop: `1px solid ${C.border}` }}>
+                <CodeBlockCopyButton content={section.content} C={C} />
               </div>
             </div>
           );
@@ -141,7 +148,7 @@ function renderResponseContent(response: string) {
   );
 }
 
-function renderChatThread(messages: ChatMessage[], loading?: boolean) {
+function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean) {
   return (
     <div className="flex flex-col gap-2">
       {messages.length ? (
@@ -154,19 +161,19 @@ function renderChatThread(messages: ChatMessage[], loading?: boolean) {
               <div
                 className="max-w-[85%] rounded border px-2 py-1.5 text-xs leading-4"
                 style={{
-                  background: isUser ? 'rgba(168, 85, 247, 0.15)' : '#180C29',
-                  borderColor: isUser ? '#a855f7' : 'rgba(168, 85, 247, 0.16)',
-                  color: '#F5F0FA',
+                  background: isUser ? C.bgSelected : C.bgCard,
+                  borderColor: isUser ? C.accentAI : C.border,
+                  color: C.textPrimary,
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
-                {isUser ? message.content : isPendingAssistant ? <LoadingIndicator /> : renderResponseContent(message.content)}
+                {isUser ? message.content : isPendingAssistant ? <LoadingIndicator C={C} /> : renderResponseContent(message.content, C)}
               </div>
             </div>
           );
         })
       ) : (
-        <div className="text-xs text-[#B8AFC2]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+        <div className="text-xs" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
           Start a conversation to get help with code, reasoning, or planning.
         </div>
       )}
@@ -192,6 +199,9 @@ function getCompletionErrorText(error?: string) {
 }
 
 export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile, panelState }: AIPanelProps) {
+  const { theme } = useTheme();
+  const C = theme.ui;
+
   const {
     activeKey: modelKey,
     modelName,
@@ -421,9 +431,9 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#180C29] border-l border-[rgba(168,85,247,0.16)] overflow-hidden">
+    <div className="flex flex-col h-full border-l overflow-hidden" style={{ background: C.bgPreviewAI, borderColor: C.border }}>
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.16)' }}>
+      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: `1px solid ${C.border}` }}>
         {(['ask', 'plan', 'translate', 'explain'] as TabKey[]).map((tab) => {
           const isActive = activeTab === tab;
           return (
@@ -433,10 +443,10 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               onClick={() => setActiveTab(tab)}
               className="text-[10px] px-3 py-1 rounded-t font-medium tracking-widest transition-colors"
               style={{
-                background: isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                color: isActive ? '#F5F0FA' : '#B8AFC2',
-                border: '1px solid rgba(168, 85, 247, 0.16)',
-                borderBottomColor: isActive ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                background: isActive ? C.bgActiveTab : 'transparent',
+                color: isActive ? C.textPrimary : C.textSecondary,
+                border: `1px solid ${C.border}`,
+                borderBottomColor: isActive ? C.bgActiveTab : 'transparent',
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >
@@ -449,20 +459,20 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       {/* Model selector — applies to all tabs, one model backs every mode */}
       <div
         className="flex items-center justify-between gap-2 px-3 py-1.5 shrink-0"
-        style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.16)' }}
+        style={{ borderBottom: `1px solid ${C.border}` }}
       >
         <span
-          className="text-[9px] uppercase tracking-widest text-[#B8AFC2]"
-          style={{ fontFamily: 'Segoe UI, sans-serif' }}
+          className="text-[9px] uppercase tracking-widest"
+          style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}
         >
           Model
         </span>
         {modelSwitching ? (
-          <span className="text-[10px] flex items-center gap-1.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+          <span className="text-[10px] flex items-center gap-1.5" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
             Switching…
             <span
               className="inline-block w-2.5 h-2.5 rounded-full animate-spin"
-              style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }}
+              style={{ border: `2px solid ${C.border}`, borderTopColor: C.accentAI }}
             />
           </span>
         ) : (
@@ -470,12 +480,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
             value={modelKey ?? ''}
             onChange={(e) => selectModel(e.target.value as ModelOption['key'])}
             disabled={models.length === 0}
-            className="text-[10px] px-2 py-0.5 rounded bg-[#1C0F30] text-[#F5F0FA] max-w-[150px]"
-            style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}
+            className="text-[10px] px-2 py-0.5 rounded max-w-[150px]"
+            style={{ background: C.bgInput, color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif', border: `1px solid ${C.border}` }}
           >
             {models.length === 0 && <option value="">{modelName}</option>}
             {models.map((m) => (
-              <option key={m.key} value={m.key} className="bg-[#1C0F30]">
+              <option key={m.key} value={m.key} style={{ background: C.bgInput }}>
                 {m.displayName}
               </option>
             ))}
@@ -492,8 +502,8 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       <div className="flex-1 flex flex-col gap-1.5 px-3 py-2 overflow-hidden min-h-0">
         {activeTab === 'ask' && (
           <>
-            <div className="flex-1 overflow-y-auto rounded bg-[#180C29] p-2 min-h-0" style={{ border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {renderChatThread(askMessages, askLoading)}
+            <div className="flex-1 overflow-y-auto rounded p-2 min-h-0" style={{ background: C.bgCard, border: `1px solid ${C.border}` }}>
+              {renderChatThread(askMessages, C, askLoading)}
             </div>
 
             <div className="shrink-0 flex flex-col gap-1.5">
@@ -503,12 +513,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Ask for help with code, concepts, debugging, or explanation..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#1C0F30',
-                  color: '#F5F0FA',
+                  background: C.bgInput,
+                  color: C.textPrimary,
                   fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid rgba(168, 85, 247, 0.16)',
+                  border: `1px solid ${C.border}`,
                 }}
               />
 
@@ -519,7 +529,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={askLoading || !askPrompt.trim()}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
                   style={{
-                    background: askLoading || !askPrompt.trim() ? '#1C0F30' : '#a855f7',
+                    background: askLoading || !askPrompt.trim() ? C.bgInput : C.accentAI,
                     color: '#ffffff',
                     cursor: askLoading || !askPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
@@ -533,12 +543,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
 
         {activeTab === 'plan' && (
           <>
-            <div className="shrink-0 rounded border border-[rgba(168,85,247,0.16)] bg-[#180C29] px-3 py-1 text-[10px] text-[#B8AFC2]" style={{ fontFamily: 'Segoe UI, sans-serif' }}>
+            <div className="shrink-0 rounded px-3 py-1 text-[10px]" style={{ border: `1px solid ${C.border}`, background: C.bgCard, color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
               Plan mode — outlines steps only, does not make changes.
             </div>
 
-            <div className="flex-1 overflow-y-auto rounded bg-[#180C29] p-2 min-h-0" style={{ border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {renderChatThread(planMessages, planLoading)}
+            <div className="flex-1 overflow-y-auto rounded p-2 min-h-0" style={{ background: C.bgCard, border: `1px solid ${C.border}` }}>
+              {renderChatThread(planMessages, C, planLoading)}
             </div>
 
             <div className="shrink-0 flex flex-col gap-1.5">
@@ -548,12 +558,12 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Describe what you want to plan..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#1C0F30',
-                  color: '#F5F0FA',
+                  background: C.bgInput,
+                  color: C.textPrimary,
                   fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid rgba(168, 85, 247, 0.16)',
+                  border: `1px solid ${C.border}`,
                 }}
               />
 
@@ -564,7 +574,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={planLoading || !planPrompt.trim()}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors"
                   style={{
-                    background: planLoading || !planPrompt.trim() ? '#1C0F30' : '#a855f7',
+                    background: planLoading || !planPrompt.trim() ? C.bgInput : C.accentAI,
                     color: '#ffffff',
                     cursor: planLoading || !planPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
@@ -585,26 +595,26 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 placeholder="Ask the AI to complete, explain, refactor, or generate code..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
-                  background: '#1C0F30',
-                  color: '#F5F0FA',
+                  background: C.bgInput,
+                  color: C.textPrimary,
                   fontFamily: 'Segoe UI, sans-serif',
                   minHeight: '50px',
                   maxHeight: '70px',
-                  border: '1px solid rgba(168, 85, 247, 0.16)',
+                  border: `1px solid ${C.border}`,
                 }}
               />
 
               <div
                 className="text-[10px] p-1.5 rounded overflow-y-auto shrink-0"
                 style={{
-                  background: '#1C0F30',
-                  color: '#B8AFC2',
+                  background: C.bgInput,
+                  color: C.textSecondary,
                   fontFamily: 'Space Mono, monospace',
                   minHeight: '30px',
                   maxHeight: '50px',
                   whiteSpace: 'pre',
                   overflowX: 'hidden',
-                  border: '1px solid rgba(168, 85, 247, 0.16)',
+                  border: `1px solid ${C.border}`,
                 }}
               >
                 {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to translate'}
@@ -614,11 +624,11 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="text-[10px] px-2 py-1 rounded bg-[#1C0F30] text-[#F5F0FA] flex-1"
-                  style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}
+                  className="text-[10px] px-2 py-1 rounded flex-1"
+                  style={{ background: C.bgInput, color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif', border: `1px solid ${C.border}` }}
                 >
                   {LANGUAGES.map((ln) => (
-                    <option key={ln} value={ln} className="bg-[#1C0F30]">
+                    <option key={ln} value={ln} style={{ background: C.bgInput }}>
                       {ln}
                     </option>
                   ))}
@@ -630,7 +640,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   disabled={loading || (!prompt.trim() && !selectedCode.trim())}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-2 transition-colors shrink-0"
                   style={{
-                    background: loading || (!prompt.trim() && !selectedCode.trim()) ? '#1C0F30' : '#a855f7',
+                    background: loading || (!prompt.trim() && !selectedCode.trim()) ? C.bgInput : C.accentAI,
                     color: '#ffffff',
                     cursor: loading || (!prompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
                   }}
@@ -661,7 +671,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   title={activeFilePath ? 'Save the translated code to a new file' : 'Open a file first'}
                   className="text-[10px] px-3 py-1 rounded font-semibold flex items-center gap-1.5 transition-colors shrink-0"
                   style={{
-                    background: saving || !activeFilePath ? '#1C0F30' : '#a855f7',
+                    background: saving || !activeFilePath ? C.bgInput : C.accentAI,
                     color: '#ffffff',
                     cursor: saving || !activeFilePath ? 'not-allowed' : 'pointer',
                     fontFamily: 'Segoe UI, sans-serif',
@@ -674,15 +684,15 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   {saving ? 'Saving...' : 'Save as file'}
                 </button>
                 {saveMessage && (
-                  <span className="text-[9px] leading-3 truncate" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+                  <span className="text-[9px] leading-3 truncate" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
                     {saveMessage}
                   </span>
                 )}
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded bg-[#1C0F30] text-[#F5F0FA] min-h-0" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {response ? renderResponseContent(response) : loading ? <LoadingIndicator /> : 'AI response will appear here...'}
+            <div className="flex-1 overflow-y-auto text-[10px] p-2 rounded min-h-0" style={{ background: C.bgInput, color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif', border: `1px solid ${C.border}` }}>
+              {response ? renderResponseContent(response, C) : loading ? <LoadingIndicator C={C} /> : 'AI response will appear here...'}
             </div>
           </>
         )}
@@ -695,25 +705,25 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               placeholder="Ask a specific question about the code, or leave blank for a general explanation..."
               className="text-xs p-2 rounded resize-none outline-none"
               style={{
-                background: '#1C0F30',
-                color: '#F5F0FA',
+                background: C.bgInput,
+                color: C.textPrimary,
                 fontFamily: 'Segoe UI, sans-serif',
                 minHeight: '92px',
-                border: '1px solid rgba(168, 85, 247, 0.16)',
+                border: `1px solid ${C.border}`,
               }}
             />
 
             <div
               className="text-xs p-2 rounded overflow-y-auto"
               style={{
-                background: '#1C0F30',
-                color: '#B8AFC2',
+                background: C.bgInput,
+                color: C.textSecondary,
                 fontFamily: 'Space Mono, monospace',
                 minHeight: '60px',
                 maxHeight: '120px',
                 whiteSpace: 'pre',
                 overflowX: 'hidden',
-                border: '1px solid rgba(168, 85, 247, 0.16)',
+                border: `1px solid ${C.border}`,
               }}
             >
               {selectedCode.trim() ? selectedCode.slice(0, 300) + (selectedCode.length > 300 ? '...' : '') : 'Select code in editor to explain'}
@@ -726,7 +736,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                 disabled={explainLoading || (!explainPrompt.trim() && !selectedCode.trim())}
                 className="text-xs px-3 py-2 rounded font-semibold flex items-center gap-2"
                 style={{
-                  background: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? '#1C0F30' : '#a855f7',
+                  background: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? C.bgInput : C.accentAI,
                   color: '#ffffff',
                   cursor: explainLoading || (!explainPrompt.trim() && !selectedCode.trim()) ? 'not-allowed' : 'pointer',
                 }}
@@ -735,8 +745,8 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto text-xs p-2 rounded bg-[#1C0F30] text-[#F5F0FA]" style={{ fontFamily: 'Segoe UI, sans-serif', border: '1px solid rgba(168, 85, 247, 0.16)' }}>
-              {explainResponse ? renderResponseContent(explainResponse) : explainLoading ? <LoadingIndicator /> : 'AI response will appear here...'}
+            <div className="flex-1 overflow-y-auto text-xs p-2 rounded" style={{ background: C.bgInput, color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif', border: `1px solid ${C.border}` }}>
+              {explainResponse ? renderResponseContent(explainResponse, C) : explainLoading ? <LoadingIndicator C={C} /> : 'AI response will appear here...'}
             </div>
           </>
         )}

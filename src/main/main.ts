@@ -15,6 +15,7 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog, Menu, globalShortcut } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import { getTheme, setTheme } from './settingsStore';
 import * as pty from 'node-pty';
 import MenuBuilder from './menu';
 import {
@@ -641,6 +642,23 @@ ipcMain.handle('stats:getAggregate', () => getAggregate());
 ipcMain.handle('stats:getSessionHistory', (_event, projectPath: string) =>
   getSessionHistory(projectPath),
 );
+
+ipcMain.handle('settings:getTheme', () => {
+  try {
+    return { success: true, theme: getTheme() };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('settings:setTheme', (_event, themeId: string) => {
+  try {
+    setTheme(themeId);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+});
 
 ipcMain.handle('store:getRecentProjects', async () => {
   const projects = readRecentProjects();
@@ -1508,6 +1526,16 @@ ipcMain.handle('ai:explain', async (event, payload: { prompt: string; selectedCo
     const result = await generate(userPrompt, systemPrompt, (chunk: string) => {
       fullText += chunk;
       event.sender.send('ai:token', chunk);
+    }, {
+      // This call previously passed no options at all -- no ceiling on a
+      // runaway/repetitive generation. 768 leaves room for a full explanation
+      // of a real selection without an unbounded worst case. No stopTriggers:
+      // customStopTriggers exist for a semantic mid-generation boundary (e.g.
+      // codeInference.ts's FIM suffix boundary) -- prose explanation has no
+      // such boundary, and the model's own EOT/EOG token is already honoured
+      // by session.prompt() in llmWorker.ts regardless of customStopTriggers,
+      // so adding one here would be redundant, not a fix.
+      maxTokens: 768,
     });
 
     incrementAiCallCount();

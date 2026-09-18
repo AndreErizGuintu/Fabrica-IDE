@@ -249,6 +249,10 @@ declare global {
       // the new model before resolving. Caller should show a busy state.
       setActiveModel: (modelKey: 'primary' | 'cpuFallback') => Promise<{ success: boolean; name?: string; error?: string }>;
     };
+    settings: {
+      getTheme: () => Promise<{ success: boolean; theme?: string; error?: string }>;
+      setTheme: (themeId: string) => Promise<{ success: boolean; error?: string }>;
+    };
     stats: {
       startSession: (projectPath: string) => Promise<{ success: boolean }>;
       activity: () => void;
