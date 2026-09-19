@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ThinkingIndicator from './ThinkingIndicator';
 
 type Suggestion = {
   scenario: 1 | 2 | 3 | 4 | 5;
@@ -132,36 +133,39 @@ export default function AdaptiveToast({
           <p className="text-xs leading-snug whitespace-pre-wrap" style={{ color: '#F5F0FA' }}>
             {hint ?? suggestion.message}
           </p>
-          {suggestion.offersCorrection && !hint && (
+          {!hint && hintLoading && (
+            <div className="mt-2">
+              <ThinkingIndicator />
+            </div>
+          )}
+          {!hint && !hintLoading && suggestion.offersCorrection && (
             <button
               type="button"
               onClick={handleAcceptCorrection}
-              disabled={hintLoading}
               className="mt-2 text-[11px] px-3 py-1 rounded-md font-medium"
               style={{
-                background: hintLoading ? '#1C0F30' : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 color: '#ffffff',
-                cursor: hintLoading ? 'default' : 'pointer',
+                cursor: 'pointer',
                 border: 'none',
               }}
             >
-              {hintLoading ? 'Working it out…' : 'Show me the fix'}
+              Show me the fix
             </button>
           )}
-          {suggestion.offersHint && !hint && (
+          {!hint && !hintLoading && suggestion.offersHint && (
             <button
               type="button"
               onClick={handleAcceptHint}
-              disabled={hintLoading}
               className="mt-2 text-[11px] px-3 py-1 rounded-md font-medium"
               style={{
-                background: hintLoading ? '#1C0F30' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
                 color: '#ffffff',
-                cursor: hintLoading ? 'default' : 'pointer',
+                cursor: 'pointer',
                 border: 'none',
               }}
             >
-              {hintLoading ? 'Thinking…' : 'Show me a hint'}
+              Show me a hint
             </button>
           )}
         </div>

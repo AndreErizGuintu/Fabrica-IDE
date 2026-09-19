@@ -4,6 +4,7 @@ import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
 import { useTheme } from '../../theme/ThemeContext';
 import type { ThemeUI } from '../../theme/themes';
+import ThinkingIndicator from '../adaptive/ThinkingIndicator';
 
 interface AIPanelProps {
   selectedCode: string;
@@ -156,6 +157,14 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
           const isUser = message.role === 'user';
           const isPendingAssistant = !isUser && loading && !message.content && index === messages.length - 1;
 
+          if (isPendingAssistant) {
+            return (
+              <div key={`${message.role}-${index}`} className="flex justify-start">
+                <ThinkingIndicator />
+              </div>
+            );
+          }
+
           return (
             <div key={`${message.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
               <div
@@ -167,7 +176,7 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
-                {isUser ? message.content : isPendingAssistant ? <LoadingIndicator C={C} /> : renderResponseContent(message.content, C)}
+                {isUser ? message.content : renderResponseContent(message.content, C)}
               </div>
             </div>
           );
@@ -534,7 +543,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                     cursor: askLoading || !askPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {askLoading ? 'Thinking...' : 'Send'}
+                  Send
                 </button>
               </div>
             </div>
@@ -579,7 +588,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                     cursor: planLoading || !planPrompt.trim() ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {planLoading ? 'Thinking...' : 'Send'}
+                  Send
                 </button>
               </div>
             </div>

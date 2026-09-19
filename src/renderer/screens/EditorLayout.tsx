@@ -19,9 +19,11 @@ import MirrorButton from '../components/mirror/MirrorButton';
 import SourceControlPanel from '../components/git/SourceControlPanel';
 import AndroidSdkButton from '../components/AndroidSdkButton';
 import AndroidBuildApkModal from '../components/AndroidBuildApkModal';
+import SettingsScreen from './SettingsScreen';
 import { lintCSharpFile, lintDartFile, lintPhpFile } from '../lsp/csharpLint';
 import { Tab } from '../types/index';
 import { useTheme } from '../theme/ThemeContext';
+import { useEditorSettings } from '../theme/EditorSettingsContext';
 
 type FloatingPanel = 'preview' | 'ai';
 
@@ -78,12 +80,14 @@ const DEFAULT_SIDEBAR_WIDTH = 240;
 const MIN_RIGHT_PANEL_WIDTH = 280;
 const MAX_RIGHT_PANEL_WIDTH = 600;
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
+const AUTOSAVE_DELAY_MS = 1200;
 
 interface MenuBarProps {
   onOpenFile: () => void;
   onSave: () => void;
   onCloseEditor: () => void;
   onCloseFolder: () => void;
+  onOpenSettings: () => void;
   hasActiveTab: boolean;
   onToggleSidebar: () => void;
   onToggleTerminal: () => void;
@@ -104,14 +108,16 @@ interface MenuBarProps {
   hasOpenTerminal: boolean;
   isFlutterProject: boolean;
   projectPath?: string;
+  autoSaveEnabled: boolean;
+  onToggleAutoSave: () => void;
 }
 
 function MenuBarComponent({
-  onOpenFile, onSave, onCloseEditor, onCloseFolder, hasActiveTab,
+  onOpenFile, onSave, onCloseEditor, onCloseFolder, onOpenSettings, hasActiveTab,
   onToggleSidebar, onToggleTerminal, onToggleAI, onToggleStats, onTogglePreview, onToggleGit,
   onRun, onStop, onUndo, onRedo, onCut, onCopy, onPaste, onFind,
   onNewTerminalTab, onKillActiveTerminalTab, hasOpenTerminal,
-  isFlutterProject, projectPath,
+  isFlutterProject, projectPath, autoSaveEnabled, onToggleAutoSave,
 }: MenuBarProps) {
   const { theme } = useTheme();
   const C = theme.ui;
@@ -131,9 +137,12 @@ function MenuBarComponent({
       { separator: true },
       { label: 'Save', shortcut: 'Ctrl+S', action: onSave },
       { label: 'Save As', shortcut: 'Ctrl+Shift+S', disabled: true },
+      { label: 'Autosave', shortcut: autoSaveEnabled ? 'On' : 'Off', action: onToggleAutoSave, checked: autoSaveEnabled },
       { separator: true },
       { label: 'Close Editor', shortcut: 'Ctrl+W', action: onCloseEditor },
       { label: 'Close Folder/Workspace', shortcut: '', action: onCloseFolder },
+      { separator: true },
+      { label: 'Settings', shortcut: 'Ctrl+,', action: onOpenSettings },
       { separator: true },
       { label: 'Exit', shortcut: '', disabled: true },
     ]},
@@ -217,7 +226,7 @@ function MenuBarComponent({
         onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.12)'}
         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
         onClick={() => { item.action(); setOpenMenu(null); }}>
-        <span>{item.label}</span>
+        <span>{item.checked !== undefined ? `${item.checked ? '✓' : ' '} ${item.label}` : item.label}</span>
         {item.shortcut && <span className="text-[10px]" style={{ color: C.textMuted }}>{item.shortcut}</span>}
       </button>
     );
@@ -473,6 +482,7 @@ function ToolWindowHeader({
 export default function EditorLayout({ onBack, initialFolder }: { onBack: () => void; initialFolder?: string }) {
   const { theme } = useTheme();
   const C = theme.ui;
+  const { autoSave, setAutoSave } = useEditorSettings();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [selectedCode, setSelectedCode] = useState('');
@@ -512,6 +522,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
   const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Hover state for VS Code-like toggle strips
   const [hoverStrip, setHoverStrip] = useState<'left' | 'right' | null>(null);
@@ -928,7 +939,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     });
   }, []);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (opts?: { silent?: boolean }) => {
     if (!activeTab || !activeTab.path) return;
     const result = await window.fileSystem.writeFile(activeTab.path, activeTab.content);
     if (result.success) {
@@ -938,11 +949,17 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       triggerPhpLint(activeTab.path);
       setTabs((prev) => prev.map((tab, index) => index === activeTabIndex ? { ...tab, isDirty: false } : tab));
       setGitRefreshToken((n) => n + 1);
-      showNotification(`Saved ${activeTab.filename}`, 'success');
-    } else {
+      if (!opts?.silent) showNotification(`Saved ${activeTab.filename}`, 'success');
+    } else if (!opts?.silent) {
       showNotification(`Failed to save ${activeTab.filename}`, 'error');
     }
-  }, [activeTab, activeTabIndex, triggerFlutterHotReload, triggerCSharpLint, triggerDartLint, triggerPhpLint]);
+  }, [activeTab, activeTabIndex, triggerFlutterHotReload, triggerCSharpLint, triggerDartLint, triggerPhpLint, showNotification]);
+
+  useEffect(() => {
+    if (!autoSave || !activeTab?.path || !activeTab.isDirty) return undefined;
+    const timer = window.setTimeout(() => { void handleSave({ silent: true }); }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [autoSave, activeTab?.path, activeTab?.isDirty, activeTab?.content, handleSave]);
 
   const handleRun = useCallback(async () => {
     if (!activeTab?.path) {
@@ -1018,10 +1035,23 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         setPreviewRefreshKey((prev) => prev + 1);
         showNotification('Preview refreshed', 'success');
       }
+      if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+        event.preventDefault();
+        setSettingsOpen(true);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, handleSave, triggerDartLint, triggerPhpLint]);
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [settingsOpen]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1116,6 +1146,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onSave={handleSave}
             onCloseEditor={() => { if (activeTab) handleCloseTab(activeTabIndex); }}
             onCloseFolder={onBack}
+            onOpenSettings={() => setSettingsOpen(true)}
             hasActiveTab={!!activeTab}
             onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
             onToggleTerminal={() => setShowOutput((prev) => !prev)}
@@ -1136,6 +1167,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             hasOpenTerminal={showOutput}
             isFlutterProject={isFlutterProject}
             projectPath={initialFolder}
+            autoSaveEnabled={autoSave}
+            onToggleAutoSave={() => {
+              setAutoSave(!autoSave);
+              showNotification(`Autosave turned ${!autoSave ? 'on' : 'off'}`, 'info');
+            }}
           />
         </div>
 
@@ -1712,6 +1748,91 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         col={cursorPosition.col}
         branch="main"
       />
+
+      {settingsOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSettingsOpen(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '90vw',
+              maxWidth: 1000,
+              height: '85vh',
+              maxHeight: 700,
+              background: '#080719',
+              border: '1px solid #29204A',
+              borderRadius: 12,
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              animation: 'fabricaDialogIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 20px',
+                borderBottom: '1px solid #29204A',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: '#A855F7', fontSize: 18 }}>⚙️</span>
+                <strong style={{ color: '#F4F1FF', fontSize: 15, fontFamily: 'Segoe UI, sans-serif' }}>
+                  Settings
+                </strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#A9A3C7',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease, color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
+                  e.currentTarget.style.color = '#F4F1FF';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#A9A3C7';
+                }}
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <SettingsScreen onBack={() => setSettingsOpen(false)} embedded />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

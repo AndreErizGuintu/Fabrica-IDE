@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { useTheme } from '../../theme/ThemeContext';
 
 export type TerminalRunPayload = { language: string; path: string; deviceId?: string };
 
@@ -36,12 +37,17 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
   },
   ref,
 ) => {
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const autoStartedRef = useRef(false);
   const [running, setRunning] = useState(false);
+  // Read via a ref inside the mount-only effect below so the terminal isn't
+  // torn down and recreated (losing scrollback/pty) every time the theme changes.
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   const setRunningState = useCallback((value: boolean) => {
     setRunning(value);
@@ -55,7 +61,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
       convertEol: true,
       fontFamily: 'Consolas, monospace',
       fontSize: 12,
-      theme: { background: '#1e1e2e', foreground: '#d4d4d4' },
+      theme: { ...themeRef.current.terminal },
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
@@ -156,6 +162,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
     });
     return () => window.cancelAnimationFrame(frame);
   }, [visible]);
+
+  useEffect(() => {
+    if (!xtermRef.current) return;
+    xtermRef.current.options.theme = { ...theme.terminal };
+  }, [theme]);
 
   // "+"-spawned tabs open a blank shell immediately, with nothing queued.
   useEffect(() => {
@@ -258,17 +269,17 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#1e1e2e' }}>
+    <div className="flex flex-col h-full" style={{ background: theme.terminal.background }}>
       {showHeader && (
         <div
           className="flex items-center justify-between px-3 py-1 shrink-0"
-          style={{ background: '#252535', borderBottom: '1px solid #2d2d3a' }}
+          style={{ background: theme.ui.bgCard, borderBottom: `1px solid ${theme.ui.border}` }}
         >
           <div className="flex items-center gap-2">
             <span
               className="text-[10px] font-medium"
               style={{
-                color: '#6b7280',
+                color: theme.ui.textMuted,
                 fontFamily: 'Segoe UI, sans-serif',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -276,7 +287,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
             >
               Terminal
             </span>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: running ? '#4ade80' : '#52525b' }} />
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: running ? theme.ui.success : theme.ui.textMuted }} />
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -285,8 +296,8 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
               disabled={!running}
               className="text-[10px] px-2 py-0.5 rounded transition-colors"
               style={{
-                color: running ? '#f87171' : '#3f3f46',
-                border: `1px solid ${running ? '#f87171' : '#2d2d3a'}`,
+                color: running ? theme.terminal.red : theme.ui.textMuted,
+                border: `1px solid ${running ? theme.terminal.red : theme.ui.border}`,
                 cursor: running ? 'pointer' : 'not-allowed',
                 background: 'transparent',
               }}
@@ -299,7 +310,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
               type="button"
               onClick={handleClear}
               className="text-[10px] transition-colors hover:text-white"
-              style={{ color: '#52525b' }}
+              style={{ color: theme.ui.textMuted }}
             >
               Clear
             </button>
@@ -308,7 +319,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>((
                 type="button"
                 onClick={onClose}
                 className="text-[10px] transition-colors hover:text-white"
-                style={{ color: '#52525b' }}
+                style={{ color: theme.ui.textMuted }}
               >
                 <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
               </button>

@@ -10,6 +10,7 @@ type EditorSettings = {
   indentType: IndentType;
   wordWrap: boolean;
   lineNumbers: boolean;
+  autoSave: boolean;
 };
 
 const DEFAULT_SETTINGS: EditorSettings = {
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: EditorSettings = {
   indentType: 'spaces',
   wordWrap: true,
   lineNumbers: true,
+  autoSave: false,
 };
 
 function readSettings(): EditorSettings {
@@ -40,6 +42,7 @@ type EditorSettingsContextValue = EditorSettings & {
   setIndentType: (indentType: IndentType) => void;
   setWordWrap: (wordWrap: boolean) => void;
   setLineNumbers: (lineNumbers: boolean) => void;
+  setAutoSave: (autoSave: boolean) => void;
 };
 
 const EditorSettingsContext = createContext<EditorSettingsContextValue | undefined>(undefined);
@@ -60,10 +63,11 @@ export function EditorSettingsProvider({ children }: { children: React.ReactNode
   const setIndentType = (indentType: IndentType) => update({ indentType });
   const setWordWrap = (wordWrap: boolean) => update({ wordWrap });
   const setLineNumbers = (lineNumbers: boolean) => update({ lineNumbers });
+  const setAutoSave = (autoSave: boolean) => update({ autoSave });
 
   return (
     <EditorSettingsContext.Provider
-      value={{ ...settings, setFontSize, setTabSize, setIndentType, setWordWrap, setLineNumbers }}
+      value={{ ...settings, setFontSize, setTabSize, setIndentType, setWordWrap, setLineNumbers, setAutoSave }}
     >
       {children}
     </EditorSettingsContext.Provider>

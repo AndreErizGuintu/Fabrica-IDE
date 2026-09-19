@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import Terminal, { TerminalHandle, TerminalRunPayload } from './Terminal';
+import { useTheme } from '../../theme/ThemeContext';
 
 /**
  * VS Code-style multi-tab terminal.
@@ -62,6 +63,8 @@ function nextShellTitle(): string {
 const RUN_TAB_TITLE = 'Terminal';
 
 const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClose, onRunningChange, cwd }, ref) => {
+  const { theme } = useTheme();
+  const C = theme.ui;
   // One id shared by both initializers so the first tab is active on the very
   // first render (no blank frame before an effect could seed it).
   const initialTabRef = useRef<TerminalTab | null>(null);
@@ -207,11 +210,11 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#1e1e2e' }}>
+    <div className="flex flex-col h-full" style={{ background: theme.terminal.background }}>
       {/* Combined tab bar + controls — one chrome row, the panel is only 160px tall */}
       <div
         className="flex items-stretch justify-between shrink-0"
-        style={{ background: '#252535', borderBottom: '1px solid #2d2d3a' }}
+        style={{ background: C.bgCard, borderBottom: `1px solid ${C.border}` }}
       >
         <div className="flex items-stretch min-w-0 overflow-x-auto">
           {tabs.map((tab) => {
@@ -227,19 +230,19 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
                 }}
                 className="group flex items-center gap-1.5 px-3 py-1 cursor-pointer transition-colors shrink-0"
                 style={{
-                  background: isActive ? '#1e1e2e' : 'transparent',
-                  borderTop: '2px solid ' + (isActive ? '#a855f7' : 'transparent'),
-                  borderRight: '1px solid #2d2d3a',
+                  background: isActive ? theme.terminal.background : 'transparent',
+                  borderTop: '2px solid ' + (isActive ? C.accentAI : 'transparent'),
+                  borderRight: `1px solid ${C.border}`,
                 }}
               >
                 <span
                   className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{ background: runningByTab[tab.id] ? '#4ade80' : '#52525b' }}
+                  style={{ background: runningByTab[tab.id] ? C.success : C.textMuted }}
                 />
                 <span
                   className="text-[10px] font-medium whitespace-nowrap"
                   style={{
-                    color: isActive ? '#ffffff' : '#6b7280',
+                    color: isActive ? C.textPrimary : C.textSecondary,
                     fontFamily: 'Segoe UI, sans-serif',
                   }}
                 >
@@ -253,7 +256,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
                     void closeTab(tab.id);
                   }}
                   className="text-[10px] rounded px-0.5 transition-colors hover:text-white hover:bg-white/10"
-                  style={{ color: isActive ? '#6b7280' : '#3f3f46' }}
+                  style={{ color: isActive ? C.textSecondary : C.textMuted }}
                 >
                   <i className="codicon codicon-close" style={{ fontSize: '10px' }} />
                 </button>
@@ -266,7 +269,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
             aria-label="New terminal"
             onClick={addShellTab}
             className="flex items-center px-2 transition-colors hover:text-white hover:bg-white/5 shrink-0"
-            style={{ color: '#6b7280' }}
+            style={{ color: C.textSecondary }}
             title="New terminal"
           >
             <i className="codicon codicon-add" style={{ fontSize: '12px' }} />
@@ -280,8 +283,8 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
             disabled={!activeRunning}
             className="text-[10px] px-2 py-0.5 rounded transition-colors"
             style={{
-              color: activeRunning ? '#f87171' : '#3f3f46',
-              border: '1px solid ' + (activeRunning ? '#f87171' : '#2d2d3a'),
+              color: activeRunning ? theme.terminal.red : C.textMuted,
+              border: '1px solid ' + (activeRunning ? theme.terminal.red : C.border),
               cursor: activeRunning ? 'pointer' : 'not-allowed',
               background: 'transparent',
             }}
@@ -294,7 +297,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
             type="button"
             onClick={handleClearActive}
             className="text-[10px] transition-colors hover:text-white"
-            style={{ color: '#52525b' }}
+            style={{ color: C.textMuted }}
           >
             Clear
           </button>
@@ -304,7 +307,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
               onClick={onClose}
               aria-label="Close terminal panel"
               className="text-[10px] transition-colors hover:text-white"
-              style={{ color: '#52525b' }}
+              style={{ color: C.textMuted }}
             >
               <i className="codicon codicon-close" style={{ fontSize: '12px' }} />
             </button>
@@ -313,7 +316,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
       </div>
 
       {/* Every tab stays mounted; only the active one is displayed. */}
-      <div className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-0 relative" style={{ background: theme.terminal.background }}>
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -333,7 +336,7 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
 
         {tabs.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <span className="text-[11px]" style={{ color: '#6b7280', fontFamily: 'Segoe UI, sans-serif' }}>
+            <span className="text-[11px]" style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
               No open terminals
             </span>
             <button
@@ -341,8 +344,8 @@ const TerminalTabs = forwardRef<TerminalTabsHandle, TerminalTabsProps>(({ onClos
               onClick={addShellTab}
               className="text-[10px] px-3 py-1 rounded transition-colors hover:bg-white/5"
               style={{
-                color: '#a855f7',
-                border: '1px solid rgba(168, 85, 247, 0.4)',
+                color: C.accentAI,
+                border: `1px solid ${C.accentAI}66`,
                 fontFamily: 'Segoe UI, sans-serif',
               }}
             >

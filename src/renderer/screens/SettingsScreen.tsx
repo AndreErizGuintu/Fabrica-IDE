@@ -5,7 +5,7 @@ import { themes } from '../theme/themes';
 import { useTheme } from '../theme/ThemeContext';
 import { useEditorSettings } from '../theme/EditorSettingsContext';
 
-type SettingsCategory = 'general' | 'appearance' | 'editor' | 'themes';
+type SettingsCategory = 'appearance';
 
 function ToggleSwitch({
   checked, onChange, label,
@@ -54,24 +54,12 @@ function SettingsRow({
   );
 }
 
-function GeneralSettingsCategory() {
-  return (
-    <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
-      General settings are coming soon.
-    </div>
-  );
-}
-
 function AppearanceSettingsCategory() {
-  return (
-    <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
-      Appearance settings (theme, etc.) are coming soon.
-    </div>
-  );
-}
-
-function EditorSettingsCategory() {
-  const { fontSize, tabSize, indentType, wordWrap, lineNumbers, setFontSize, setTabSize, setIndentType, setWordWrap, setLineNumbers } = useEditorSettings();
+  const {
+    fontSize, tabSize, indentType, wordWrap, lineNumbers, autoSave,
+    setFontSize, setTabSize, setIndentType, setWordWrap, setLineNumbers, setAutoSave,
+  } = useEditorSettings();
+  const { themeId, setTheme } = useTheme();
 
   return (
     <div className="max-w-2xl">
@@ -125,115 +113,124 @@ function EditorSettingsCategory() {
       <SettingsRow label="Line Numbers" description="Show line numbers in the editor gutter.">
         <ToggleSwitch checked={lineNumbers} onChange={setLineNumbers} label="Line Numbers" />
       </SettingsRow>
+
+      <SettingsRow label="Autosave" description="Automatically save the active file shortly after you stop typing.">
+        <ToggleSwitch checked={autoSave} onChange={setAutoSave} label="Autosave" />
+      </SettingsRow>
+
+      <div style={{ marginTop: 32 }}>
+        <div className="text-xs font-semibold uppercase tracking-wide"
+          style={{ color: '#A855F7', marginBottom: 8, fontFamily: 'Segoe UI, sans-serif' }}>
+          Color Theme
+        </div>
+        <div className="text-xs mb-4" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+          Changes the entire app&apos;s colors instantly — editor, sidebar, terminal, and panels.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          {themes.map((t) => {
+            const isActive = t.id === themeId;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTheme(t.id)}
+                style={{
+                  padding: 16, borderRadius: 10,
+                  background: isActive ? 'rgba(168, 85, 247, 0.1)' : '#12102D',
+                  border: isActive ? '2px solid #A855F7' : '1px solid #29204A',
+                  textAlign: 'left', cursor: 'pointer',
+                  transition: 'border-color 0.15s ease, background 0.15s ease',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  {[t.monaco.background, t.monaco.tokens.keyword, t.monaco.tokens.string, t.monaco.tokens.function, t.monaco.tokens.number].map((c, i) => (
+                    <span key={i} style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />
+                  ))}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#F4F1FF' }}>{t.name}</div>
+                {isActive && <div style={{ fontSize: 11, color: '#A855F7', marginTop: 4 }}>✓ Active</div>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
-function ThemesSettingsCategory() {
-  const { themeId, setTheme } = useTheme();
-  return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-        {themes.map((t) => {
-          const isActive = t.id === themeId;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTheme(t.id)}
-              style={{
-                padding: 16, borderRadius: 10,
-                background: isActive ? 'rgba(168, 85, 247, 0.1)' : '#12102D',
-                border: isActive ? '2px solid #A855F7' : '1px solid #29204A',
-                textAlign: 'left', cursor: 'pointer',
-                transition: 'border-color 0.15s ease, background 0.15s ease',
-              }}
-            >
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                {[t.monaco.background, t.monaco.tokens.keyword, t.monaco.tokens.string, t.monaco.tokens.function, t.monaco.tokens.number].map((c, i) => (
-                  <span key={i} style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />
-                ))}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#F4F1FF' }}>{t.name}</div>
-              {isActive && <div style={{ fontSize: 11, color: '#A855F7', marginTop: 4 }}>✓ Active</div>}
-            </button>
-          );
-        })}
-      </div>
-      <div className="text-xs mt-3" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
-        Applies to editor, preview, AI, and git panels
-      </div>
-    </div>
-  );
-}
-
-export default function SettingsScreen({ onBack }: { onBack: () => void }) {
+export default function SettingsScreen({
+  onBack,
+  embedded = false,
+}: {
+  onBack: () => void;
+  embedded?: boolean;
+}) {
   const { activeKey, modelName, models, switching, error, selectModel } = useModelSelector();
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('appearance');
 
   const categories: { id: SettingsCategory; label: string }[] = [
-    { id: 'general', label: 'General' },
     { id: 'appearance', label: 'Appearance' },
-    { id: 'editor', label: 'Editor' },
-    { id: 'themes', label: 'Themes' },
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
-      <AppSidebar
-        active="settings"
-        onNavigate={(screen) => {
-          if (screen === 'main') onBack();
-        }}
-        bottomSlot={
-          <>
-            <div className="text-[10px] uppercase tracking-wider mb-1.5"
-              style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
-              Default AI model
-            </div>
-            {switching ? (
-              <div className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
-                style={{
-                  backgroundColor: '#100718',
-                  color: '#B8AFC2',
-                  fontFamily: 'Segoe UI, sans-serif',
-                  border: '1px solid rgba(168, 85, 247, 0.24)',
-                }}>
-                <span>Switching…</span>
-                <span className="inline-block w-3 h-3 rounded-full animate-spin"
-                  style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }} />
+    <div className={`flex ${embedded ? 'h-full' : 'h-screen'} overflow-hidden`} style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+      {!embedded && (
+        <AppSidebar
+          active="settings"
+          onNavigate={(screen) => {
+            if (screen === 'main') onBack();
+          }}
+          bottomSlot={
+            <>
+              <div className="text-[10px] uppercase tracking-wider mb-1.5"
+                style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                Default AI model
               </div>
-            ) : (
-              <div className="relative">
-                <select
-                  value={activeKey ?? ''}
-                  onChange={(e) => selectModel(e.target.value as ModelOption['key'])}
-                  disabled={models.length === 0}
-                  className="w-full appearance-none px-3 py-1.5 pr-7 rounded text-sm"
+              {switching ? (
+                <div className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
                   style={{
                     backgroundColor: '#100718',
-                    color: '#F5F0FA',
+                    color: '#B8AFC2',
                     fontFamily: 'Segoe UI, sans-serif',
                     border: '1px solid rgba(168, 85, 247, 0.24)',
                   }}>
-                  {models.length === 0 && <option value="">{modelName}</option>}
-                  {models.map((m) => (
-                    <option key={m.key} value={m.key}>{m.displayName}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute top-1/2 -translate-y-1/2"
-                  style={{ right: '10px', color: '#B8AFC2' }}>
-                  ▼
-                </span>
-              </div>
-            )}
-            {error && (
-              <div className="text-xs mt-1" style={{ color: '#f87171', fontFamily: 'Segoe UI, sans-serif' }}>
-                {error}
-              </div>
-            )}
-          </>
-        }
-      />
+                  <span>Switching…</span>
+                  <span className="inline-block w-3 h-3 rounded-full animate-spin"
+                    style={{ border: '2px solid rgba(168, 85, 247, 0.3)', borderTopColor: '#a855f7' }} />
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    value={activeKey ?? ''}
+                    onChange={(e) => selectModel(e.target.value as ModelOption['key'])}
+                    disabled={models.length === 0}
+                    className="w-full appearance-none px-3 py-1.5 pr-7 rounded text-sm"
+                    style={{
+                      backgroundColor: '#100718',
+                      color: '#F5F0FA',
+                      fontFamily: 'Segoe UI, sans-serif',
+                      border: '1px solid rgba(168, 85, 247, 0.24)',
+                    }}>
+                    {models.length === 0 && <option value="">{modelName}</option>}
+                    {models.map((m) => (
+                      <option key={m.key} value={m.key}>{m.displayName}</option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute top-1/2 -translate-y-1/2"
+                    style={{ right: '10px', color: '#B8AFC2' }}>
+                    ▼
+                  </span>
+                </div>
+              )}
+              {error && (
+                <div className="text-xs mt-1" style={{ color: '#f87171', fontFamily: 'Segoe UI, sans-serif' }}>
+                  {error}
+                </div>
+              )}
+            </>
+          }
+        />
+      )}
 
       <div className="flex flex-col w-44 shrink-0"
         style={{ backgroundColor: '#100718', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}>
@@ -269,10 +266,7 @@ export default function SettingsScreen({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-          {activeCategory === 'general' && <GeneralSettingsCategory />}
           {activeCategory === 'appearance' && <AppearanceSettingsCategory />}
-          {activeCategory === 'editor' && <EditorSettingsCategory />}
-          {activeCategory === 'themes' && <ThemesSettingsCategory />}
         </div>
       </div>
     </div>
