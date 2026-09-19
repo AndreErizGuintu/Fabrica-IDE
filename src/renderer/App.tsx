@@ -684,7 +684,7 @@ function MainMenu({
             </div>
             <div className="text-xs sm:text-sm mt-1"
               style={{ color: C.textPrimary, fontFamily: 'Segoe UI, sans-serif' }}>
-              Offline AI completion for Rust and Go · Faster indexing · Terminal fixes
+              Welcome to Fabrica IDE! Check out the new features and improvements in this version.
             </div>
           </div>
         </div>
