@@ -124,6 +124,7 @@ contextBridge.exposeInMainWorld('terminal', {
   run: (payload: { language: string; path: string; deviceId?: string }) => ipcRenderer.invoke('terminal:run', payload),
   create: (payload?: { cwd?: string }) => ipcRenderer.invoke('terminal:create', payload ?? {}),
   hotReload: () => ipcRenderer.invoke('terminal:hotReload'),
+  hotRestart: () => ipcRenderer.invoke('terminal:hotRestart'),
   input: (sessionId: string, data: string) => ipcRenderer.send('terminal:input', { sessionId, data }),
   stop: (sessionId: string) => ipcRenderer.invoke('terminal:stop', { sessionId }),
   onOutput: (cb: (sessionId: string, data: string) => void) => {

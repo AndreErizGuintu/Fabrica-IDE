@@ -1080,6 +1080,20 @@ ipcMain.handle('terminal:hotReload', async () => {
   return { success: true };
 });
 
+ipcMain.handle('terminal:hotRestart', async () => {
+  if (!activeFlutterSessionId) {
+    return { success: true };
+  }
+
+  const session = ptySessions.get(activeFlutterSessionId);
+  if (!session) {
+    return { success: true };
+  }
+
+  session.write('R');
+  return { success: true };
+});
+
 ipcMain.on('terminal:input', (_event, { sessionId, data }: { sessionId: string; data: string }) => {
   ptySessions.get(sessionId)?.write(data);
 });

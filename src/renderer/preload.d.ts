@@ -297,6 +297,7 @@ declare global {
       run: (payload: { language: string; path: string; deviceId?: string }) => Promise<{ success: boolean; sessionId?: string; html?: boolean; error?: string }>;
       create: (payload?: { cwd?: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
       hotReload: () => Promise<{ success: boolean }>;
+      hotRestart: () => Promise<{ success: boolean }>;
       input: (sessionId: string, data: string) => void;
       stop: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
       onOutput: (cb: (sessionId: string, data: string) => void) => () => void;
