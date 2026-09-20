@@ -138,6 +138,7 @@
     "electron-updater": "^6.3.9",
     "intelephense": "^1.18.5",
     "lucide-react": "^1.46.0",
+    "monaco-editor": "^0.55.1",
     "node-llama-cpp": "3.20.0",
     "process": "^0.11.10",
     "react": "^19.0.0",
