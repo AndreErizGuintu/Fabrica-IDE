@@ -241,6 +241,7 @@ declare global {
     };
     runner: {
       checkSDK: (runtime: string) => Promise<{ available: boolean; version?: string; error?: string }>;
+      getVendorAssetPaths: () => Promise<{ react: string; reactDom: string; babel: string }>;
     };
     model: {
       getActiveModel: () => Promise<{ success: boolean; name?: string; key?: 'primary' | 'cpuFallback'; error?: string }>;

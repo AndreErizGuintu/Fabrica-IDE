@@ -52,7 +52,8 @@
     "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon . -- {@}\" --",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"-r ts-node/register --no-warnings\" webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
-    "test": "jest"
+    "test": "jest",
+    "vendor:sandbox": "node scripts/vendor-react-sandbox.js"
   },
   "browserslist": [
     "extends browserslist-config-erb"
@@ -141,11 +142,13 @@
     "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-is": "^19.3.0",
     "react-rnd": "^10.5.3",
     "react-router-dom": "^7.3.0",
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@babel/standalone": "^7.29.9",
     "@electron/rebuild": "^3.7.1",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.15",
     "@svgr/webpack": "^8.1.0",
@@ -196,7 +199,9 @@
     "postcss": "^8.5.14",
     "postcss-loader": "^8.2.1",
     "prettier": "^3.5.3",
+    "react-dom-sandbox-vendor": "npm:react-dom@^18.3.1",
     "react-refresh": "^0.16.0",
+    "react-sandbox-vendor": "npm:react@^18.3.1",
     "react-test-renderer": "^19.0.0",
     "rimraf": "^6.0.1",
     "sass": "^1.86.0",
@@ -250,6 +255,10 @@
       {
         "from": "resources/runtimes",
         "to": "runtimes"
+      },
+      {
+        "from": "resources/vendor",
+        "to": "vendor"
       }
     ],
     "publish": {

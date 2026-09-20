@@ -33,7 +33,7 @@ import { ensureRequiredImports } from './translateImports';
 import { appendDeprecatedApiGuard, applyDeprecatedApiFixes } from './deprecatedApiGuard';
 import { ensureGpuDeviceIsolation } from './gpuIsolation';
 import { startMirrorServer, stopMirrorServer } from './mirrorProcess';
-import { registerAndroidSdkIpc, checkAndroidSdk, buildToolEnv } from './androidSdk';
+import { registerAndroidSdkIpc, checkAndroidSdk, buildToolEnv, resolveJavaHome } from './androidSdk';
 import { resolveHtmlPath } from './util';
 import {
   RUN_SENTINEL_SUFFIX,
@@ -130,6 +130,17 @@ const getFlutterBinary = () => {
 const getBundledRuntimePathEntries = () =>
   (['node', 'php', 'dotnet', 'dart'] as RuntimeName[]).map(getBundledRuntimeDir);
 
+// Static UMD/standalone assets for the in-app .tsx sandbox preview (React,
+// ReactDOM, Babel standalone) — same extraResources pattern as models/runtimes,
+// just files to be read as text rather than binaries to be spawned.
+const getBundledVendorDir = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'vendor');
+  }
+
+  return path.join(app.getAppPath(), 'resources', 'vendor');
+};
+
 const prependBundledRuntimePaths = (env: NodeJS.ProcessEnv = process.env) => {
   const pathEntries = getBundledRuntimePathEntries();
   const existingPath = env.PATH ?? env.Path ?? '';
@@ -172,11 +183,12 @@ const writeRecentProjects = (projects: RecentProject[]) => {
 // version-check, the terminal:run spawn, and (formerly) the separate flutter:run
 // handler all resolve through here instead of each keeping their own switch.
 function getRunConfig(targetPath: string, language: string, deviceId?: string):
-  | { cmd: string; args: string[]; cwd: string }
+  | { cmd: string; args: string[]; cwd: string; andThen?: { cmd: string; args: string[] } }
   | { html: true }
   | { error: string } {
   switch (language) {
     case 'html':
+    case 'tsx':
       return { html: true };
     case 'php':
       return { cmd: getBundledRuntimeBinary('php'), args: ['-f', targetPath], cwd: path.dirname(targetPath) };
@@ -187,6 +199,30 @@ function getRunConfig(targetPath: string, language: string, deviceId?: string):
       return { cmd: getBundledRuntimeBinary('dotnet'), args: ['run', targetPath], cwd: path.dirname(targetPath) };
     case 'dart':
       return { cmd: getBundledRuntimeBinary('dart'), args: ['run', targetPath], cwd: path.dirname(targetPath) };
+    case 'java': {
+      const dir = path.dirname(targetPath);
+      const fileBase = path.basename(targetPath, '.java');
+      const javaHome = resolveJavaHome();
+      const javac = javaHome ? path.join(javaHome, 'bin', 'javac.exe') : 'javac.exe';
+      const javaBin = javaHome ? path.join(javaHome, 'bin', 'java.exe') : 'java.exe';
+
+      if (targetPath && fs.existsSync(targetPath)) {
+        const source = fs.readFileSync(targetPath, 'utf-8');
+        const publicMatch = source.match(/public\s+class\s+(\w+)/);
+        const anyMatch = source.match(/\bclass\s+(\w+)/);
+        const className = (publicMatch ?? anyMatch)?.[1];
+
+        if (!className) {
+          return { error: 'No class declaration found in this file.' };
+        }
+        if (className !== fileBase) {
+          return { error: `Class name "${className}" doesn't match file name "${fileBase}.java". Rename the file to "${className}.java" to match, and try again.` };
+        }
+        return { cmd: javac, args: [targetPath], cwd: dir, andThen: { cmd: javaBin, args: [className] } };
+      }
+
+      return { cmd: javac, args: [], cwd: dir };
+    }
     case 'flutter':
       // Project-level (whole-folder `flutter run`), so targetPath is the folder itself, not a file.
       // deviceId comes from the run-target selector in the renderer; falls back to
@@ -803,6 +839,7 @@ const LANGUAGE_BY_RUNTIME: Record<string, string> = {
   php: 'php',
   dotnet: 'cs',
   dart: 'dart',
+  java: 'java',
 };
 
 ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
@@ -821,6 +858,15 @@ ipcMain.handle('run:checkSDK', async (_event, runtime: string) => {
       }
     });
   });
+});
+
+ipcMain.handle('runner:getVendorAssetPaths', () => {
+  const vendorDir = getBundledVendorDir();
+  return {
+    react: path.join(vendorDir, 'react.production.min.js'),
+    reactDom: path.join(vendorDir, 'react-dom.production.min.js'),
+    babel: path.join(vendorDir, 'babel.min.js'),
+  };
 });
 
 ipcMain.handle('shell:openTerminal', async (_event, cwd?: string) => {
@@ -912,7 +958,7 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
     // command finishes, instead of the pty having nothing left running.
     const ptyProcess = pty.spawn('cmd.exe', [], {
       cwd: config.cwd,
-      env,
+      env: prependBundledRuntimePaths(env),
       cols: 80,
       rows: 24,
     });
@@ -973,7 +1019,11 @@ ipcMain.handle('terminal:run', async (event, { language, path: targetPath, devic
       event.sender.send('terminal:exit', { sessionId, exitCode });
     });
 
-    const commandLine = buildCommandLine(config.cmd, config.args);
+    // andThen (currently Java only): compile then execute as one line in the same
+    // persistent shell, chained with && so a failed compile never reaches the run step.
+    const commandLine = config.andThen
+      ? `${buildCommandLine(config.cmd, config.args)} && ${buildCommandLine(config.andThen.cmd, config.andThen.args)}`
+      : buildCommandLine(config.cmd, config.args);
     ptyProcess.write(`${commandLine}${RUN_SENTINEL_SUFFIX}\r`);
 
     return { success: true, sessionId };
@@ -1033,7 +1083,7 @@ ipcMain.handle('terminal:create', async (event, { cwd }: { cwd?: string } = {}) 
   try {
     const ptyProcess = pty.spawn('cmd.exe', [], {
       cwd: startDir,
-      env,
+      env: prependBundledRuntimePaths(env),
       cols: 80,
       rows: 24,
     });

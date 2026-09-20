@@ -47,17 +47,73 @@ function getLanguage(filename: string): string {
 }
 
 const RUNTIME_BY_EXT: Record<string, string> = {
-  js: 'node', ts: 'node', php: 'php', cs: 'dotnet', dart: 'dart',
+  js: 'node', ts: 'node', php: 'php', cs: 'dotnet', dart: 'dart', java: 'java',
 };
 
 const RUN_LANGUAGE_BY_EXT: Record<string, string> = {
-  html: 'html', js: 'js', ts: 'ts', php: 'php', cs: 'cs', dart: 'dart',
+  html: 'html', js: 'js', ts: 'ts', tsx: 'tsx', php: 'php', cs: 'cs', dart: 'dart', java: 'java',
 };
 
 const LANGUAGE_NAME_TO_EXT: Record<string, string> = {
   JavaScript: 'js', TypeScript: 'ts', Dart: 'dart', 'C#': 'cs',
   PHP: 'php', Python: 'py', Java: 'java', Go: 'go', Rust: 'rs',
 };
+
+// Sandboxed .tsx preview: no bundler, no CRA/Vite scaffold. The vendor React/
+// ReactDOM/Babel-standalone UMD sources are inlined verbatim so the whole thing
+// runs from a single srcDoc with zero network access. Babel.transform runs the
+// typescript+react presets in isTSX mode (so plain .tsx type annotations don't
+// need a real module resolver), and transform-modules-commonjs turns any
+// `export default` into an assignment our tiny module/exports shim can read —
+// convention: the previewed file must expose its component as either a default
+// export or a top-level `App` identifier, since there is no real module system
+// to resolve imports against.
+function buildReactSandboxHtml(vendor: { react: string; reactDom: string; babel: string }, source: string): string {
+  const escapeScriptClose = (text: string) => text.replace(/<\/script/gi, '<\\/script');
+  const escapedSource = escapeScriptClose(JSON.stringify(source));
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>${escapeScriptClose(vendor.react)}</script>
+  <script>${escapeScriptClose(vendor.reactDom)}</script>
+  <script>${escapeScriptClose(vendor.babel)}</script>
+  <script>
+    (function () {
+      try {
+        var source = ${escapedSource};
+        var result = Babel.transform(source, {
+          filename: 'sandbox.tsx',
+          presets: [['typescript', { isTSX: true, allExtensions: true }], 'react'],
+          plugins: ['transform-modules-commonjs'],
+        });
+        var mod = { exports: {} };
+        var run = new Function('React', 'ReactDOM', 'exports', 'module', result.code);
+        run(React, ReactDOM, mod.exports, mod);
+        var Component = mod.exports.default || mod.exports.App || window.App;
+        if (!Component) {
+          throw new Error('No component found. Export a default component or define one named "App".');
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Component));
+      } catch (err) {
+        document.getElementById('root').innerHTML =
+          '<pre style="color:#f87171;white-space:pre-wrap;font-family:Consolas,monospace;">' +
+          String(err && err.message ? err.message : err).replace(/</g, '&lt;') +
+          '</pre>';
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
 
 function extractTranslatedCode(raw: string): string {
   const text = raw.trim();
@@ -522,6 +578,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
   const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
   const [previewLoaded, setPreviewLoaded] = useState(false);
+  // Blob URL (not the raw HTML) — see handleRunReactSandbox. A srcDoc document
+  // inherits the main app's CSP and can only add restrictions, never loosen it,
+  // which blocks Babel's eval-based transpile; navigating to its own blob: URL
+  // makes it a separate document governed only by its own CSP meta tag.
+  const [tsxPreviewUrl, setTsxPreviewUrl] = useState<string | null>(null);
+  const tsxPreviewUrlRef = useRef<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Hover state for VS Code-like toggle strips
@@ -540,8 +602,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const aiPanelState = useAIPanelState();
   const activeTab = tabs[activeTabIndex] ?? null;
+  // Broadened to include .tsx so Preview renders its sandboxed output instead of
+  // the "not available" placeholder once handleRunReactSandbox has populated
+  // tsxPreviewUrl. Unlike .html/.css this does NOT auto-show Preview on open —
+  // see the auto-show effect below, which checks its own narrower condition.
   const isHtmlFile = activeTab
-    ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
+    ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css') || activeTab.filename.endsWith('.tsx')
     : false;
 
   const showNotification = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
@@ -550,9 +616,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     notificationTimeoutRef.current = setTimeout(() => setNotification(null), 2000);
   }, []);
 
-  // Auto-show Preview when an HTML/CSS file opens. Auto-hide when switching to non-HTML.
+  // Auto-show Preview when an HTML/CSS file opens. Auto-hide when switching away.
+  // .tsx is deliberately excluded here — its preview is Run-triggered only
+  // (handleRunReactSandbox), never shown just from opening the file.
   useEffect(() => {
-    if (isHtmlFile && activeTab) {
+    const isAutoPreviewFile = activeTab
+      ? activeTab.filename.endsWith('.html') || activeTab.filename.endsWith('.css')
+      : false;
+    if (isAutoPreviewFile) {
       setPreviewLoaded(true);
       setPreviewRefreshKey((prev) => prev + 1);
       setShowPreview(true);
@@ -598,6 +669,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const previewHtml = useMemo(() => {
     if (!activeTab) return '';
+    if (activeTab.filename.endsWith('.tsx')) {
+      // Rendered via the src (blob URL) prop instead — see tsxPreviewUrl.
+      return '';
+    }
     if (activeTab.filename.endsWith('.css')) {
       return `<!DOCTYPE html>
 <html>
@@ -629,6 +704,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     }
     return activeTab.content;
   }, [activeTab]);
+
+  const tsxPreviewSrc = activeTab?.filename.endsWith('.tsx') ? tsxPreviewUrl ?? undefined : undefined;
 
   const handleSidebarStripMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -961,6 +1038,57 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     return () => window.clearTimeout(timer);
   }, [autoSave, activeTab?.path, activeTab?.isDirty, activeTab?.content, handleSave]);
 
+  // No spawn, no terminal — reads the current buffer, transpiles it in-process
+  // with the bundled Babel standalone, and mounts the result into the existing
+  // Preview panel. See buildReactSandboxHtml for the transpile/mount contract.
+  const handleRunReactSandbox = useCallback(async () => {
+    if (!activeTab) return;
+    showNotification(`Running ${activeTab.filename}...`, 'info');
+    try {
+      const vendorPaths = await window.runner.getVendorAssetPaths();
+      const [reactFile, reactDomFile, babelFile] = await Promise.all([
+        window.fileSystem.readFile(vendorPaths.react),
+        window.fileSystem.readFile(vendorPaths.reactDom),
+        window.fileSystem.readFile(vendorPaths.babel),
+      ]);
+      if (!reactFile.success || !reactDomFile.success || !babelFile.success) {
+        setRunError('React sandbox assets not found. Run "npm run vendor:sandbox" and repackage.');
+        setShowOutput(true);
+        return;
+      }
+      const html = buildReactSandboxHtml(
+        { react: reactFile.content ?? '', reactDom: reactDomFile.content ?? '', babel: babelFile.content ?? '' },
+        activeTab.content,
+      );
+      const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      // Revoke the previous URL before the new one is ever assigned anywhere
+      // (ref or state) — so a second quick Run click can never leave two blob
+      // URLs alive at once, even mid-transition.
+      if (tsxPreviewUrlRef.current) {
+        URL.revokeObjectURL(tsxPreviewUrlRef.current);
+      }
+      tsxPreviewUrlRef.current = blobUrl;
+      setTsxPreviewUrl(blobUrl);
+      setPreviewLoaded(true);
+      setShowPreview(true);
+      setPreviewRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      setRunError(`Failed to run React sandbox: ${String(err)}`);
+      setShowOutput(true);
+    }
+  }, [activeTab, showNotification]);
+
+  // Blob URLs created for the .tsx sandbox preview are only ever referenced via
+  // tsxPreviewUrlRef, so this is the one place a leftover URL could otherwise
+  // survive past the component's lifetime.
+  useEffect(() => {
+    return () => {
+      if (tsxPreviewUrlRef.current) {
+        URL.revokeObjectURL(tsxPreviewUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleRun = useCallback(async () => {
     if (!activeTab?.path) {
       setRunError('No file saved. Save the file before running.');
@@ -969,6 +1097,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     const ext = activeTab.filename.split('.').pop()?.toLowerCase();
     const language = ext ? RUN_LANGUAGE_BY_EXT[ext] : undefined;
     if (!language) { setRunError(`Cannot run .${ext ?? '?'} files directly.`); setShowOutput(true); return; }
+    if (language === 'tsx') {
+      setRunError(null);
+      await handleRunReactSandbox();
+      return;
+    }
     if (language !== 'html') {
       const runtime = ext ? RUNTIME_BY_EXT[ext] : undefined;
       const sdkCheck = runtime ? await window.runner.checkSDK(runtime) : undefined;
@@ -980,7 +1113,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
     setRunError(null); setShowOutput(true);
     showNotification(`Running ${activeTab.filename}...`, 'info');
     await terminalRef.current?.run({ language, path: activeTab.path });
-  }, [activeTab]);
+  }, [activeTab, handleRunReactSandbox]);
 
   const handleFlutterRun = useCallback(async (target: FlutterTarget) => {
     if (!initialFolder) return;
@@ -1505,9 +1638,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                   <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
                     {previewLoaded ? (
                       <Preview
-                        key={activeTab?.path + previewHtml}
+                        key={activeTab?.path + (tsxPreviewSrc ?? previewHtml)}
                         html={previewHtml}
                         isHtmlFile={isHtmlFile}
+                        src={tsxPreviewSrc}
                         zoom={1}
                         refreshKey={previewRefreshKey}
                       />
@@ -1628,9 +1762,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </ToolWindowHeader>
           <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
             <Preview
-              key={activeTab?.path + previewHtml}
+              key={activeTab?.path + (tsxPreviewSrc ?? previewHtml)}
               html={previewHtml}
               isHtmlFile={isHtmlFile}
+              src={tsxPreviewSrc}
               zoom={1}
               refreshKey={previewRefreshKey}
             />

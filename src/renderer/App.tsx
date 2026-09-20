@@ -49,7 +49,7 @@ function getLastPathSegment(targetPath: string): string {
   return targetPath.split(/[\\/]/).filter(Boolean).pop() ?? targetPath;
 }
 
-type TemplateId = 'web' | 'csharp' | 'flutter';
+type TemplateId = 'web' | 'csharp' | 'flutter' | 'blank';
 
 type ProjectTemplate = {
   id: TemplateId;
@@ -76,6 +76,12 @@ const PROJECT_TEMPLATES: ProjectTemplate[] = [
     name: 'Flutter (Windows)',
     description: 'Full Windows desktop preview app via flutter create. Desktop only.',
     icon: <Smartphone size={28} strokeWidth={1.6} />,
+  },
+  {
+    id: 'blank',
+    name: 'Blank',
+    description: 'Empty folder — no starter files. Use the terminal to scaffold whatever you want.',
+    icon: <FolderOpen size={28} strokeWidth={1.6} />,
   },
 ];
 
@@ -185,6 +191,9 @@ Console.WriteLine(Greet("World"));
 `,
         },
       ];
+
+    case 'blank':
+      return [];
 
     case 'flutter':
     default:
