@@ -40,12 +40,12 @@ function SettingsRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-6 py-3"
-      style={{ borderBottom: '1px solid #180C29' }}>
+      style={{ borderBottom: '1px solid #29204A' }}>
       <div>
-        <div className="text-sm font-medium" style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+        <div className="text-sm font-medium" style={{ color: '#F4F1FF', fontFamily: 'Segoe UI, sans-serif' }}>
           {label}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+        <div className="text-xs mt-0.5" style={{ color: '#A9A3C7', fontFamily: 'Segoe UI, sans-serif' }}>
           {description}
         </div>
       </div>
@@ -69,7 +69,7 @@ function AppearanceSettingsCategory() {
             onChange={(e) => setFontSize(Number(e.target.value))}
             className="w-40" style={{ accentColor: '#a855f7' }} />
           <span className="text-xs w-10 text-right"
-            style={{ color: '#F5F0FA', fontFamily: 'Space Mono, monospace' }}>
+            style={{ color: '#F4F1FF', fontFamily: 'Space Mono, monospace' }}>
             {fontSize}px
           </span>
         </div>
@@ -79,9 +79,9 @@ function AppearanceSettingsCategory() {
         <select value={tabSize} onChange={(e) => setTabSize(Number(e.target.value))}
           className="px-3 py-1.5 rounded text-sm outline-none"
           style={{
-            backgroundColor: '#100718',
-            color: '#F5F0FA',
-            border: '1px solid rgba(168, 85, 247, 0.24)',
+            backgroundColor: '#080719',
+            color: '#F4F1FF',
+            border: '1px solid #29204A',
             fontFamily: 'Segoe UI, sans-serif',
           }}>
           <option value={2}>2</option>
@@ -91,13 +91,13 @@ function AppearanceSettingsCategory() {
       </SettingsRow>
 
       <SettingsRow label="Indentation" description="Insert spaces or tab characters when pressing Tab.">
-        <div className="flex rounded overflow-hidden" style={{ border: '1px solid rgba(168, 85, 247, 0.24)' }}>
+        <div className="flex rounded overflow-hidden" style={{ border: '1px solid #29204A' }}>
           {(['spaces', 'tabs'] as const).map((option) => (
             <button key={option} type="button" onClick={() => setIndentType(option)}
               className="px-3 py-1.5 text-xs font-medium capitalize transition-colors"
               style={{
-                backgroundColor: indentType === option ? '#a855f7' : '#100718',
-                color: indentType === option ? '#ffffff' : '#B8AFC2',
+                backgroundColor: indentType === option ? '#a855f7' : '#080719',
+                color: indentType === option ? '#ffffff' : '#A9A3C7',
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
               {option}
@@ -123,7 +123,7 @@ function AppearanceSettingsCategory() {
           style={{ color: '#A855F7', marginBottom: 8, fontFamily: 'Segoe UI, sans-serif' }}>
           Color Theme
         </div>
-        <div className="text-xs mb-4" style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+        <div className="text-xs mb-4" style={{ color: '#A9A3C7', fontFamily: 'Segoe UI, sans-serif' }}>
           Changes the entire app&apos;s colors instantly — editor, sidebar, terminal, and panels.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -173,7 +173,7 @@ export default function SettingsScreen({
   ];
 
   return (
-    <div className={`flex ${embedded ? 'h-full' : 'h-screen'} overflow-hidden`} style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+    <div className={`flex ${embedded ? 'h-full' : 'h-screen'} overflow-hidden`} style={{ backgroundColor: '#080719', color: '#F4F1FF' }}>
       {!embedded && (
         <AppSidebar
           active="settings"
@@ -183,16 +183,16 @@ export default function SettingsScreen({
           bottomSlot={
             <>
               <div className="text-[10px] uppercase tracking-wider mb-1.5"
-                style={{ color: '#81748F', fontFamily: 'Segoe UI, sans-serif' }}>
+                style={{ color: '#77718F', fontFamily: 'Segoe UI, sans-serif' }}>
                 Default AI model
               </div>
               {switching ? (
                 <div className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
                   style={{
-                    backgroundColor: '#100718',
-                    color: '#B8AFC2',
+                    backgroundColor: '#080719',
+                    color: '#A9A3C7',
                     fontFamily: 'Segoe UI, sans-serif',
-                    border: '1px solid rgba(168, 85, 247, 0.24)',
+                    border: '1px solid #29204A',
                   }}>
                   <span>Switching…</span>
                   <span className="inline-block w-3 h-3 rounded-full animate-spin"
@@ -206,10 +206,10 @@ export default function SettingsScreen({
                     disabled={models.length === 0}
                     className="w-full appearance-none px-3 py-1.5 pr-7 rounded text-sm"
                     style={{
-                      backgroundColor: '#100718',
-                      color: '#F5F0FA',
+                      backgroundColor: '#080719',
+                      color: '#F4F1FF',
                       fontFamily: 'Segoe UI, sans-serif',
-                      border: '1px solid rgba(168, 85, 247, 0.24)',
+                      border: '1px solid #29204A',
                     }}>
                     {models.length === 0 && <option value="">{modelName}</option>}
                     {models.map((m) => (
@@ -217,7 +217,7 @@ export default function SettingsScreen({
                     ))}
                   </select>
                   <span className="pointer-events-none absolute top-1/2 -translate-y-1/2"
-                    style={{ right: '10px', color: '#B8AFC2' }}>
+                    style={{ right: '10px', color: '#A9A3C7' }}>
                     ▼
                   </span>
                 </div>
@@ -233,10 +233,10 @@ export default function SettingsScreen({
       )}
 
       <div className="flex flex-col w-44 shrink-0"
-        style={{ backgroundColor: '#100718', borderRight: '1px solid rgba(168, 85, 247, 0.24)' }}>
+        style={{ backgroundColor: '#100A24', borderRight: '1px solid #29204A' }}>
         <div className="px-4 py-4">
           <span className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: '#B8AFC2', fontFamily: 'Segoe UI, sans-serif' }}>
+            style={{ color: '#A9A3C7', fontFamily: 'Segoe UI, sans-serif' }}>
             Categories
           </span>
         </div>
@@ -247,7 +247,7 @@ export default function SettingsScreen({
               className="w-full text-left px-3 py-1.5 text-sm rounded transition-colors hover:bg-white/5"
               style={{
                 backgroundColor: activeCategory === category.id ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                color: activeCategory === category.id ? '#a855f7' : '#B8AFC2',
+                color: activeCategory === category.id ? '#a855f7' : '#A9A3C7',
                 fontFamily: 'Segoe UI, sans-serif',
               }}>
               {category.label}
@@ -258,9 +258,9 @@ export default function SettingsScreen({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0"
-          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.24)' }}>
+          style={{ borderBottom: '1px solid #29204A' }}>
           <h1 className="text-base sm:text-lg font-semibold"
-            style={{ color: '#ffffff', fontFamily: 'Segoe UI, sans-serif' }}>
+            style={{ color: '#F4F1FF', fontFamily: 'Segoe UI, sans-serif' }}>
             {categories.find((c) => c.id === activeCategory)?.label}
           </h1>
         </div>

@@ -19,6 +19,13 @@ interface PreviewProps {
   zoom?: number;
   device?: DeviceType;
   refreshKey?: number;
+  // When set, the iframe navigates to this URL (e.g. a blob: URL) instead of
+  // rendering `html` via srcDoc. srcDoc documents inherit and only ever add
+  // restrictions on top of the parent document's CSP, which breaks content
+  // that needs a looser policy (e.g. 'unsafe-eval' for in-browser transpiling)
+  // — a real navigation to its own URL is a separate document not bound by
+  // the parent's CSP. `html` is ignored while `src` is set.
+  src?: string;
 }
 
 export default function Preview({
@@ -27,6 +34,7 @@ export default function Preview({
   zoom = 1,
   device = 'desktop',
   refreshKey = 0,
+  src,
 }: PreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -94,7 +102,7 @@ export default function Preview({
           <iframe
             key={iframeKey}
             ref={iframeRef}
-            srcDoc={html}
+            {...(src ? { src } : { srcDoc: html })}
             className="w-full h-full border-none block"
             style={{
               background: '#ffffff',

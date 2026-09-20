@@ -14,8 +14,8 @@ type FileSystemBridge = {
 };
 
 type StoreBridge = {
-  getRecentProjects: () => Promise<{ success: boolean; projects: Array<{ name: string; path: string }>; error?: string }>;
-  addRecentProject: (project: { name: string; path: string }) => Promise<{ success: boolean; projects: Array<{ name: string; path: string }>; error?: string }>;
+  getRecentProjects: () => Promise<{ success: boolean; projects: Array<{ name: string; path: string; lastOpenedAt: number }>; error?: string }>;
+  addRecentProject: (project: { name: string; path: string }) => Promise<{ success: boolean; projects: Array<{ name: string; path: string; lastOpenedAt: number }>; error?: string }>;
 };
 
 type FlutterTarget = { id: string; name: string; platform: string };
@@ -241,6 +241,7 @@ declare global {
     };
     runner: {
       checkSDK: (runtime: string) => Promise<{ available: boolean; version?: string; error?: string }>;
+      getVendorAssetPaths: () => Promise<{ react: string; reactDom: string; babel: string }>;
     };
     model: {
       getActiveModel: () => Promise<{ success: boolean; name?: string; key?: 'primary' | 'cpuFallback'; error?: string }>;

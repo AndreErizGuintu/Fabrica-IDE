@@ -54,16 +54,16 @@ const COLOR_RUNS = '#38bdf8';
 const COLOR_IDLE = '#fbbf24';
 const COLOR_ACTIVE = '#4ade80';
 const CHART_GRID = 'rgba(168, 85, 247, 0.15)';
-const CHART_AXIS = '#81748F';
+const CHART_AXIS = '#77718F';
 
 const UI_FONT = 'Segoe UI, sans-serif';
 const MONO_FONT = 'Space Mono, monospace';
 
 const chartTooltipStyle = {
-  backgroundColor: '#100718',
+  backgroundColor: '#080719',
   border: '1px solid rgba(168, 85, 247, 0.3)',
   borderRadius: '8px',
-  color: '#F5F0FA',
+  color: '#F4F1FF',
   fontSize: 12,
   fontFamily: UI_FONT,
 };
@@ -129,15 +129,15 @@ function Card({
 }) {
   return (
     <div className="rounded-xl p-5"
-      style={{ backgroundColor: '#180C29', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+      style={{ backgroundColor: '#12102D', border: '1px solid #29204A' }}>
       <div className="flex items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">
           {icon && <span style={{ color: '#a855f7' }}>{icon}</span>}
-          <h2 className="text-base font-semibold" style={{ color: '#ffffff', fontFamily: UI_FONT }}>
+          <h2 className="text-base font-semibold" style={{ color: '#F4F1FF', fontFamily: UI_FONT }}>
             {title}
           </h2>
           {subtitle && (
-            <span className="text-xs ml-2" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+            <span className="text-xs ml-2" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
               {subtitle}
             </span>
           )}
@@ -156,14 +156,14 @@ function StatTile({
 }) {
   return (
     <div className="rounded-lg px-4 py-3 flex items-center justify-between gap-3"
-      style={{ backgroundColor: '#100718', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+      style={{ backgroundColor: '#080719', border: '1px solid #29204A' }}>
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ backgroundColor: 'rgba(168, 85, 247, 0.1)', color: '#a855f7', fontSize: 14 }}>
           {icon}
         </div>
         <span className="text-[10px] uppercase tracking-wider font-medium"
-          style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+          style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
           {label}
         </span>
       </div>
@@ -181,18 +181,18 @@ function SplitBar({ activeMs, idleMs }: { activeMs: number; idleMs: number }) {
 
   return (
     <div className="mt-4">
-      <div className="flex h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#100718' }}>
+      <div className="flex h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#080719' }}>
         <div style={{ width: activePct + '%', backgroundColor: COLOR_ACTIVE }} />
         <div style={{ width: idlePct + '%', backgroundColor: COLOR_IDLE }} />
       </div>
       <div className="flex items-center gap-5 mt-3 text-xs" style={{ fontFamily: UI_FONT }}>
-        <span className="flex items-center gap-2" style={{ color: '#B8AFC2' }}>
+        <span className="flex items-center gap-2" style={{ color: '#A9A3C7' }}>
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLOR_ACTIVE }} />
-          Active <span style={{ color: '#F5F0FA', fontWeight: 600 }}>{Math.round(activePct)}%</span>
+          Active <span style={{ color: '#F4F1FF', fontWeight: 600 }}>{Math.round(activePct)}%</span>
         </span>
-        <span className="flex items-center gap-2" style={{ color: '#B8AFC2' }}>
+        <span className="flex items-center gap-2" style={{ color: '#A9A3C7' }}>
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: COLOR_IDLE }} />
-          Idle <span style={{ color: '#F5F0FA', fontWeight: 600 }}>{Math.round(idlePct)}%</span>
+          Idle <span style={{ color: '#F4F1FF', fontWeight: 600 }}>{Math.round(idlePct)}%</span>
         </span>
       </div>
     </div>
@@ -203,14 +203,14 @@ function CompareCell({ value, delta }: { value: string; delta?: string }) {
   return (
     <td className="py-2 px-2 text-sm"
       style={{
-        color: '#F5F0FA',
+        color: '#F4F1FF',
         fontFamily: MONO_FONT,
-        borderBottom: '1px solid rgba(168, 85, 247, 0.15)',
+        borderBottom: '1px solid #29204A',
       }}>
       {value}
       {delta && (
         <span className="ml-2 text-xs"
-          style={{ color: delta.startsWith('-') ? COLOR_ACTIVE : '#B8AFC2' }}>
+          style={{ color: delta.startsWith('-') ? COLOR_ACTIVE : '#A9A3C7' }}>
           {delta}
         </span>
       )}
@@ -372,9 +372,9 @@ export default function StatsDashboard({
   const sessionB = history.find((entry) => entry.fileName === compareB) ?? null;
 
   const selectStyle = {
-    backgroundColor: '#100718',
-    color: '#F5F0FA',
-    border: '1px solid rgba(168, 85, 247, 0.25)',
+    backgroundColor: '#080719',
+    color: '#F4F1FF',
+    border: '1px solid #29204A',
     fontFamily: UI_FONT,
   };
 
@@ -382,9 +382,9 @@ export default function StatsDashboard({
     <tr>
       <td className="py-2 px-2 text-xs"
         style={{
-          color: '#B8AFC2',
+          color: '#A9A3C7',
           fontFamily: UI_FONT,
-          borderBottom: '1px solid rgba(168, 85, 247, 0.15)',
+          borderBottom: '1px solid #29204A',
         }}>
         {label}
       </td>
@@ -394,7 +394,7 @@ export default function StatsDashboard({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#100718', color: '#F5F0FA' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#080719', color: '#F4F1FF' }}>
       <AppSidebar
         active="stats-dashboard"
         onNavigate={(screen) => {
@@ -404,18 +404,18 @@ export default function StatsDashboard({
         bottomSlot={
           <>
             <div className="text-[10px] uppercase tracking-wider mb-1.5"
-              style={{ color: '#81748F', fontFamily: UI_FONT }}>
+              style={{ color: '#77718F', fontFamily: UI_FONT }}>
               Tracked sessions
             </div>
             <div className="flex items-center justify-between px-3 py-1.5 rounded text-sm"
               style={{
-                backgroundColor: '#100718',
-                color: '#F5F0FA',
+                backgroundColor: '#080719',
+                color: '#F4F1FF',
                 fontFamily: MONO_FONT,
-                border: '1px solid rgba(168, 85, 247, 0.2)',
+                border: '1px solid #29204A',
               }}>
               <span>{aggregate ? aggregate.totalSessionCount : '—'}</span>
-              <span style={{ color: '#81748F', fontSize: 10 }}>all projects</span>
+              <span style={{ color: '#77718F', fontSize: 10 }}>all projects</span>
             </div>
           </>
         }
@@ -423,10 +423,10 @@ export default function StatsDashboard({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0"
-          style={{ borderBottom: '1px solid rgba(168, 85, 247, 0.15)' }}>
+          style={{ borderBottom: '1px solid #29204A' }}>
           <div className="flex items-center gap-3">
             <span style={{ color: '#a855f7', fontSize: 20 }}>📊</span>
-            <h1 className="text-lg font-semibold" style={{ color: '#ffffff', fontFamily: UI_FONT }}>
+            <h1 className="text-lg font-semibold" style={{ color: '#F4F1FF', fontFamily: UI_FONT }}>
               Stats Dashboard
             </h1>
           </div>
@@ -467,7 +467,7 @@ export default function StatsDashboard({
             )}
 
             {loading && (
-              <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+              <div className="text-sm" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                 Loading stats…
               </div>
             )}
@@ -475,10 +475,10 @@ export default function StatsDashboard({
             {!loading && !selectedPath && (
               <div className="text-center py-16">
                 <div className="text-4xl mb-3 opacity-30">📊</div>
-                <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+                <div className="text-sm" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                   No tracked sessions yet
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#81748F', fontFamily: UI_FONT }}>
+                <div className="text-xs mt-1" style={{ color: '#77718F', fontFamily: UI_FONT }}>
                   Open a project and start coding — sessions are recorded automatically.
                 </div>
               </div>
@@ -491,9 +491,9 @@ export default function StatsDashboard({
                 right={
                   summary && (
                     <span className="flex items-center gap-2 text-xs"
-                      style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+                      style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                       <span className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: summary.live ? '#4ade80' : '#81748F' }} />
+                        style={{ backgroundColor: summary.live ? '#4ade80' : '#77718F' }} />
                       {summary.live ? 'Live' : 'Ended'} · {formatDateTime(summary.startedAt)}
                     </span>
                   )
@@ -507,14 +507,14 @@ export default function StatsDashboard({
                       <StatTile label="Runs" value={String(summary.runCount)} accent={COLOR_RUNS} icon={<span>▶</span>} />
                     </div>
                     <SplitBar activeMs={summary.activeMs} idleMs={summary.idleMs} />
-                    <div className="text-[11px] mt-4" style={{ color: '#81748F', fontFamily: UI_FONT }}>
-                      Total session length <span style={{ color: '#B8AFC2' }}>{formatDuration(summary.durationMs)}</span> · active
+                    <div className="text-[11px] mt-4" style={{ color: '#77718F', fontFamily: UI_FONT }}>
+                      Total session length <span style={{ color: '#A9A3C7' }}>{formatDuration(summary.durationMs)}</span> · active
                       time is session length minus idle time (idle accrues after 15s of no editor, AI, or run
                       activity).
                     </div>
                   </>
                 ) : (
-                  <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+                  <div className="text-sm" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                     No sessions recorded for this project yet.
                   </div>
                 )}
@@ -534,7 +534,7 @@ export default function StatsDashboard({
                   </select>
                 }>
                 {trendData.length === 0 ? (
-                  <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+                  <div className="text-sm" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                     No completed sessions yet — the trend appears once at least one session has been written.
                   </div>
                 ) : (
@@ -548,17 +548,17 @@ export default function StatsDashboard({
                         <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: 'rgba(168, 85, 247, 0.08)' }} />
                         <Legend wrapperStyle={{ fontSize: 11, fontFamily: UI_FONT, paddingTop: 10 }} iconType="circle" iconSize={8} />
                         <Bar yAxisId="right" dataKey="idleMinutes" name="Idle (min)" fill={COLOR_IDLE} fillOpacity={0.85} radius={[3, 3, 0, 0]} isAnimationActive={false} maxBarSize={40} />
-                        <Line yAxisId="left" type="monotone" dataKey="aiCalls" name="AI calls" stroke={COLOR_AI} strokeWidth={2} dot={{ r: 3, fill: '#100718', strokeWidth: 2 }} isAnimationActive={false} />
-                        <Line yAxisId="left" type="monotone" dataKey="runs" name="Runs" stroke={COLOR_RUNS} strokeWidth={2} dot={{ r: 3, fill: '#100718', strokeWidth: 2 }} isAnimationActive={false} />
+                        <Line yAxisId="left" type="monotone" dataKey="aiCalls" name="AI calls" stroke={COLOR_AI} strokeWidth={2} dot={{ r: 3, fill: '#080719', strokeWidth: 2 }} isAnimationActive={false} />
+                        <Line yAxisId="left" type="monotone" dataKey="runs" name="Runs" stroke={COLOR_RUNS} strokeWidth={2} dot={{ r: 3, fill: '#080719', strokeWidth: 2 }} isAnimationActive={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
 
                     {trend && (
                       <div className="mt-4 px-4 py-2.5 rounded-lg text-xs"
                         style={{
-                          backgroundColor: '#100718',
-                          border: '1px solid rgba(168, 85, 247, 0.2)',
-                          color: '#B8AFC2',
+                          backgroundColor: '#080719',
+                          border: '1px solid #29204A',
+                          color: '#A9A3C7',
                           fontFamily: UI_FONT,
                         }}>
                         AI calls per session averaged{' '}
@@ -566,7 +566,7 @@ export default function StatsDashboard({
                         across the earlier half and{' '}
                         <span style={{ color: COLOR_AI, fontFamily: MONO_FONT, fontWeight: 600 }}>{trend.later.toFixed(1)}</span>{' '}
                         across the later half —{' '}
-                        <span style={{ color: trend.changePct < 0 ? COLOR_ACTIVE : '#F5F0FA', fontWeight: 600 }}>
+                        <span style={{ color: trend.changePct < 0 ? COLOR_ACTIVE : '#F4F1FF', fontWeight: 600 }}>
                           {trend.changePct > 0 ? '+' : ''}{trend.changePct}%
                         </span>
                         {trend.changePct < 0 ? ' (reliance trending down).' : '.'}
@@ -583,7 +583,7 @@ export default function StatsDashboard({
                   title="Compare two sessions"
                   icon={<span>📋</span>}
                   right={
-                    <span className="text-[10px]" style={{ color: '#81748F', fontFamily: UI_FONT }}>
+                    <span className="text-[10px]" style={{ color: '#77718F', fontFamily: UI_FONT }}>
                       Deltas vs. first
                     </span>
                   }>
@@ -594,7 +594,7 @@ export default function StatsDashboard({
                         <option key={entry.fileName} value={entry.fileName}>{formatShortLabel(entry.sessionStart)}</option>
                       ))}
                     </select>
-                    <span className="text-xs" style={{ color: '#81748F', fontFamily: UI_FONT }}>vs</span>
+                    <span className="text-xs" style={{ color: '#77718F', fontFamily: UI_FONT }}>vs</span>
                     <select value={compareB} onChange={(event) => setCompareB(event.target.value)}
                       className="flex-1 px-3 py-1.5 rounded-lg text-xs outline-none" style={selectStyle}>
                       {history.map((entry) => (
@@ -619,11 +619,11 @@ export default function StatsDashboard({
                             <thead>
                               <tr>
                                 <th className="text-left py-2 px-2 text-[10px] uppercase tracking-wider"
-                                  style={{ color: '#81748F', fontFamily: UI_FONT }}>Metric</th>
+                                  style={{ color: '#77718F', fontFamily: UI_FONT }}>Metric</th>
                                 <th className="text-left py-2 px-2 text-[11px]"
-                                  style={{ color: '#F5F0FA', fontFamily: UI_FONT }}>{formatShortLabel(sessionA.sessionStart)}</th>
+                                  style={{ color: '#F4F1FF', fontFamily: UI_FONT }}>{formatShortLabel(sessionA.sessionStart)}</th>
                                 <th className="text-left py-2 px-2 text-[11px]"
-                                  style={{ color: '#F5F0FA', fontFamily: UI_FONT }}>{formatShortLabel(sessionB.sessionStart)}</th>
+                                  style={{ color: '#F4F1FF', fontFamily: UI_FONT }}>{formatShortLabel(sessionB.sessionStart)}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -638,7 +638,7 @@ export default function StatsDashboard({
                       );
                     })()
                   ) : (
-                    <div className="text-sm" style={{ color: '#B8AFC2', fontFamily: UI_FONT }}>
+                    <div className="text-sm" style={{ color: '#A9A3C7', fontFamily: UI_FONT }}>
                       Select two sessions to compare.
                     </div>
                   )}
@@ -650,17 +650,17 @@ export default function StatsDashboard({
                   title="All-time totals"
                   icon={<span>📊</span>}
                   right={
-                    <span className="text-[10px]" style={{ color: '#81748F', fontFamily: UI_FONT }}>
+                    <span className="text-[10px]" style={{ color: '#77718F', fontFamily: UI_FONT }}>
                       Updated {formatDateTime(aggregate.lastUpdated)}
                     </span>
                   }>
                   <div className="grid grid-cols-2 gap-3">
-                    <StatTile label="Sessions" value={String(aggregate.totalSessionCount)} accent="#F5F0FA" icon={<span>📅</span>} />
+                    <StatTile label="Sessions" value={String(aggregate.totalSessionCount)} accent="#F4F1FF" icon={<span>📅</span>} />
                     <StatTile label="Total idle" value={formatDuration(aggregate.totalIdleTimeMs)} accent={COLOR_IDLE} icon={<span>🕐</span>} />
                     <StatTile label="Total AI calls" value={String(aggregate.totalAiCallCount)} accent={COLOR_AI} icon={<span>✨</span>} />
                     <StatTile label="Total runs" value={String(aggregate.totalRunCount)} accent={COLOR_RUNS} icon={<span>▶</span>} />
                   </div>
-                  <div className="text-[11px] mt-4" style={{ color: '#81748F', fontFamily: UI_FONT }}>
+                  <div className="text-[11px] mt-4" style={{ color: '#77718F', fontFamily: UI_FONT }}>
                     Totals span every project, not just the one selected above.
                   </div>
                 </Card>

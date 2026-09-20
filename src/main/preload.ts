@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('ai', {
 
 contextBridge.exposeInMainWorld('runner', {
   checkSDK: (runtime: string) => ipcRenderer.invoke('run:checkSDK', runtime),
+  getVendorAssetPaths: () => ipcRenderer.invoke('runner:getVendorAssetPaths'),
 });
 
 contextBridge.exposeInMainWorld('model', {
