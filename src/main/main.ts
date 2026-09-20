@@ -10,7 +10,7 @@
  */
 import fs from 'fs';
 import crypto from 'crypto';
-import { exec, execFile, spawn } from 'child_process';
+import { exec, execFile, spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain, dialog, Menu, globalShortcut } from 'electron';
 import { autoUpdater } from 'electron-updater';
@@ -141,7 +141,79 @@ const getBundledVendorDir = () => {
   return path.join(app.getAppPath(), 'resources', 'vendor');
 };
 
-const prependBundledRuntimePaths = (env: NodeJS.ProcessEnv = process.env) => {
+// resources/pub-cache-seed is a one-time manual copy of a warm
+// %LOCALAPPDATA%\Pub\Cache — same extraResources pattern as models/runtimes/vendor.
+// It's seeded into userData on first use so it stays writable (pub writes lockfiles/
+// hash state into the cache during `flutter create`) without mutating the read-only
+// packaged resources dir.
+const getBundledPubCacheSeedDir = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'pub-cache-seed');
+  }
+
+  return path.join(app.getAppPath(), 'resources', 'pub-cache-seed');
+};
+
+const getUserPubCacheDir = () => path.join(app.getPath('userData'), 'pub-cache');
+
+// Written only after a robocopy exits < 8, i.e. a real completed copy — not just
+// "the destination folder exists", which a partial/interrupted copy would also
+// satisfy and get silently treated as done on the next run.
+const getPubCacheSeedMarkerPath = () => path.join(getUserPubCacheDir(), '.seed-complete');
+
+// Copies the bundled seed into userData once, so `flutter create`'s pub get
+// resolves --offline from a cache this app ships, not whatever the host machine's
+// own global pub cache happens to contain (or not contain).
+//
+// Uses robocopy instead of fs.cpSync/PowerShell recursive copy: this pub cache's
+// deep folder structure hits path-length failures on machines without
+// LongPathsEnabled, which robocopy handles natively with no registry change
+// required (confirmed in field debugging).
+//
+// robocopy's exit codes are a bitmask, not the usual 0-success/nonzero-failure
+// convention — 0 through 7 all mean some degree of success (files copied and/or
+// already up to date), 8+ means a real failure.
+//
+// Returns null — and lets the caller fall through to the host's own PUB_CACHE —
+// if no seed was ever placed or the copy failed, same warn-and-fall-back style as
+// getBundledRuntimeBinary.
+const ensurePubCacheSeeded = (): string | null => {
+  const userPubCacheDir = getUserPubCacheDir();
+
+  if (fs.existsSync(getPubCacheSeedMarkerPath())) {
+    return userPubCacheDir;
+  }
+
+  const seedDir = getBundledPubCacheSeedDir();
+  if (!fs.existsSync(seedDir)) {
+    console.warn(`Bundled pub cache seed not found at ${seedDir}; flutter create will fall back to the host's own PUB_CACHE.`);
+    return null;
+  }
+
+  const result = spawnSync('robocopy', [seedDir, userPubCacheDir, '/E', '/R:1', '/W:1']);
+
+  if (result.error) {
+    console.warn(`Failed to launch robocopy while seeding pub cache: ${result.error.message}`);
+    return null;
+  }
+
+  const exitCode = result.status ?? 8;
+  if (exitCode >= 8) {
+    console.warn(`robocopy failed seeding pub cache at ${userPubCacheDir} (exit ${exitCode}): ${result.stderr?.toString().trim() ?? ''}`);
+    return null;
+  }
+
+  try {
+    fs.writeFileSync(getPubCacheSeedMarkerPath(), new Date().toISOString());
+  } catch (err) {
+    console.warn(`Failed to write pub cache seed marker at ${userPubCacheDir}: ${String(err)}`);
+    return null;
+  }
+
+  return userPubCacheDir;
+};
+
+const prependBundledRuntimePaths = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
   const pathEntries = getBundledRuntimePathEntries();
   const existingPath = env.PATH ?? env.Path ?? '';
   const nextPath = [...pathEntries, existingPath].filter(Boolean).join(path.delimiter);
@@ -336,9 +408,15 @@ ipcMain.handle(
         projectPath,
       ]);
 
+      const pubCacheDir = ensurePubCacheSeeded();
+      const env = prependBundledRuntimePaths();
+      if (pubCacheDir) {
+        env.PUB_CACHE = pubCacheDir;
+      }
+
       const child = spawn('cmd.exe', ['/d', '/s', '/c', `"${commandLine}"`], {
         windowsVerbatimArguments: true,
-        env: prependBundledRuntimePaths(),
+        env,
       });
 
       let output = '';

@@ -260,6 +260,10 @@
       {
         "from": "resources/vendor",
         "to": "vendor"
+      },
+      {
+        "from": "resources/pub-cache-seed",
+        "to": "pub-cache-seed"
       }
     ],
     "publish": {
