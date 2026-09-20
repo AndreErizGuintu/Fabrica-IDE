@@ -39,6 +39,7 @@ type Screen = 'splash' | 'main' | 'new-project' | 'editor' | 'templates' | 'sett
 type RecentProject = {
   name: string;
   path: string;
+  lastOpenedAt: number;
 };
 
 function getPathSeparator(targetPath: string): string {
@@ -47,6 +48,23 @@ function getPathSeparator(targetPath: string): string {
 
 function getLastPathSegment(targetPath: string): string {
   return targetPath.split(/[\\/]/).filter(Boolean).pop() ?? targetPath;
+}
+
+function formatRelativeTime(timestamp: number): string {
+  if (!timestamp || Number.isNaN(timestamp)) return 'Opened previously';
+  const minutes = Math.floor((Date.now() - timestamp) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  return `${Math.floor(days / 365)} year${Math.floor(days / 365) === 1 ? '' : 's'} ago`;
 }
 
 type TemplateId = 'web' | 'csharp' | 'flutter' | 'blank';
@@ -209,7 +227,7 @@ function useRecentProjects() {
     if (result.success && result.projects) setRecentProjects(result.projects);
   };
 
-  const add = async (project: RecentProject) => {
+  const add = async (project: { name: string; path: string }) => {
     const result = await window.store.addRecentProject(project);
     if (result.success && result.projects) setRecentProjects(result.projects);
   };
@@ -640,7 +658,7 @@ function MainMenu({
                 </div>
               </div>
             ) : (
-              recentProjects.map((project, index) => (
+              recentProjects.map((project) => (
                 <div key={project.path} onClick={() => onOpenProject(project)}
                   className="p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 hover:-translate-y-1"
                   style={{
@@ -667,7 +685,7 @@ function MainMenu({
                       </div>
                       <div className="text-[10px] sm:text-xs"
                         style={{ color: C.textSecondary, fontFamily: 'Segoe UI, sans-serif' }}>
-                        {index === 0 ? '2 hours ago' : index === 1 ? 'Yesterday' : '3 days ago'}
+                        {formatRelativeTime(project.lastOpenedAt)}
                       </div>
                     </div>
                   </div>
@@ -938,6 +956,11 @@ function App() {
     return result;
   };
 
+  const handleOpenRecentProject = async (project: RecentProject) => {
+    await addRecentProject({ name: project.name, path: project.path });
+    openEditor(project.path);
+  };
+
   if (screen === 'splash') {
     return <SplashScreen onDone={() => setScreen('main')} />;
   }
@@ -985,7 +1008,7 @@ function App() {
     <MainMenu
       recentProjects={recentProjects}
       onNewProject={() => setScreen('new-project')}
-      onOpenProject={(project) => openEditor(project.path)}
+      onOpenProject={handleOpenRecentProject}
       onOpenFolder={handleOpenFolder}
       onCloneRepository={handleCloneRepository}
       onOpenSettings={() => setScreen('settings')}

@@ -14,8 +14,8 @@ type FileSystemBridge = {
 };
 
 type StoreBridge = {
-  getRecentProjects: () => Promise<{ success: boolean; projects: Array<{ name: string; path: string }>; error?: string }>;
-  addRecentProject: (project: { name: string; path: string }) => Promise<{ success: boolean; projects: Array<{ name: string; path: string }>; error?: string }>;
+  getRecentProjects: () => Promise<{ success: boolean; projects: Array<{ name: string; path: string; lastOpenedAt: number }>; error?: string }>;
+  addRecentProject: (project: { name: string; path: string }) => Promise<{ success: boolean; projects: Array<{ name: string; path: string; lastOpenedAt: number }>; error?: string }>;
 };
 
 type FlutterTarget = { id: string; name: string; platform: string };

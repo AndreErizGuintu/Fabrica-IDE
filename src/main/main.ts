@@ -83,7 +83,7 @@ import { lintPhp } from './phpLint';
 // %APPDATA%/electron-react-boilerplate instead of %APPDATA%/Fabrica.
 app.setName('Fabrica');
 
-type RecentProject = { name: string; path: string };
+type RecentProject = { name: string; path: string; lastOpenedAt: number };
 type RuntimeName = 'node' | 'php' | 'dotnet' | 'dart';
 
 const getRecentProjectsPath = () =>
@@ -166,10 +166,17 @@ const readRecentProjects = (): RecentProject[] => {
       return [];
     }
 
-    return parsed.filter(
+    const projects = parsed.filter(
       (project): project is RecentProject =>
         project && typeof project.name === 'string' && typeof project.path === 'string',
     );
+
+    const existing = projects.filter((project) => fs.existsSync(project.path));
+    if (existing.length !== projects.length) {
+      writeRecentProjects(existing);
+    }
+
+    return existing;
   } catch {
     return [];
   }
@@ -701,10 +708,10 @@ ipcMain.handle('store:getRecentProjects', async () => {
   return { success: true, projects };
 });
 
-ipcMain.handle('store:addRecentProject', async (_event, project: RecentProject) => {
+ipcMain.handle('store:addRecentProject', async (_event, project: { name: string; path: string }) => {
   try {
     const projects = [
-      project,
+      { ...project, lastOpenedAt: Date.now() },
       ...readRecentProjects().filter((entry) => entry.path !== project.path),
     ].slice(0, 5);
     writeRecentProjects(projects);
