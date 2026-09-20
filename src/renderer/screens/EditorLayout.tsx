@@ -3,6 +3,7 @@ import { Rnd } from 'react-rnd';
 import { loader } from '@monaco-editor/react';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
+import WebPreview from '../components/WebPreview';
 import Sidebar from '../components/sidebar/Sidebar';
 import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
@@ -25,7 +26,7 @@ import { Tab } from '../types/index';
 import { useTheme } from '../theme/ThemeContext';
 import { useEditorSettings } from '../theme/EditorSettingsContext';
 
-type FloatingPanel = 'preview' | 'ai';
+type FloatingPanel = 'preview' | 'ai' | 'webPreview';
 
 function getLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -554,6 +555,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const phpLintTimerRef = useRef<number | null>(null);
   const [showAI, setShowAI] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showWebPreview, setShowWebPreview] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [gitStatusFiles, setGitStatusFiles] = useState<string[]>([]);
@@ -575,10 +577,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const terminalResizeStartHeight = useRef(190);
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
   const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
-    preview: { x: 100, y: 100 }, ai: { x: 140, y: 120 },
+    preview: { x: 100, y: 100 }, ai: { x: 140, y: 120 }, webPreview: { x: 180, y: 140 },
   });
   const [floatSize, setFloatSize] = useState<Record<FloatingPanel, { width: number; height: number }>>({
-    preview: { width: 420, height: 350 }, ai: { width: 420, height: 350 },
+    preview: { width: 420, height: 350 }, ai: { width: 420, height: 350 }, webPreview: { width: 420, height: 350 },
   });
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -838,6 +840,11 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const handleTogglePreview = useCallback(() => {
     if (floatingPanel === 'preview' && isFloatMinimized) { setIsFloatMinimized(false); return; }
     setShowPreview((prev) => !prev);
+  }, [floatingPanel, isFloatMinimized]);
+
+  const handleToggleWebPreview = useCallback(() => {
+    if (floatingPanel === 'webPreview' && isFloatMinimized) { setIsFloatMinimized(false); return; }
+    setShowWebPreview((prev) => !prev);
   }, [floatingPanel, isFloatMinimized]);
 
   // Editor.tsx never forwards a ref to its underlying Monaco instance, and
@@ -1356,6 +1363,14 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             Live Preview
           </button>
 
+          <button type="button" onClick={handleToggleWebPreview} style={topPillStyle(showWebPreview)} title="Toggle Browser Preview">
+            <svg style={topPillIconStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12a9 9 0 1018 0 9 9 0 00-18 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
+            </svg>
+            Browser Preview
+          </button>
+
           <button type="button" onClick={handleToggleAI} style={topPillStyle(showAI)} title="Toggle AI Assistant">
             <svg style={topPillIconStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -1496,7 +1511,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         <div className="flex-1 flex flex-col overflow-hidden"
           style={{
             background: '#080719',
-            borderRight: (showPreview || showAI) ? `1px solid ${C.borderSubtle}` : 'none',
+            borderRight: (showPreview || showAI || showWebPreview) ? `1px solid ${C.borderSubtle}` : 'none',
           }}>
           <div className="flex items-center overflow-x-auto shrink-0"
             style={{
@@ -1614,8 +1629,8 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
           </div>
         </div>
 
-        {/* Right panel — only if preview or AI is shown */}
-        {(showPreview || showAI) && (
+        {/* Right panel — only if preview, AI, or browser preview is shown */}
+        {(showPreview || showAI || showWebPreview) && (
           <>
             {/* VS Code-style right toggle strip */}
             <div
@@ -1682,7 +1697,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     borderRadius: 8,
                     border: `1px solid ${C.border}`,
                     background: C.bgPreviewAI,
-                    flex: showAI ? 1 : '1 1 auto',
+                    flex: (showAI || showWebPreview) ? 1 : '1 1 auto',
                     minHeight: 0,
                   }}
                   onMouseDown={handleDetachMouseDown('preview')}>
@@ -1734,6 +1749,30 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                 </div>
               )}
 
+              {/* Browser Preview card */}
+              {showWebPreview && floatingPanel !== 'webPreview' && (
+                <div
+                  className="flex flex-col overflow-hidden"
+                  style={{
+                    cursor: armedDetachPanel === 'webPreview' ? 'grabbing' : 'grab',
+                    borderRadius: 8,
+                    border: `1px solid ${C.border}`,
+                    background: C.bgPreviewAI,
+                    flex: (showPreview || showAI) ? 1 : '1 1 auto',
+                    minHeight: 0,
+                  }}
+                  onMouseDown={handleDetachMouseDown('webPreview')}>
+                  <ToolWindowHeader icon="⌂" title="Browser Preview" mode="docked"
+                    onMinimize={() => setShowWebPreview(false)}
+                    onMaximizeFullscreen={() => { detachToFloat('webPreview'); toggleFullscreen('webPreview'); }}
+                    onClose={() => setShowWebPreview(false)}
+                  />
+                  <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
+                    <WebPreview />
+                  </div>
+                </div>
+              )}
+
               {/* AI card */}
               {showAI && floatingPanel !== 'ai' && (
                 <div
@@ -1743,7 +1782,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     borderRadius: 8,
                     border: `1px solid ${C.border}`,
                     background: C.bgPreviewAI,
-                    flex: showPreview ? 1 : '1 1 auto',
+                    flex: (showPreview || showWebPreview) ? 1 : '1 1 auto',
                     minHeight: 0,
                   }}
                   onMouseDown={handleDetachMouseDown('ai')}>
@@ -1833,6 +1872,47 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               zoom={1}
               refreshKey={previewRefreshKey}
             />
+          </div>
+        </Rnd>
+      )}
+
+      {/* Floating Browser Preview */}
+      {floatingPanel === 'webPreview' && !isFloatMinimized && (
+        <Rnd
+          size={{ width: floatStyle.width, height: floatStyle.height }}
+          position={{ x: floatStyle.x, y: floatStyle.y }}
+          minWidth={320}
+          minHeight={240}
+          bounds="window"
+          disableDragging={isFullscreen}
+          enableResizing={!isFullscreen}
+          dragHandleClassName="float-drag-handle"
+          onDragStop={handleFloatDragStop}
+          onResizeStop={handleFloatResizeStop}
+          style={{
+            borderRadius: isFullscreen ? 0 : floatStyle.borderRadius,
+            backgroundColor: C.bgPreviewAI,
+            border: `1px solid ${C.border}`,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(168, 85, 247, 0.08)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            userSelect: 'none',
+          }}
+        >
+          <ToolWindowHeader
+            icon="⌂"
+            title="Browser Preview"
+            mode="floating"
+            dragHandleClassName="float-drag-handle"
+            onHeaderDoubleClick={() => toggleFullscreen()}
+            onMinimize={dockPanel}
+            onMaximizeFullscreen={() => toggleFullscreen()}
+            onClose={() => { dockPanel(); setShowWebPreview(false); }}
+          />
+          <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
+            <WebPreview />
           </div>
         </Rnd>
       )}
