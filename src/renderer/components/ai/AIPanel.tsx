@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
@@ -210,6 +210,8 @@ function getCompletionErrorText(error?: string) {
 export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslatedFile, panelState }: AIPanelProps) {
   const { theme } = useTheme();
   const C = theme.ui;
+  const [pulseTab, setPulseTab] = useState<TabKey | null>(null);
+  const pulseTimeoutRef = useRef<number | null>(null);
 
   const {
     activeKey: modelKey,
@@ -413,6 +415,19 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
     }
   };
 
+  const handleTabClick = (tab: TabKey) => {
+    setActiveTab(tab);
+    setPulseTab(tab);
+    if (pulseTimeoutRef.current) window.clearTimeout(pulseTimeoutRef.current);
+    pulseTimeoutRef.current = window.setTimeout(() => setPulseTab(null), 200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (pulseTimeoutRef.current) window.clearTimeout(pulseTimeoutRef.current);
+    };
+  }, []);
+
   const handleExplain = async () => {
     if (!explainPrompt.trim() && !selectedCode.trim()) return;
     setExplainLoading(true);
@@ -442,24 +457,56 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
   return (
     <div className="flex flex-col h-full border-l overflow-hidden" style={{ background: C.bgPreviewAI, borderColor: C.border }}>
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-3 pt-2" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div style={{
+        display: 'flex',
+        gap: 4,
+        padding: '4px 8px',
+        background: '#12102D',
+        borderBottom: '1px solid #29204A',
+      }}>
         {(['ask', 'plan', 'translate', 'explain'] as TabKey[]).map((tab) => {
           const isActive = activeTab === tab;
+          const isPulsing = pulseTab === tab;
           return (
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
-              className="text-[10px] px-3 py-1 rounded-t font-medium tracking-widest transition-colors"
+              onClick={() => handleTabClick(tab)}
               style={{
-                background: isActive ? C.bgActiveTab : 'transparent',
-                color: isActive ? C.textPrimary : C.textSecondary,
-                border: `1px solid ${C.border}`,
-                borderBottomColor: isActive ? C.bgActiveTab : 'transparent',
+                position: 'relative',
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 500,
                 fontFamily: 'Segoe UI, sans-serif',
+                border: 'none',
+                borderRadius: 6,
+                background: isActive ? '#3B1D72' : 'transparent',
+                color: isActive ? '#F4F1FF' : '#A9A3C7',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: isActive ? '0 0 12px rgba(168, 85, 247, 0.35)' : 'none',
+                transform: isPulsing ? 'scale(1.04)' : 'scale(1)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'rgba(168, 85, 247, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'transparent';
               }}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {isActive && (
+                <span style={{
+                  position: 'absolute',
+                  bottom: -6,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 20,
+                  height: 2,
+                  borderRadius: 1,
+                  background: '#A855F7',
+                }} />
+              )}
             </button>
           );
         })}
@@ -519,6 +566,14 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               <textarea
                 value={askPrompt}
                 onChange={(e) => setAskPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!askLoading && askPrompt.trim()) {
+                      handleAskSend();
+                    }
+                  }
+                }}
                 placeholder="Ask for help with code, concepts, debugging, or explanation..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
@@ -530,6 +585,9 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   border: `1px solid ${C.border}`,
                 }}
               />
+              <div style={{ fontSize: 10, color: '#77718F', fontFamily: 'Segoe UI, sans-serif' }}>
+                Enter to send · Shift+Enter for new line
+              </div>
 
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -564,6 +622,14 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
               <textarea
                 value={planPrompt}
                 onChange={(e) => setPlanPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!planLoading && planPrompt.trim()) {
+                      handlePlanSend();
+                    }
+                  }
+                }}
                 placeholder="Describe what you want to plan..."
                 className="text-[10px] p-2 rounded resize-none outline-none w-full"
                 style={{
@@ -575,6 +641,9 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
                   border: `1px solid ${C.border}`,
                 }}
               />
+              <div style={{ fontSize: 10, color: '#77718F', fontFamily: 'Segoe UI, sans-serif' }}>
+                Enter to send · Shift+Enter for new line
+              </div>
 
               <div className="flex items-center justify-end gap-2">
                 <button

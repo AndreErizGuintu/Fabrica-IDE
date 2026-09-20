@@ -569,6 +569,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(190);
+  const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+  const terminalResizeStartY = useRef(0);
+  const terminalResizeStartHeight = useRef(190);
   const [floatingPanel, setFloatingPanel] = useState<FloatingPanel | null>(null);
   const [floatPosition, setFloatPosition] = useState<Record<FloatingPanel, { x: number; y: number }>>({
     preview: { x: 100, y: 100 }, ai: { x: 140, y: 120 },
@@ -781,6 +785,31 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizingSidebar, isResizingRightPanel]);
+
+  const handleTerminalResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingTerminal(true);
+    terminalResizeStartY.current = e.clientY;
+    terminalResizeStartHeight.current = terminalHeight;
+  }, [terminalHeight]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingTerminal) return;
+      const delta = terminalResizeStartY.current - e.clientY;
+      const newHeight = Math.min(Math.max(terminalResizeStartHeight.current + delta, 80), 600);
+      setTerminalHeight(newHeight);
+    };
+    const handleMouseUp = () => setIsResizingTerminal(false);
+    if (isResizingTerminal) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingTerminal]);
 
   const checkDockPosition = useCallback((x: number, y: number, width: number, height: number) => {
     if (!sidebarRef.current) return null;
@@ -1844,10 +1873,29 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       {/* Terminal */}
       <div className="flex flex-col shrink-0 overflow-hidden"
         style={{
-          height: showOutput ? '190px' : '0px',
+          height: showOutput ? `${terminalHeight}px` : '0px',
           background: C.bgEditor,
           borderTop: showOutput ? `1px solid ${C.border}` : 'none',
+          transition: isResizingTerminal ? 'none' : 'height 0.2s ease',
         }}>
+        {showOutput && (
+          <div
+            onMouseDown={handleTerminalResizeStart}
+            style={{
+              height: 4,
+              cursor: 'ns-resize',
+              background: isResizingTerminal ? 'rgba(168, 85, 247, 0.5)' : 'transparent',
+              transition: 'background 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizingTerminal) e.currentTarget.style.background = 'rgba(168, 85, 247, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizingTerminal) e.currentTarget.style.background = 'transparent';
+            }}
+          />
+        )}
         {showOutput && (
           <div className="flex items-center justify-between px-4 shrink-0"
             style={{
