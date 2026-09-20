@@ -91,7 +91,7 @@ const PROJECT_TEMPLATES: ProjectTemplate[] = [
   },
   {
     id: 'flutter',
-    name: 'Flutter (Windows)',
+    name: 'Flutter',
     description: 'Full Windows desktop preview app via flutter create. Desktop only.',
     icon: <Smartphone size={28} strokeWidth={1.6} />,
   },
@@ -991,7 +991,7 @@ function App() {
   }
 
   if (screen === 'settings') {
-    return <SettingsScreen onBack={() => setScreen('main')} />;
+    return <SettingsScreen onBack={() => setScreen('main')} onOpenStats={() => setScreen('stats-dashboard')} />;
   }
 
   if (screen === 'stats-dashboard') {

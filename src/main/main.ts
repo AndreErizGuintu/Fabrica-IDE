@@ -408,9 +408,36 @@ ipcMain.handle('dialog:openFile', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+// Extensions safe to read and decode as UTF-8 text. Mirrors the text/code/config vs.
+// media split already drawn in src/renderer/utils/fileIcons.ts (its codicon-file-media
+// entries -- png/jpg/jpeg/gif/ico/svg -- plus the binary sqlite/db formats are the ones
+// deliberately left out here). Anything not in this list is treated as non-previewable
+// instead of being force-decoded, which is what corrupted binary files (e.g. PNGs) into
+// garbled text before this existed.
+const TEXT_EXTENSIONS = new Set([
+  'html', 'htm', 'css', 'scss', 'sass', 'less',
+  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
+  'py', 'php', 'java', 'cs', 'dart', 'go', 'rb', 'rs', 'kt', 'swift',
+  'c', 'h', 'cpp', 'hpp', 'vue', 'svelte', 'md',
+  'sh', 'bash', 'zsh', 'ps1', 'dockerfile', 'dockerignore', 'tf', 'tfvars',
+  'gitignore', 'json', 'jsonc', 'txt', 'xml', 'env', 'yml', 'yaml', 'toml',
+  'lock', 'sql',
+]);
+
+// Returned by fs:readFile in place of file content for anything not in TEXT_EXTENSIONS
+// (images, and any other non-text extension) -- the renderer's openFileInTab
+// (EditorLayout.tsx) checks for this exact string to show a placeholder instead of
+// putting binary-derived garbage into Monaco. Must match the constant of the same name
+// in EditorLayout.tsx.
+const NOT_PREVIEWABLE_SENTINEL = '\u0000FABRICA_NOT_PREVIEWABLE\u0000';
+
 // Read file contents
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
   try {
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+    if (!TEXT_EXTENSIONS.has(ext)) {
+      return { success: true, content: NOT_PREVIEWABLE_SENTINEL };
+    }
     return { success: true, content: fs.readFileSync(filePath, 'utf-8') };
   } catch (err) {
     return { success: false, error: String(err) };

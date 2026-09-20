@@ -160,9 +160,11 @@ function AppearanceSettingsCategory() {
 
 export default function SettingsScreen({
   onBack,
+  onOpenStats,
   embedded = false,
 }: {
   onBack: () => void;
+  onOpenStats: () => void;
   embedded?: boolean;
 }) {
   const { activeKey, modelName, models, switching, error, selectModel } = useModelSelector();
@@ -179,6 +181,7 @@ export default function SettingsScreen({
           active="settings"
           onNavigate={(screen) => {
             if (screen === 'main') onBack();
+            if (screen === 'stats-dashboard') onOpenStats();
           }}
           bottomSlot={
             <>

@@ -46,6 +46,11 @@ function getLanguage(filename: string): string {
   }
 }
 
+// Wire sentinel returned by fs:readFile (main.ts) for non-text files instead of raw
+// bytes force-decoded as UTF-8 -- must match the constant of the same name there.
+const NOT_PREVIEWABLE_SENTINEL = '\u0000FABRICA_NOT_PREVIEWABLE\u0000';
+const NOT_PREVIEWABLE_MESSAGE = 'Preview not available for this file type.';
+
 const RUNTIME_BY_EXT: Record<string, string> = {
   js: 'node', ts: 'node', php: 'php', cs: 'dotnet', dart: 'dart', java: 'java',
 };
@@ -914,6 +919,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   }, [armedDetachPanel, floatSize]);
 
   const openFileInTab = useCallback((filePath: string, filename: string, content: string) => {
+    const tabContent = content === NOT_PREVIEWABLE_SENTINEL ? NOT_PREVIEWABLE_MESSAGE : content;
     setTabs((prev) => {
       const existing = prev.findIndex((tab) => tab.path === filePath);
       if (existing !== -1) {
@@ -921,7 +927,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
         showNotification(`Switched to ${filename}`, 'info');
         return prev;
       }
-      const newTab: Tab = { filename, path: filePath, content, isDirty: false };
+      const newTab: Tab = { filename, path: filePath, content: tabContent, isDirty: false };
       const newTabs = [...prev, newTab];
       setActiveTabIndex(newTabs.length - 1);
       showNotification(`Opened ${filename}`, 'success');
@@ -1018,6 +1024,10 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 
   const handleSave = useCallback(async (opts?: { silent?: boolean }) => {
     if (!activeTab || !activeTab.path) return;
+    // A placeholder tab (non-previewable file) is never dirty and has no Monaco
+    // instance to edit it, but Ctrl+S doesn't check isDirty -- without this guard
+    // it would silently overwrite the real binary file with the placeholder text.
+    if (activeTab.content === NOT_PREVIEWABLE_MESSAGE) return;
     const result = await window.fileSystem.writeFile(activeTab.path, activeTab.content);
     if (result.success) {
       triggerFlutterHotReload(activeTab.path);
@@ -1537,14 +1547,21 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-w-0" style={{ background: '#080719' }}>
-                <Editor
-                  language={getLanguage(tabs[activeTabIndex].filename)}
-                  filename={activeTab!.filename}
-                  path={activeTab!.path}
-                  value={activeTab!.content}
-                  onChange={handleEditorChange}
-                  onSelectionChange={(s) => setSelectedCode(s)}
-                />
+                {activeTab!.content === NOT_PREVIEWABLE_MESSAGE ? (
+                  <div className="flex-1 flex items-center justify-center text-sm"
+                    style={{ color: C.textMuted, fontFamily: 'Segoe UI, sans-serif' }}>
+                    {NOT_PREVIEWABLE_MESSAGE}
+                  </div>
+                ) : (
+                  <Editor
+                    language={getLanguage(tabs[activeTabIndex].filename)}
+                    filename={activeTab!.filename}
+                    path={activeTab!.path}
+                    value={activeTab!.content}
+                    onChange={handleEditorChange}
+                    onSelectionChange={(s) => setSelectedCode(s)}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -1963,7 +1980,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             </div>
 
             <div style={{ flex: 1, overflow: 'hidden' }}>
-              <SettingsScreen onBack={() => setSettingsOpen(false)} embedded />
+              <SettingsScreen onBack={() => setSettingsOpen(false)} embedded onOpenStats={() => {}} />
             </div>
           </div>
         </div>
