@@ -223,8 +223,8 @@
     "webpack-merge": "^6.0.1"
   },
   "build": {
-    "productName": "ElectronReact",
-    "appId": "org.erb.ElectronReact",
+    "productName": "Fabrica",
+    "appId": "org.fabrica.ide",
     "asar": true,
     "asarUnpack": [
       "**/*.{node,dll}",
