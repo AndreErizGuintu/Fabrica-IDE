@@ -121,6 +121,36 @@ function buildReactSandboxHtml(vendor: { react: string; reactDom: string; babel:
 </html>`;
 }
 
+// Converts an absolute file path (Windows "C:\Users\x\proj\file.html", or
+// POSIX) to a file:// directory URI, terminated with a trailing slash, for
+// use as a <base href>. encodeURI (not encodeURIComponent) is deliberate: it
+// escapes spaces as %20 but leaves '/' and the drive letter's ':' alone,
+// which encodeURIComponent would mangle.
+function toFileDirectoryUri(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  const dir = lastSlash === -1 ? normalized : normalized.slice(0, lastSlash);
+  const withLeadingSlash = dir.startsWith('/') ? dir : `/${dir}`;
+  return `file://${encodeURI(withLeadingSlash)}/`;
+}
+
+// Injects <base href> as the very first element inside <head>, so it takes
+// effect before any other relative reference in the document -- fixing
+// srcDoc's relative paths resolving against about:srcdoc instead of the
+// real project folder (images/css/js 404s in Live Preview). Falls back to
+// synthesizing a <head> when the source has none, since previewHtml can be
+// a bare HTML fragment rather than a guaranteed full document.
+function injectBaseHref(html: string, baseUri: string): string {
+  const baseTag = `<base href="${baseUri}">`;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (match) => `${match}\n    ${baseTag}`);
+  }
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, (match) => `${match}\n<head>${baseTag}</head>`);
+  }
+  return `<head>${baseTag}</head>${html}`;
+}
+
 function extractTranslatedCode(raw: string): string {
   const text = raw.trim();
   const closedFence = /```[^\n]*\n([\s\S]*?)```/.exec(text);
@@ -684,10 +714,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
       // Rendered via the src (blob URL) prop instead — see tsxPreviewUrl.
       return '';
     }
+    const baseUri = activeTab.path ? toFileDirectoryUri(activeTab.path) : '';
     if (activeTab.filename.endsWith('.css')) {
       return `<!DOCTYPE html>
 <html>
 <head>
+    ${baseUri ? `<base href="${baseUri}">` : ''}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
@@ -713,7 +745,7 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
 </body>
 </html>`;
     }
-    return activeTab.content;
+    return baseUri ? injectBaseHref(activeTab.content, baseUri) : activeTab.content;
   }, [activeTab]);
 
   const tsxPreviewSrc = activeTab?.filename.endsWith('.tsx') ? tsxPreviewUrl ?? undefined : undefined;
