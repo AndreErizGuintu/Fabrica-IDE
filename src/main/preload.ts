@@ -217,6 +217,7 @@ contextBridge.exposeInMainWorld('lsp', {
 
 contextBridge.exposeInMainWorld('lint', {
   csharp: (csprojPath: string) => ipcRenderer.invoke('lint:csharp', csprojPath),
+  csharpCode: (code: string) => ipcRenderer.invoke('lint:csharpCode', code),
   dart: (projectPath: string) => ipcRenderer.invoke('lint:dart', projectPath),
   php: (filePath: string) => ipcRenderer.invoke('lint:php', filePath),
 });

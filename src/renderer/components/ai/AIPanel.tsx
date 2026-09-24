@@ -150,7 +150,25 @@ function renderResponseContent(response: string, C: ThemeUI) {
   );
 }
 
-function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean) {
+function renderVerifyStatus(verify: VerifyStatus, C: ThemeUI) {
+  const text =
+    verify.state === 'checking'
+      ? 'Checking code with compiler…'
+      : verify.state === 'verified'
+        ? '✓ Verified by compiler'
+        : '⚠ Compiler still reports errors';
+  const color = verify.state === 'verified' ? C.success : verify.state === 'failed' ? C.codeOrange : C.textSecondary;
+  return (
+    <div className="mb-1.5 border-b pb-1" style={{ borderColor: C.border, color }}>
+      {text}
+      {verify.errors?.map((line, index) => (
+        <div key={`${index}-${line}`} style={{ color: C.textSecondary }}>{line}</div>
+      ))}
+    </div>
+  );
+}
+
+function renderChatThread(messages: StoredChatMessage[], C: ThemeUI, loading?: boolean) {
   return (
     <div className="flex flex-col gap-2">
       {messages.length ? (
@@ -177,6 +195,7 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
                   fontFamily: 'Segoe UI, sans-serif',
                 }}
               >
+                {!isUser && message.verify && renderVerifyStatus(message.verify, C)}
                 {isUser ? message.content : renderResponseContent(message.content, C)}
               </div>
             </div>
@@ -193,9 +212,12 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
 
 const CHAT_HISTORY_LIMIT = 6;
 
+type VerifyStatus = { state: 'checking' | 'verified' | 'failed'; errors?: string[] };
+
 // The text shown in the chat bubble stays in `content`; `modelContent`, when
 // set, is what the model saw for that turn (message + attached file/errors).
-type StoredChatMessage = ChatMessage & { modelContent?: string };
+// `verify` is UI-only compiler status and never reaches the model.
+type StoredChatMessage = ChatMessage & { modelContent?: string; verify?: VerifyStatus };
 
 // Error placeholders and empty replies are UI state, not model output. The
 // question that produced one is dropped with it so no failed turn stays in history.
@@ -230,6 +252,44 @@ const ERROR_HELP_PATTERN = /\b(fix|error|bug|wrong|broken|not working|doesn['’
 const toModelPath = (filePath: string) =>
   `file:///${filePath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
 
+const FIX_HINTS: Record<string, string> = {
+  CS0136:
+    'The same variable name is declared twice in one method. In C# a for loop cannot declare int i if the method also declares i later. Rename the variables in the for loops (for example a and b) and update their uses inside those loops only.',
+  CS0103: 'This name does not exist here. Declare it first or fix the spelling.',
+  CS1002: 'A semicolon is missing at the end of this line.',
+  CS0165: 'This variable is used before it is given a value. Initialize it when declaring it.',
+  CS0161: 'Not every path in this method returns a value. Add a return at the end.',
+  CS0029: 'The types do not match. Convert or cast the value to the expected type.',
+};
+
+// Our lint helpers put the code in the message ("CS0136: ..."); marker.code is
+// checked too in case a source ever sets it.
+function getFixHint(marker: { code?: string | { value: string }; message: string }): string | undefined {
+  const code = typeof marker.code === 'string' ? marker.code : marker.code?.value;
+  const codes = `${code ?? ''} ${marker.message}`.match(/\bCS\d{4}\b/g) ?? [];
+  return codes.map((found) => FIX_HINTS[found]).find(Boolean);
+}
+
+type ContextError = { line: number; message: string; code?: string | { value: string } };
+
+function formatErrorContext(message: string, filename: string, languageId: string, code: string, errors: ContextError[]): string {
+  return [
+    message,
+    '',
+    `File: ${filename} (${languageId})`,
+    `\`\`\`${languageId}`,
+    code,
+    '```',
+    'Compiler errors:',
+    ...errors.flatMap((error) => {
+      const hint = getFixHint(error);
+      return [`Line ${error.line}: ${error.message}`, ...(hint ? [`Hint: ${hint}`] : [])];
+    }),
+    '',
+    'Rewrite the code so every error above is fixed. Change the lines the errors point to. Do not return the code unchanged. Return the full corrected file.',
+  ].join('\n');
+}
+
 // Returns the message to send the model with the open file and its error
 // markers attached, or undefined when there is nothing worth attaching.
 async function buildErrorContextMessage(message: string, filePath?: string): Promise<string | undefined> {
@@ -243,21 +303,23 @@ async function buildErrorContextMessage(message: string, filePath?: string): Pro
     .sort((a, b) => a.startLineNumber - b.startLineNumber);
   if (errors.length === 0) return undefined;
 
-  const filename = filePath.split(/[\\/]/).pop();
-  const languageId = model.getLanguageId();
-  return [
+  return formatErrorContext(
     message,
-    '',
-    `File: ${filename} (${languageId})`,
-    `\`\`\`${languageId}`,
+    filePath.split(/[\\/]/).pop() ?? filePath,
+    model.getLanguageId(),
     model.getValue(),
-    '```',
-    'Compiler errors:',
-    ...errors.map((marker) => `Line ${marker.startLineNumber}: ${marker.message}`),
-    '',
-    'Rewrite the code so every error above is fixed. Change the lines the errors point to. Do not return the code unchanged. Return the full corrected file.',
-  ].join('\n');
+    errors.map((marker) => ({ line: marker.startLineNumber, message: marker.message, code: marker.code })),
+  );
 }
+
+const CSHARP_BLOCK = /```(?:csharp|c#|cs)[ \t]*\r?\n([\s\S]*?)```/i;
+
+function extractCSharpCode(text: string): string | undefined {
+  return CSHARP_BLOCK.exec(text)?.[1];
+}
+
+const ASK_SYSTEM_PROMPT =
+  'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp and a MaterialApp at the root, and use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code. If asked what model you are, say you are Fabrica\'s offline coding assistant running a local open source model on this computer, not GPT or any online service. In C#, never declare a variable inside a for loop with the same name as a variable declared later in the same method; Java allows this but C# does not.';
 
 function getCompletionErrorText(error?: string) {
   if (typeof error === 'string' && error.trim() && error.trim() !== 'undefined') {
@@ -334,9 +396,10 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
     setPromptState: React.Dispatch<React.SetStateAction<string>>,
     systemPrompt: string,
     modelMessage?: string,
-  ) => {
+  ): Promise<string | undefined> => {
     const trimmedPrompt = userPrompt.trim();
-    if (!trimmedPrompt) return;
+    if (!trimmedPrompt) return undefined;
+    let answer: string | undefined;
 
     setLoadingState(true);
     setPromptState('');
@@ -366,7 +429,9 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
         userMessage: modelMessage ?? trimmedPrompt,
       });
 
-      if (!completion?.success) {
+      if (completion?.success) {
+        answer = completion.result;
+      } else {
         const errorText = getCompletionErrorText(completion?.error);
         setMessages((prev) => {
           const next = [...prev];
@@ -401,18 +466,102 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       if (removeListener) removeListener();
       setLoadingState(false);
     }
+    return answer;
+  };
+
+  const updateAskMessage = (index: number, patch: Partial<StoredChatMessage>) => {
+    setAskMessages((prev) => prev.map((message, i) => (i === index ? { ...message, ...patch } : message)));
+  };
+
+  // null = the compiler could not run, so nothing is claimed either way.
+  const getCompileErrors = async (code: string): Promise<ContextError[] | null> => {
+    const result = await window.lint.csharpCode(code);
+    if (!result.success || !result.errors) return null;
+    return result.errors
+      .filter((error) => error.severity === 'error')
+      .map((error) => ({ line: error.line, message: `${error.code}: ${error.message}` }));
+  };
+
+  const describeErrors = (errors: ContextError[]) => errors.map((error) => `Line ${error.line}: ${error.message}`);
+
+  // Ask only. Compiles the first C# block of a finished answer; on errors sends
+  // ONE hidden fix request (no bubble, its tokens have no listener) and
+  // re-checks the result once.
+  const verifyCSharpAnswer = async (answer: string, answerIndex: number, history: ChatMessage[]) => {
+    const code = extractCSharpCode(answer);
+    if (!code) return;
+
+    // Held for the whole check so no new Ask can start and pick up the hidden
+    // fix request's streamed tokens.
+    setAskLoading(true);
+    updateAskMessage(answerIndex, { verify: { state: 'checking' } });
+    try {
+      const firstErrors = await getCompileErrors(code);
+      if (firstErrors === null) {
+        updateAskMessage(answerIndex, { verify: undefined });
+        return;
+      }
+      if (firstErrors.length === 0) {
+        updateAskMessage(answerIndex, { verify: { state: 'verified' } });
+        return;
+      }
+
+      const fix = await appWindowWithAI.ai?.complete({
+        systemPrompt: ASK_SYSTEM_PROMPT,
+        history,
+        userMessage: formatErrorContext(
+          'The C# code in your last answer does not compile.',
+          'Program.cs',
+          'csharp',
+          code,
+          firstErrors,
+        ),
+      });
+      const fixedAnswer = fix?.success ? fix.result : undefined;
+      const fixedCode = fixedAnswer ? extractCSharpCode(fixedAnswer) : undefined;
+      if (!fixedAnswer || !fixedCode) {
+        updateAskMessage(answerIndex, { verify: { state: 'failed', errors: describeErrors(firstErrors) } });
+        return;
+      }
+
+      updateAskMessage(answerIndex, { content: fixedAnswer });
+      const secondErrors = await getCompileErrors(fixedCode);
+      if (secondErrors === null) {
+        updateAskMessage(answerIndex, { verify: undefined });
+      } else if (secondErrors.length === 0) {
+        updateAskMessage(answerIndex, { verify: { state: 'verified' } });
+      } else {
+        updateAskMessage(answerIndex, { verify: { state: 'failed', errors: describeErrors(secondErrors) } });
+      }
+    } finally {
+      setAskLoading(false);
+    }
   };
 
   const handleAskSend = async () => {
-    const modelMessage = await buildErrorContextMessage(askPrompt.trim(), activeFilePath);
-    await sendChatMessage(
+    const trimmedPrompt = askPrompt.trim();
+    // sendChatMessage appends [user, assistant] to askMessages, so the answer
+    // bubble lands at this index.
+    const answerIndex = askMessages.length + 1;
+    const modelMessage = await buildErrorContextMessage(trimmedPrompt, activeFilePath);
+    const answer = await sendChatMessage(
       askPrompt,
       askMessages,
       setAskMessages,
       setAskLoading,
       setAskPrompt,
-      'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp and a MaterialApp at the root, and use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code. If asked what model you are, say you are Fabrica\'s offline coding assistant running a local open source model on this computer, not GPT or any online service.',
+      ASK_SYSTEM_PROMPT,
       modelMessage,
+    );
+    if (!answer) return;
+    await verifyCSharpAnswer(
+      answer,
+      answerIndex,
+      buildChatHistory([
+        ...askMessages,
+        { role: 'user', content: trimmedPrompt, modelContent: modelMessage },
+        { role: 'assistant', content: answer },
+      ]),
     );
   };
 

@@ -341,6 +341,7 @@ declare global {
     };
     lint: {
       csharp: (csprojPath: string) => Promise<{ success: boolean; errors?: ParsedCSharpError[]; error?: string }>;
+      csharpCode: (code: string) => Promise<{ success: boolean; errors?: ParsedCSharpError[]; error?: string }>;
       dart: (projectPath: string) => Promise<{ success: boolean; errors?: ParsedDartError[]; error?: string }>;
       php: (filePath: string) => Promise<{ success: boolean; errors?: ParsedPhpError[]; error?: string }>;
     };

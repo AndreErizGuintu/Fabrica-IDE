@@ -74,7 +74,7 @@ import {
   getCodeInferenceConfig,
 } from './codeInference';
 import { startLanguageServer } from './lspBridge';
-import { lintCSharp } from './csharpLint';
+import { lintCSharp, lintCSharpCode } from './csharpLint';
 import { lintDart } from './dartLint';
 import { lintPhp } from './phpLint';
 
@@ -672,6 +672,18 @@ ipcMain.handle('lsp:startPhp', async () => {
 ipcMain.handle('lint:csharp', async (_event, csprojPath: string) => {
   const errors = await lintCSharp(getBundledRuntimeBinary('dotnet'), csprojPath);
   return { success: true, errors };
+});
+
+ipcMain.handle('lint:csharpCode', async (_event, code: string) => {
+  if (typeof code !== 'string' || !code.trim()) {
+    return { success: false, error: 'No C# code provided.' };
+  }
+  try {
+    const errors = await lintCSharpCode(getBundledRuntimeBinary('dotnet'), code);
+    return { success: true, errors };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
 });
 
 ipcMain.handle('lint:dart', async (_event, projectPath: string) => {
