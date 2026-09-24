@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactElement, Ref } from 'react';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 
 // Electron's <webview> is not in React's intrinsic-element types, so the tag
 // name is cast to a component rather than declared globally — same approach
@@ -12,7 +12,7 @@ const WebView = 'webview' as unknown as (
   },
 ) => ReactElement;
 
-const DEFAULT_URL = 'http://localhost/';
+export const DEFAULT_URL = 'http://localhost/';
 
 // Normalizes bare input ("localhost:3000", "example.com") into a loadable URL
 // the same way a browser address bar does, so the webview is never handed a
@@ -24,17 +24,31 @@ function normalizeUrl(raw: string): string {
   return `http://${trimmed}`;
 }
 
+interface WebPreviewProps {
+  committedUrl: string;
+  inputValue: string;
+  onCommittedUrlChange: (url: string) => void;
+  onInputValueChange: (value: string) => void;
+}
+
 // Renders the standalone header EditorLayout wraps every floating panel
 // with (ToolWindowHeader) is that component's own composition, not this
 // one's — this only ever provides the address bar + <webview> content, same
 // division AIPanel/Preview already keep with their header chrome.
-export default function WebPreview() {
-  const [inputValue, setInputValue] = useState(DEFAULT_URL);
-  const [committedUrl, setCommittedUrl] = useState(DEFAULT_URL);
+//
+// Controlled by EditorLayout rather than owning its own useState: EditorLayout
+// renders this component from two mutually exclusive conditional blocks
+// (docked vs. floating), and minimize/detach/redock all flip which one is
+// active -- unmounting whichever instance was live. Local state would reset
+// to DEFAULT_URL on every one of those transitions, so the URL lives one
+// level up, in state that survives the swap.
+export default function WebPreview({
+  committedUrl, inputValue, onCommittedUrlChange, onInputValueChange,
+}: WebPreviewProps) {
   const webviewRef = useRef<HTMLElement | null>(null);
 
   const navigate = () => {
-    setCommittedUrl(normalizeUrl(inputValue));
+    onCommittedUrlChange(normalizeUrl(inputValue));
   };
 
   return (
@@ -46,7 +60,7 @@ export default function WebPreview() {
         <input
           type="text"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => onInputValueChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') navigate();
           }}

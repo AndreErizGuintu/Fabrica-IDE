@@ -3,7 +3,7 @@ import { Rnd } from 'react-rnd';
 import { loader } from '@monaco-editor/react';
 import Editor from '../components/editor/Editor';
 import Preview from '../components/preview/Preview';
-import WebPreview from '../components/WebPreview';
+import WebPreview, { DEFAULT_URL as WEB_PREVIEW_DEFAULT_URL } from '../components/WebPreview';
 import Sidebar from '../components/sidebar/Sidebar';
 import { getFileIcon } from '../utils/fileIcons';
 import AIPanel from '../components/ai/AIPanel';
@@ -122,16 +122,20 @@ function buildReactSandboxHtml(vendor: { react: string; reactDom: string; babel:
 }
 
 // Converts an absolute file path (Windows "C:\Users\x\proj\file.html", or
-// POSIX) to a file:// directory URI, terminated with a trailing slash, for
-// use as a <base href>. encodeURI (not encodeURIComponent) is deliberate: it
-// escapes spaces as %20 but leaves '/' and the drive letter's ':' alone,
+// POSIX) to a fabrica-file:// directory URI, terminated with a trailing
+// slash, for use as a <base href>. fabrica-file, not file: -- srcDoc
+// documents refuse to load file:// subresources outright ("Not allowed to
+// load local resource"), but main.ts registers fabrica-file as a privileged
+// scheme (protocol.handle, scoped to the open project root) that isn't
+// subject to that block. encodeURI (not encodeURIComponent) is deliberate:
+// it escapes spaces as %20 but leaves '/' and the drive letter's ':' alone,
 // which encodeURIComponent would mangle.
 function toFileDirectoryUri(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   const lastSlash = normalized.lastIndexOf('/');
   const dir = lastSlash === -1 ? normalized : normalized.slice(0, lastSlash);
   const withLeadingSlash = dir.startsWith('/') ? dir : `/${dir}`;
-  return `file://${encodeURI(withLeadingSlash)}/`;
+  return `fabrica-file://${encodeURI(withLeadingSlash)}/`;
 }
 
 // Injects <base href> as the very first element inside <head>, so it takes
@@ -586,6 +590,13 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
   const [showAI, setShowAI] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showWebPreview, setShowWebPreview] = useState(false);
+  // Lifted out of WebPreview.tsx (rather than local useState there) because
+  // that component is mounted from two mutually exclusive conditional blocks
+  // below (docked vs. floating) -- minimize/detach/redock all flip which one
+  // is active, unmounting whichever instance was live. State here survives
+  // that swap; WebPreview.tsx is now a controlled component.
+  const [webPreviewUrl, setWebPreviewUrl] = useState(WEB_PREVIEW_DEFAULT_URL);
+  const [webPreviewInput, setWebPreviewInput] = useState(WEB_PREVIEW_DEFAULT_URL);
   const [statsOpen, setStatsOpen] = useState(false);
   const [showGit, setShowGit] = useState(false);
   const [gitStatusFiles, setGitStatusFiles] = useState<string[]>([]);
@@ -1800,7 +1811,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
                     onClose={() => setShowWebPreview(false)}
                   />
                   <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
-                    <WebPreview />
+                    <WebPreview
+                      committedUrl={webPreviewUrl}
+                      inputValue={webPreviewInput}
+                      onCommittedUrlChange={setWebPreviewUrl}
+                      onInputValueChange={setWebPreviewInput}
+                    />
                   </div>
                 </div>
               )}
@@ -1944,7 +1960,12 @@ export default function EditorLayout({ onBack, initialFolder }: { onBack: () => 
             onClose={() => { dockPanel(); setShowWebPreview(false); }}
           />
           <div className="flex-1 overflow-hidden" style={{ background: C.bgPreviewAI }}>
-            <WebPreview />
+            <WebPreview
+              committedUrl={webPreviewUrl}
+              inputValue={webPreviewInput}
+              onCommittedUrlChange={setWebPreviewUrl}
+              onInputValueChange={setWebPreviewInput}
+            />
           </div>
         </Rnd>
       )}

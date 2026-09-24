@@ -29,11 +29,20 @@ export type GenerationPriority = 'explicit' | 'opportunistic';
 // `signal` on its public `generate()` signature, subscribes to it main-side,
 // and turns an abort into a `{ type: 'cancel', id }` message on this wire. The
 // signal object stays in main; only the fact that it fired ever crosses.
+// One prior chat turn. Plain data, so it clones across the MessagePort.
+export type WireChatTurn = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 export type WireGenerateOptions = {
   maxTokens?: number;
   contextSize?: number;
   priority?: GenerationPriority;
   stopTriggers?: string[];
+  temperature?: number;
+  // Prior turns, loaded with setChatHistory() before prompt(). Unset = single-turn.
+  history?: WireChatTurn[];
 };
 
 // --- main -> worker --------------------------------------------------------

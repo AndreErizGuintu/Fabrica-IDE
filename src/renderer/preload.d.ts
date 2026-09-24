@@ -234,7 +234,11 @@ declare global {
     fileSystem: FileSystemBridge;
     store: StoreBridge;
     ai: {
-      complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+      complete: (payload: {
+        systemPrompt: string;
+        history: Array<{ role: 'user' | 'assistant'; content: string }>;
+        userMessage: string;
+      }) => Promise<{ success: boolean; result?: string; error?: string }>;
       translate: (payload: { prompt: string; selectedCode: string; language: string }) => Promise<{ success: boolean; result?: string; error?: string }>;
       explain: (payload: { prompt: string; selectedCode: string }) => Promise<{ success: boolean; result?: string; error?: string }>;
       llamaTestPing: () => Promise<{ success: boolean; result?: string; error?: string }>;

@@ -12,7 +12,8 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { exec, execFile, spawn, spawnSync } from 'child_process';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, dialog, Menu, globalShortcut } from 'electron';
+import { pathToFileURL } from 'url';
+import { app, BrowserWindow, shell, ipcMain, dialog, Menu, globalShortcut, protocol, net } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { getTheme, setTheme } from './settingsStore';
@@ -82,6 +83,26 @@ import { lintPhp } from './phpLint';
 // so without this app.getPath('userData') resolves under
 // %APPDATA%/electron-react-boilerplate instead of %APPDATA%/Fabrica.
 app.setName('Fabrica');
+
+// Must run before the app is 'ready' -- Live Preview's <base href> (see
+// EditorLayout.tsx's toFileDirectoryUri) points srcDoc-rendered HTML at this
+// scheme instead of file://, because srcDoc documents refuse file://
+// subresources outright ("Not allowed to load local resource"). A registered
+// privileged custom scheme is exempt from that block without resorting to
+// webSecurity: false. bypassCSP is required because srcDoc's inherited CSP
+// would otherwise still block it despite the privilege.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'fabrica-file',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: true,
+    },
+  },
+]);
 
 type RecentProject = { name: string; path: string; lastOpenedAt: number };
 type RuntimeName = 'node' | 'php' | 'dotnet' | 'dart';
@@ -454,6 +475,12 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 
+// The folder the fabrica-file:// handler is allowed to serve from. Set from
+// stats:startSession below -- the same "project opened" signal EditorLayout
+// already fires for the reason noted next to lsp:startDart, reused here
+// rather than adding a second IPC channel for the same event.
+let currentProjectRoot: string | null = null;
+
 setSuggestionSink((suggestion: Suggestion) => {
   mainWindow?.webContents.send('adaptive:suggest', suggestion);
 });
@@ -607,6 +634,7 @@ ipcMain.handle('fs:delete', async (_event, targetPath: string) => {
 });
 
 ipcMain.handle('stats:startSession', async (_event, projectPath: string) => {
+  currentProjectRoot = projectPath;
   startSession(projectPath);
   startEngineSession();
   return { success: true };
@@ -1577,6 +1605,41 @@ app
     if (gpuStatus === 'no-gpu' || gpuStatus === 'probe-failed') {
       setActiveModel('cpuFallback');
     }
+
+    // Serves fabrica-file:///C:/path/to/x.jpg by mapping it back to the real
+    // file on disk, constrained to currentProjectRoot -- this is NOT a
+    // general file:// passthrough (webSecurity stays on everywhere), it only
+    // ever resolves paths that are already inside the open project folder.
+    protocol.handle('fabrica-file', (request) => {
+      try {
+        const url = new URL(request.url);
+        // Standard-scheme URLs keep the leading '/' before a Windows drive
+        // letter (fabrica-file:///C:/foo -> pathname "/C:/foo"), same shape
+        // file: URLs use, so it has to be stripped before hitting the fs.
+        let decodedPath = decodeURIComponent(url.pathname);
+        if (/^\/[a-zA-Z]:/.test(decodedPath)) {
+          decodedPath = decodedPath.slice(1);
+        }
+
+        if (!currentProjectRoot) {
+          return new Response('Not Found', { status: 404 });
+        }
+
+        const resolvedRoot = path.resolve(currentProjectRoot);
+        const resolvedPath = path.resolve(decodedPath);
+        const isInsideRoot = resolvedPath === resolvedRoot
+          || resolvedPath.startsWith(resolvedRoot + path.sep);
+
+        if (!isInsideRoot) {
+          return new Response('Not Found', { status: 404 });
+        }
+
+        return net.fetch(pathToFileURL(resolvedPath).toString());
+      } catch {
+        return new Response('Not Found', { status: 404 });
+      }
+    });
+
     createWindow();
 
     // Fire-and-forget model warmup: forces the worker fork, the model load and
@@ -1613,12 +1676,33 @@ app
   })
   .catch(console.log);
 
-ipcMain.handle('ai:complete', async (event, prompt: string) => {
+type ChatCompletePayload = {
+  systemPrompt: string;
+  history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  userMessage: string;
+};
+
+ipcMain.handle('ai:complete', async (event, payload: ChatCompletePayload) => {
   try {
+    // IPC boundary: keep only well-formed turns.
+    const history = Array.isArray(payload.history)
+      ? payload.history.filter(
+          (turn) => (turn.role === 'user' || turn.role === 'assistant') && typeof turn.content === 'string',
+        )
+      : [];
     let fullText = '';
-    const result = await generate(prompt, undefined, (chunk: string) => {
+    const result = await generate(payload.userMessage, payload.systemPrompt, (chunk: string) => {
       fullText += chunk;
       event.sender.send('ai:token', chunk);
+    }, {
+      // Ask/Plan only. 2048 fits a full multi-method answer with explanation
+      // (e.g. C# merge sort) with ~2x headroom while still bounding a runaway.
+      maxTokens: 2048,
+      temperature: 0.2,
+      // Stops the model from continuing the transcript by writing the next
+      // turn itself.
+      stopTriggers: ['\nUser:', '\nAssistant:'],
+      history,
     });
 
     incrementAiCallCount();

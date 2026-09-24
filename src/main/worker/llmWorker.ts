@@ -556,11 +556,24 @@ const runGeneration = async (
       // drops, and the model never sees the instruction. TypeScript doesn't flag
       // it because LLamaChatPromptOptions is a union-shaped intersection type,
       // which disables excess-property checking. This affects every caller that
-      // relies on the systemPrompt arg (ai:translate, ai:explain); ai:complete
-      // (Ask/Plan) embeds its instructions in the user prompt and is unaffected.
+      // relies on the systemPrompt arg (ai:translate, ai:explain, and ai:complete
+      // for Ask/Plan).
       systemPrompt,
     });
     phaseLog(id, 'new LlamaChatSession()', sessionConstructStartHr, process.hrtime.bigint(), sessionConstructStartMs, Date.now());
+
+    if (options?.history?.length) {
+      // getChatHistory() already holds the constructor's system item; prior
+      // turns go after it so the system prompt stays in the real system slot.
+      session.setChatHistory([
+        ...session.getChatHistory(),
+        ...options.history.map((turn) =>
+          turn.role === 'user'
+            ? { type: 'user' as const, text: turn.content }
+            : { type: 'model' as const, response: [turn.content] },
+        ),
+      ]);
+    }
 
     lockLog(`${id} context created; GENERATION START maxTokens=${options?.maxTokens ?? 'unset'}`);
     const generationStartedAt = Date.now();
@@ -596,6 +609,9 @@ const runGeneration = async (
         // the aborted/normal paths converge on one shape below.
         stopOnAbortSignal: true,
         customStopTriggers: options?.stopTriggers?.length ? options.stopTriggers : undefined,
+        // Only ai:complete sets this today; undefined leaves every other caller
+        // on node-llama-cpp's default, exactly as before.
+        temperature: options?.temperature,
       });
     } catch (err) {
       lockLog(

@@ -36,6 +36,7 @@ import {
   GenerationAbortedError,
   WorkerRequest,
   WorkerResponse,
+  WireChatTurn,
   rehydrateError,
 } from './worker/llmProtocol';
 
@@ -825,7 +826,10 @@ export const shutdownWorker = (reason = 'app quit'): void => {
 };
 
 // ---------------------------------------------------------------------------
-// The one contract that had to be preserved byte-for-byte.
+// The one contract that had to be preserved byte-for-byte -- since extended
+// with two optional, backward-compatible fields: `temperature` and `history`.
+// Omitting them leaves every existing caller's behavior unchanged (undefined
+// all the way to the session in llmWorker.ts).
 export const generate = async (
   prompt: string,
   systemPrompt?: string,
@@ -836,6 +840,8 @@ export const generate = async (
     priority?: GenerationPriority;
     signal?: AbortSignal;
     stopTriggers?: string[];
+    temperature?: number;
+    history?: WireChatTurn[];
   },
 ): Promise<string> => {
   const { signal } = options ?? {};
@@ -870,6 +876,8 @@ export const generate = async (
             contextSize: options.contextSize,
             priority: options.priority,
             stopTriggers: options.stopTriggers,
+            temperature: options.temperature,
+            history: options.history,
           }
         : undefined,
     };

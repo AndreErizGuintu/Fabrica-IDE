@@ -190,13 +190,22 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
   );
 }
 
-function buildChatPrompt(systemPrompt: string, messages: ChatMessage[], userMessage: string) {
-  const transcript = [...messages, { role: 'user' as const, content: userMessage }];
-  const formattedTranscript = transcript
-    .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
-    .join('\n');
+const CHAT_HISTORY_LIMIT = 6;
 
-  return `${systemPrompt}\n\n${formattedTranscript}\nAssistant:`;
+// Error placeholders and empty replies are UI state, not model output. The
+// question that produced one is dropped with it so no failed turn stays in history.
+function buildChatHistory(messages: ChatMessage[]): ChatMessage[] {
+  const kept: ChatMessage[] = [];
+  messages.forEach((message) => {
+    const failedReply =
+      message.role === 'assistant' && (!message.content.trim() || message.content.startsWith('⚠️'));
+    if (failedReply) {
+      if (kept[kept.length - 1]?.role === 'user') kept.pop();
+      return;
+    }
+    kept.push(message);
+  });
+  return kept.slice(-CHAT_HISTORY_LIMIT);
 }
 
 function getCompletionErrorText(error?: string) {
@@ -253,7 +262,11 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
         prompt: string;
         selectedCode: string;
       }) => Promise<{ success: boolean; result?: string; error?: string }>;
-      complete: (prompt: string) => Promise<{ success: boolean; result?: string; error?: string }>;
+      complete: (payload: {
+        systemPrompt: string;
+        history: ChatMessage[];
+        userMessage: string;
+      }) => Promise<{ success: boolean; result?: string; error?: string }>;
     };
     electron?: {
       ipcRenderer: {
@@ -294,7 +307,11 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
     });
 
     try {
-      const completion = await appWindowWithAI.ai?.complete(buildChatPrompt(systemPrompt, messages, trimmedPrompt));
+      const completion = await appWindowWithAI.ai?.complete({
+        systemPrompt,
+        history: buildChatHistory(messages),
+        userMessage: trimmedPrompt,
+      });
 
       if (!completion?.success) {
         const errorText = getCompletionErrorText(completion?.error);
@@ -340,7 +357,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       setAskMessages,
       setAskLoading,
       setAskPrompt,
-      'You are a helpful, concise coding assistant for a beginner CS student. Answer directly in the chat.',
+      'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp and a MaterialApp at the root, and use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code.',
     );
   };
 

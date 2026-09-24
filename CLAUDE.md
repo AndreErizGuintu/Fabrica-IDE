@@ -35,7 +35,7 @@ Always use these bridges — never call Node/Electron APIs directly from the ren
 - `window.fileSystem` — readFile, writeFile, readDir, createFile, createFolder, openFolder (dialog), openFile (dialog), openTerminal
 - `window.store` — getRecentProjects, addRecentProject (JSON persistence in `app.getPath('userData')/recent-projects.json`, max 5, newest first)
 - `window.runner` — run(filePath), onOutput(cb), onDone(cb), removeListeners() — spawns language runtimes via child_process
-- `window.ai` — complete(prompt) — calls **node-llama-cpp** (not Ollama), streams via `ai:token` events (channel name unchanged from the Ollama-era implementation, reused as-is)
+- `window.ai` — complete({ systemPrompt, history: {role: 'user' | 'assistant', content}[], userMessage }) — Ask/Plan chat; the worker puts systemPrompt in the real system slot and loads history via setChatHistory. Calls **node-llama-cpp** (not Ollama), streams via `ai:token` events (channel name unchanged from the Ollama-era implementation, reused as-is)
 - `window.electron.ipcRenderer` — raw IPC, used only for event listeners (`ai:token`, `run:output`, `run:done`)
 
 ## Language Execution

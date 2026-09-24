@@ -47,7 +47,11 @@ contextBridge.exposeInMainWorld('store', {
 });
 
 contextBridge.exposeInMainWorld('ai', {
-  complete: (prompt: string) => ipcRenderer.invoke('ai:complete', prompt),
+  complete: (payload: {
+    systemPrompt: string;
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+    userMessage: string;
+  }) => ipcRenderer.invoke('ai:complete', payload),
   translate: (payload: { prompt: string; selectedCode: string; language: string }) =>
     ipcRenderer.invoke('ai:translate', payload),
   explain: (payload: { prompt: string; selectedCode: string }) =>
