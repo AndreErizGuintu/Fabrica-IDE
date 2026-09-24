@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { loader } from '@monaco-editor/react';
 import type { AIPanelState, ChatMessage, TabKey } from '../useAIPanelState';
 import useModelSelector, { ModelOption } from '../../hooks/useModelSelector';
 import { useTheme } from '../../theme/ThemeContext';
@@ -192,10 +193,14 @@ function renderChatThread(messages: ChatMessage[], C: ThemeUI, loading?: boolean
 
 const CHAT_HISTORY_LIMIT = 6;
 
+// The text shown in the chat bubble stays in `content`; `modelContent`, when
+// set, is what the model saw for that turn (message + attached file/errors).
+type StoredChatMessage = ChatMessage & { modelContent?: string };
+
 // Error placeholders and empty replies are UI state, not model output. The
 // question that produced one is dropped with it so no failed turn stays in history.
-function buildChatHistory(messages: ChatMessage[]): ChatMessage[] {
-  const kept: ChatMessage[] = [];
+function buildChatHistory(messages: StoredChatMessage[]): ChatMessage[] {
+  const kept: StoredChatMessage[] = [];
   messages.forEach((message) => {
     const failedReply =
       message.role === 'assistant' && (!message.content.trim() || message.content.startsWith('⚠️'));
@@ -205,7 +210,53 @@ function buildChatHistory(messages: ChatMessage[]): ChatMessage[] {
     }
     kept.push(message);
   });
-  return kept.slice(-CHAT_HISTORY_LIMIT);
+  const recent = kept.slice(-CHAT_HISTORY_LIMIT);
+
+  // Only the latest attachment is sent in full; older ones fall back to the
+  // bubble text so the file appears in history at most once.
+  let attachedIndex = -1;
+  recent.forEach((message, index) => {
+    if (message.role === 'user' && message.modelContent) attachedIndex = index;
+  });
+  return recent.map((message, index) => ({
+    role: message.role,
+    content: index === attachedIndex ? message.modelContent ?? message.content : message.content,
+  }));
+}
+
+const ERROR_HELP_PATTERN = /\b(fix|error|bug|wrong|broken|not working|doesn['’]?t work|debug|issue)/i;
+
+// Mirrors Editor.tsx's toModelPath() so the lookup hits the same Monaco model.
+const toModelPath = (filePath: string) =>
+  `file:///${filePath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+
+// Returns the message to send the model with the open file and its error
+// markers attached, or undefined when there is nothing worth attaching.
+async function buildErrorContextMessage(message: string, filePath?: string): Promise<string | undefined> {
+  if (!filePath || !ERROR_HELP_PATTERN.test(message)) return undefined;
+  const monaco = await loader.init();
+  const model = monaco.editor.getModel(monaco.Uri.parse(toModelPath(filePath)));
+  if (!model) return undefined;
+  const errors = monaco.editor
+    .getModelMarkers({ resource: model.uri })
+    .filter((marker) => marker.severity === monaco.MarkerSeverity.Error)
+    .sort((a, b) => a.startLineNumber - b.startLineNumber);
+  if (errors.length === 0) return undefined;
+
+  const filename = filePath.split(/[\\/]/).pop();
+  const languageId = model.getLanguageId();
+  return [
+    message,
+    '',
+    `File: ${filename} (${languageId})`,
+    `\`\`\`${languageId}`,
+    model.getValue(),
+    '```',
+    'Compiler errors:',
+    ...errors.map((marker) => `Line ${marker.startLineNumber}: ${marker.message}`),
+    '',
+    'Rewrite the code so every error above is fixed. Change the lines the errors point to. Do not return the code unchanged. Return the full corrected file.',
+  ].join('\n');
 }
 
 function getCompletionErrorText(error?: string) {
@@ -282,13 +333,15 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
     setLoadingState: React.Dispatch<React.SetStateAction<boolean>>,
     setPromptState: React.Dispatch<React.SetStateAction<string>>,
     systemPrompt: string,
+    modelMessage?: string,
   ) => {
     const trimmedPrompt = userPrompt.trim();
     if (!trimmedPrompt) return;
 
     setLoadingState(true);
     setPromptState('');
-    setMessages((prev) => [...prev, { role: 'user', content: trimmedPrompt }, { role: 'assistant', content: '' }]);
+    const userEntry: StoredChatMessage = { role: 'user', content: trimmedPrompt, modelContent: modelMessage };
+    setMessages((prev) => [...prev, userEntry, { role: 'assistant', content: '' }]);
 
     const removeListener = appWindow.electron?.ipcRenderer.on('ai:token', (token: unknown) => {
       setMessages((prev) => {
@@ -310,7 +363,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
       const completion = await appWindowWithAI.ai?.complete({
         systemPrompt,
         history: buildChatHistory(messages),
-        userMessage: trimmedPrompt,
+        userMessage: modelMessage ?? trimmedPrompt,
       });
 
       if (!completion?.success) {
@@ -351,13 +404,15 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
   };
 
   const handleAskSend = async () => {
+    const modelMessage = await buildErrorContextMessage(askPrompt.trim(), activeFilePath);
     await sendChatMessage(
       askPrompt,
       askMessages,
       setAskMessages,
       setAskLoading,
       setAskPrompt,
-      'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp and a MaterialApp at the root, and use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code.',
+      'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp and a MaterialApp at the root, and use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code. If asked what model you are, say you are Fabrica\'s offline coding assistant running a local open source model on this computer, not GPT or any online service.',
+      modelMessage,
     );
   };
 
