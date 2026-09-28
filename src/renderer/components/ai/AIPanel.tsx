@@ -260,13 +260,25 @@ const FIX_HINTS: Record<string, string> = {
   CS0165: 'This variable is used before it is given a value. Initialize it when declaring it.',
   CS0161: 'Not every path in this method returns a value. Add a return at the end.',
   CS0029: 'The types do not match. Convert or cast the value to the expected type.',
+  NOT_INITIALIZED_NON_NULLABLE_INSTANCE_FIELD:
+    'Add late before the field type, for example late AnimationController _controller; and create it inside initState.',
+  UNCHECKED_USE_OF_NULLABLE_VALUE:
+    'Declare the field with late instead of making it nullable with ?, then remove ?. and ! on its uses.',
+  ARGUMENT_TYPE_NOT_ASSIGNABLE:
+    'The value has the wrong type. If it is nullable, declare the field with late instead of ?.',
+  INVALID_REFERENCE_TO_THIS:
+    'this cannot be used in a constructor initializer or field initializer. Move that code into initState.',
+  UNDEFINED_METHOD: 'This name does not exist here. Check the spelling or add the missing import.',
+  UNDEFINED_IDENTIFIER: 'This name does not exist here. Check the spelling or add the missing import.',
+  UNDEFINED_FUNCTION: 'This function does not exist. Check the spelling, define it, or add the missing import.',
 };
 
-// Our lint helpers put the code in the message ("CS0136: ..."); marker.code is
-// checked too in case a source ever sets it.
+// Our lint helpers put the code in the message ("CS0136: ..." for C#,
+// "UNDEFINED_METHOD: ..." for dart analyze); marker.code is checked too in case
+// a source ever sets it.
 function getFixHint(marker: { code?: string | { value: string }; message: string }): string | undefined {
   const code = typeof marker.code === 'string' ? marker.code : marker.code?.value;
-  const codes = `${code ?? ''} ${marker.message}`.match(/\bCS\d{4}\b/g) ?? [];
+  const codes = `${code ?? ''} ${marker.message}`.match(/\b(?:CS\d{4}|[A-Z]+(?:_[A-Z0-9]+)+)\b/g) ?? [];
   return codes.map((found) => FIX_HINTS[found]).find(Boolean);
 }
 
@@ -319,7 +331,7 @@ function extractCSharpCode(text: string): string | undefined {
 }
 
 const ASK_SYSTEM_PROMPT =
-  'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp. If the user asks for Material or does not specify, use MaterialApp at the root with Scaffold and AppBar. If the user asks for Cupertino or iOS style, use CupertinoApp at the root with CupertinoPageScaffold and CupertinoNavigationBar, and never use Scaffold, AppBar, or other Material widgets inside a CupertinoApp. Use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code. If asked what model you are, say you are Fabrica\'s offline coding assistant running a local open source model on this computer, not GPT or any online service. In C#, never declare a variable inside a for loop with the same name as a variable declared later in the same method; Java allows this but C# does not.';
+  'You are the coding assistant inside Fabrica IDE, helping beginner CS students. When asked to write code, return ONE complete, runnable program in exactly the language and framework the user names, with all imports and the entry point. For Flutter, always include main() with runApp. If the user asks for Material or does not specify, use MaterialApp at the root with Scaffold and AppBar. If the user asks for Cupertino or iOS style, use CupertinoApp at the root with CupertinoPageScaffold and CupertinoNavigationBar, and never use Scaffold, AppBar, or other Material widgets inside a CupertinoApp. Use Navigator for moving between pages. Never switch frameworks, for example Material to Cupertino, unless the user asks. If the user says fix the error or similar without details, review the code you wrote earlier in this conversation, find the bugs yourself, and return the full corrected program. Keep explanations short and after the code. If asked what model you are, say you are Fabrica\'s offline coding assistant running a local open source model on this computer, not GPT or any online service. In C#, never declare a variable inside a for loop with the same name as a variable declared later in the same method; Java allows this but C# does not. All Dart and Flutter code must be null safe for Dart 3. Fields that are set in initState must be declared with late, for example late AnimationController _controller; then created inside initState, never in a constructor or field initializer. Do not use Image.asset or network images unless the user asks; use Icon or FlutterLogo instead.';
 
 function getCompletionErrorText(error?: string) {
   if (typeof error === 'string' && error.trim() && error.trim() !== 'undefined') {

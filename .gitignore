@@ -45,6 +45,7 @@ asar-extracted/
 
 # Workspace artifacts
 graphify-out/
+scripts/eval-out/
 Project/
 .vscode/
 resources

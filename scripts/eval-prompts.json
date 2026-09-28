@@ -1,0 +1,91 @@
+[
+  { "id": "cs-merge-sort", "language": "csharp", "prompt": "Write a C# console program that sorts an int array using merge sort and prints the array before and after sorting." },
+  { "id": "cs-bubble-sort", "language": "csharp", "prompt": "how do i do bubble sort in c#? i need a full program i can run" },
+  { "id": "cs-binary-search", "language": "csharp", "prompt": "Write a C# program that asks the user for a number and uses binary search to find it in a sorted array. Print the index or say it was not found." },
+  { "id": "cs-calculator", "language": "csharp", "prompt": "make a simple calculator in C# console that asks for two numbers and an operator (+ - * /) and handles divide by zero" },
+  { "id": "cs-palindrome", "language": "csharp", "prompt": "C# program to check if a word entered by the user is a palindrome, ignoring upper and lower case" },
+  { "id": "cs-fibonacci", "language": "csharp", "prompt": "Write a C# program that prints the first N Fibonacci numbers where N is entered by the user." },
+
+  { "id": "js-merge-sort", "language": "javascript", "prompt": "Implement merge sort in JavaScript and test it on an array of 10 random numbers, printing the result with console.log." },
+  { "id": "js-bubble-sort", "language": "javascript", "prompt": "bubble sort in javascript please, with comments explaining each step" },
+  { "id": "js-binary-search", "language": "javascript", "prompt": "Write a JavaScript function binarySearch(arr, target) that returns the index of target or -1, and show a few example calls." },
+  { "id": "js-calculator", "language": "javascript", "prompt": "I need a basic calculator in JavaScript that runs in Node and reads two numbers and an operator from the terminal." },
+  { "id": "js-palindrome", "language": "javascript", "prompt": "write a js program that checks if a sentence is a palindrome, ignoring spaces and punctuation" },
+  { "id": "js-fibonacci", "language": "javascript", "prompt": "Show me fibonacci in JavaScript both with a loop and with recursion." },
+
+  { "id": "php-merge-sort", "language": "php", "prompt": "Write a PHP script that implements merge sort on an array of integers and echoes the sorted result." },
+  { "id": "php-bubble-sort", "language": "php", "prompt": "how to bubble sort an array in php without using sort()" },
+  { "id": "php-binary-search", "language": "php", "prompt": "PHP binary search function on a sorted array, with an example that prints whether 42 was found." },
+  { "id": "php-calculator", "language": "php", "prompt": "Create a simple calculator in PHP with an HTML form for two numbers and an operation, and show the result on the same page." },
+  { "id": "php-palindrome", "language": "php", "prompt": "php program to check if a string is palindrome" },
+  { "id": "php-fibonacci", "language": "php", "prompt": "Write a PHP script that prints the Fibonacci sequence up to 100." },
+
+  { "id": "java-merge-sort", "language": "java", "prompt": "Write a Java program with a main method that sorts an array using merge sort and prints it." },
+  { "id": "java-bubble-sort", "language": "java", "prompt": "bubble sort java code for my lab activity, sort 5 numbers entered by the user using Scanner" },
+  { "id": "java-binary-search", "language": "java", "prompt": "Implement iterative binary search in Java and demonstrate it in main." },
+  { "id": "java-calculator", "language": "java", "prompt": "Make a Java console calculator using a switch statement for + - * / that keeps running until the user types exit." },
+  { "id": "java-palindrome", "language": "java", "prompt": "java program palindrome checker for numbers and strings" },
+  { "id": "java-fibonacci", "language": "java", "prompt": "Write a recursive Fibonacci method in Java and print the first 15 terms." },
+
+  {
+    "id": "flutter-splash",
+    "language": "flutter",
+    "prompt": "Create a Flutter splash screen that shows a logo and app name for 3 seconds and then goes to a home page.",
+    "rules": { "mustMatch": ["\\bMaterialApp\\b"] }
+  },
+  {
+    "id": "flutter-splash-animated",
+    "language": "flutter",
+    "prompt": "Make an animated splash screen in Flutter where the logo fades in and scales up, then navigates to the home screen.",
+    "rules": { "mustMatch": ["\\bMaterialApp\\b"] }
+  },
+  {
+    "id": "flutter-login",
+    "language": "flutter",
+    "prompt": "Flutter login form with email and password fields, validation (email must contain @, password at least 6 characters), and a login button that shows a SnackBar on success.",
+    "rules": { "mustMatch": ["\\bMaterialApp\\b"] }
+  },
+  {
+    "id": "flutter-listview",
+    "language": "flutter",
+    "prompt": "Flutter app that shows a list of 20 students in a ListView with a CircleAvatar, name and course, and tapping one opens a detail page.",
+    "rules": { "mustMatch": ["\\bMaterialApp\\b"] }
+  },
+  {
+    "id": "flutter-bottomnav",
+    "language": "flutter",
+    "prompt": "Flutter app with a BottomNavigationBar with Home, Search and Profile tabs, each showing a different page.",
+    "rules": { "mustMatch": ["\\bMaterialApp\\b"] }
+  },
+  {
+    "id": "flutter-login-cupertino",
+    "language": "flutter",
+    "prompt": "Build a Cupertino (iOS style) login screen in Flutter with email and password fields, validation, and an alert dialog when login succeeds.",
+    "rules": {
+      "mustMatch": ["\\bCupertinoApp\\b"],
+      "mustNotMatch": ["\\bMaterialApp\\b", "\\bScaffold\\(", "\\bAppBar\\("]
+    }
+  },
+  {
+    "id": "flutter-bottomnav-cupertino",
+    "language": "flutter",
+    "prompt": "Flutter app with iOS-style bottom tabs (Home, Search, Profile) using Cupertino widgets.",
+    "rules": {
+      "mustMatch": ["\\bCupertinoApp\\b"],
+      "mustNotMatch": ["\\bMaterialApp\\b", "\\bScaffold\\(", "\\bAppBar\\("]
+    }
+  },
+
+  {
+    "id": "react-counter",
+    "language": "react",
+    "prompt": "Make a React counter component with plus, minus and reset buttons using useState.",
+    "rules": { "mustMatch": ["\\buseState\\b"] }
+  },
+  {
+    "id": "react-todo",
+    "language": "react",
+    "prompt": "Create a React todo list app where I can add and delete tasks.",
+    "rules": { "mustMatch": ["\\buseState\\b"] }
+  }
+]
