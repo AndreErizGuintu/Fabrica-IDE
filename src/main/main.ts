@@ -1694,6 +1694,11 @@ type ChatCompletePayload = {
   userMessage: string;
 };
 
+// Loop safety net for ai:complete (Patch 6).
+const LOOP_REPEAT_LIMIT = 4;
+const LOOP_STOP_NOTICE =
+  '⚠ Stopped: the model started repeating itself. Try rephrasing or starting a new chat.';
+
 ipcMain.handle('ai:complete', async (event, payload: ChatCompletePayload) => {
   try {
     // IPC boundary: keep only well-formed turns.
@@ -1703,22 +1708,76 @@ ipcMain.handle('ai:complete', async (event, payload: ChatCompletePayload) => {
         )
       : [];
     let fullText = '';
+
+    // Detected here rather than in the worker: this callback already sees
+    // every chunk, and generate() already turns an abort into a worker
+    // cancel, so no wire or protocol change is needed.
+    const loopAbort = new AbortController();
+    let scannedTo = 0; // start of the first line not yet checked
+    let runLine = '';
+    let runCount = 0;
+    let runFirstEnd = 0; // just past the first copy of runLine
+    let keepUntil = -1; // set once the loop trips; fullText is cut here
+    const checkForLoop = () => {
+      let nl = fullText.indexOf('\n', scannedTo);
+      while (nl !== -1 && keepUntil === -1) {
+        const line = fullText.slice(scannedTo, nl).trim();
+        scannedTo = nl + 1;
+        // Blank lines neither extend nor break a run.
+        if (line === runLine && line !== '') {
+          runCount += 1;
+          if (runCount >= LOOP_REPEAT_LIMIT) keepUntil = runFirstEnd;
+        } else if (line.length > 3 && /[A-Za-z0-9]/.test(line)) {
+          runLine = line;
+          runCount = 1;
+          runFirstEnd = scannedTo;
+        } else if (line !== '') {
+          // Brackets/punctuation only ("}", "),", "];") never start a run.
+          runLine = '';
+          runCount = 0;
+        }
+        nl = fullText.indexOf('\n', scannedTo);
+      }
+    };
+
     const result = await generate(payload.userMessage, payload.systemPrompt, (chunk: string) => {
+      // Drops tokens the worker emits before its cancel lands.
+      if (keepUntil !== -1) return;
       fullText += chunk;
       event.sender.send('ai:token', chunk);
+      checkForLoop();
+      if (keepUntil !== -1) loopAbort.abort();
     }, {
       // Ask/Plan only. 2048 fits a full multi-method answer with explanation
       // (e.g. C# merge sort) with ~2x headroom while still bounding a runaway.
       maxTokens: 2048,
-      temperature: 0.2,
+      // Qwen2.5 Coder's generation_config values; 0.2 was tuned for DeepSeek.
+      temperature: 0.7,
+      topP: 0.8,
+      topK: 20,
+      // Must be explicit: with `penalty` unset, node-llama-cpp 3.20.0 sends no
+      // penalty and the native sampler falls back to 1 (off).
+      repeatPenalty: { penalty: 1.1, lastTokens: 64, penalizeNewLine: false },
       // Stops the model from continuing the transcript by writing the next
       // turn itself.
       stopTriggers: ['\nUser:', '\nAssistant:'],
       history,
+      signal: loopAbort.signal,
+    }).catch((err: unknown) => {
+      // Our own abort rejects; the kept text is already in fullText.
+      if (keepUntil !== -1 && err instanceof GenerationAbortedError) return '';
+      throw err;
     });
 
     incrementAiCallCount();
     onAiCall();
+
+    if (keepUntil !== -1) {
+      let kept = fullText.slice(0, keepUntil);
+      // Close a code fence the cut left open so the notice renders as text.
+      if ((kept.match(/```/g) ?? []).length % 2 === 1) kept += '```\n';
+      return { success: true, result: `${kept}\n${LOOP_STOP_NOTICE}`, stoppedRepeating: true };
+    }
     return { success: true, result: fullText || result };
   } catch (err) {
     return { success: false, error: String(err) };

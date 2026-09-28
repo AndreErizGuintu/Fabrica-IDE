@@ -379,7 +379,7 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
         systemPrompt: string;
         history: ChatMessage[];
         userMessage: string;
-      }) => Promise<{ success: boolean; result?: string; error?: string }>;
+      }) => Promise<{ success: boolean; result?: string; error?: string; stoppedRepeating?: boolean }>;
     };
     electron?: {
       ipcRenderer: {
@@ -429,17 +429,21 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
         userMessage: modelMessage ?? trimmedPrompt,
       });
 
-      if (completion?.success) {
+      if (completion?.success && !completion.stoppedRepeating) {
         answer = completion.result;
       } else {
-        const errorText = getCompletionErrorText(completion?.error);
+        // A loop-stopped answer replaces what streamed (main trimmed it) and
+        // returns no answer, so Ask skips the C# verify.
+        const replacementText = completion?.success
+          ? completion.result ?? ''
+          : getCompletionErrorText(completion?.error);
         setMessages((prev) => {
           const next = [...prev];
           for (let index = next.length - 1; index >= 0; index -= 1) {
             if (next[index]?.role === 'assistant') {
               next[index] = {
                 ...next[index],
-                content: errorText,
+                content: replacementText,
               };
               break;
             }
@@ -517,7 +521,8 @@ export default function AIPanel({ selectedCode, activeFilePath, onSaveTranslated
           firstErrors,
         ),
       });
-      const fixedAnswer = fix?.success ? fix.result : undefined;
+      // A loop-stopped fix is truncated; keep the original answer instead.
+      const fixedAnswer = fix?.success && !fix.stoppedRepeating ? fix.result : undefined;
       const fixedCode = fixedAnswer ? extractCSharpCode(fixedAnswer) : undefined;
       if (!fixedAnswer || !fixedCode) {
         updateAskMessage(answerIndex, { verify: { state: 'failed', errors: describeErrors(firstErrors) } });

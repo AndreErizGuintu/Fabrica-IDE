@@ -37,6 +37,7 @@ import {
   WorkerRequest,
   WorkerResponse,
   WireChatTurn,
+  WireRepeatPenalty,
   rehydrateError,
 } from './worker/llmProtocol';
 
@@ -841,6 +842,9 @@ export const generate = async (
     signal?: AbortSignal;
     stopTriggers?: string[];
     temperature?: number;
+    topK?: number;
+    topP?: number;
+    repeatPenalty?: WireRepeatPenalty;
     history?: WireChatTurn[];
   },
 ): Promise<string> => {
@@ -877,6 +881,9 @@ export const generate = async (
             priority: options.priority,
             stopTriggers: options.stopTriggers,
             temperature: options.temperature,
+            topK: options.topK,
+            topP: options.topP,
+            repeatPenalty: options.repeatPenalty,
             history: options.history,
           }
         : undefined,

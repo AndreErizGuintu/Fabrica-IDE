@@ -35,12 +35,23 @@ export type WireChatTurn = {
   content: string;
 };
 
+// Plain-data subset of node-llama-cpp's LlamaChatSessionRepeatPenalty.
+// `punishTokensFilter` is a function, so it cannot cross the MessagePort.
+export type WireRepeatPenalty = {
+  penalty?: number;
+  lastTokens?: number;
+  penalizeNewLine?: boolean;
+};
+
 export type WireGenerateOptions = {
   maxTokens?: number;
   contextSize?: number;
   priority?: GenerationPriority;
   stopTriggers?: string[];
   temperature?: number;
+  topK?: number;
+  topP?: number;
+  repeatPenalty?: WireRepeatPenalty;
   // Prior turns, loaded with setChatHistory() before prompt(). Unset = single-turn.
   history?: WireChatTurn[];
 };

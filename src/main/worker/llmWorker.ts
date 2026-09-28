@@ -612,6 +612,10 @@ const runGeneration = async (
         // Only ai:complete sets this today; undefined leaves every other caller
         // on node-llama-cpp's default, exactly as before.
         temperature: options?.temperature,
+        // Same as temperature: only ai:complete sets these today.
+        topK: options?.topK,
+        topP: options?.topP,
+        repeatPenalty: options?.repeatPenalty,
       });
     } catch (err) {
       lockLog(
