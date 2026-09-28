@@ -7,14 +7,16 @@
 //   1. generate -> scripts/eval-out/<timestamp>/raw/<id>-r<n>.md + generations.json
 //   2. check    -> results.json + summary.md in the same folder
 //
-// These are compile/syntax checks, not correctness checks, and C# is
-// first-answer only (the app's hidden fix-and-recheck is not run).
+// These are compile/syntax checks, not correctness checks. Both phases are
+// first-answer only; --fix-only then replays the app's hidden C# fix request
+// (and the same shape for Dart) on the compile_fail answers of a finished run.
 //
 // Close Fabrica first: its worker holds the model in VRAM, and a second copy
 // on 6GB pushes the gpuLayers ladder down and skews the timings.
 //
-// Run:  node scripts/eval-ai.mjs [--runs 2] [--filter csharp,flutter]
+// Run:  node scripts/eval-ai.mjs [--runs 2] [--filter csharp,flutter] [--ids id1,id2]
 //       node scripts/eval-ai.mjs --check-only scripts/eval-out/<timestamp>
+//       node scripts/eval-ai.mjs --fix-only scripts/eval-out/<timestamp> [--ids id1,id2]
 // GPU_LAYERS / GGML_VK_VISIBLE_DEVICES env vars behave as they do for the app.
 
 import { register } from 'node:module';
@@ -25,6 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import vm from 'node:vm';
 import ts from 'typescript';
 
 register(new URL('./adaptive-engine-test-loader.mjs', import.meta.url), import.meta.url);
@@ -76,9 +79,17 @@ const FILTER = argValue('--filter')
   .map((s) => s.trim())
   .filter(Boolean);
 const CHECK_ONLY_DIR = argValue('--check-only');
+const FIX_ONLY_DIR = argValue('--fix-only');
+const IDS = argValue('--ids')
+  ?.split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 if (!Number.isInteger(RUNS) || RUNS < 1) {
   throw new Error(`--runs must be a positive integer, got: ${argValue('--runs')}`);
+}
+if (CHECK_ONLY_DIR && FIX_ONLY_DIR) {
+  throw new Error('--check-only and --fix-only cannot be combined.');
 }
 for (const language of FILTER ?? []) {
   if (!LANGUAGES.includes(language)) {
@@ -129,6 +140,36 @@ function readAskSystemPrompt() {
   return initializer.text;
 }
 
+// The fix request is built by AIPanel.tsx's own helpers, lifted out of the
+// source and run in a vm sandbox, so the eval sends byte-for-byte what the app
+// sends with no copied text to drift. All five are pure; if one ever gains a
+// dependency, the sandbox throws a ReferenceError instead of silently diverging.
+const AIPANEL_FIX_DECLARATIONS = ['FIX_HINTS', 'getFixHint', 'formatErrorContext', 'CSHARP_BLOCK', 'extractCSharpCode'];
+
+function loadAIPanelFixHelpers() {
+  const source = fs.readFileSync(AIPANEL_PATH, 'utf8');
+  const sourceFile = ts.createSourceFile(AIPANEL_PATH, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = new Map();
+  for (const statement of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      found.set(statement.name.text, statement.getText(sourceFile));
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) found.set(declaration.name.text, statement.getText(sourceFile));
+      }
+    }
+  }
+  const missingNames = AIPANEL_FIX_DECLARATIONS.filter((name) => !found.has(name));
+  if (missingNames.length) {
+    throw new Error(`Not found in AIPanel.tsx: ${missingNames.join(', ')}; update the eval extractor.`);
+  }
+
+  const { outputText } = ts.transpileModule(AIPANEL_FIX_DECLARATIONS.map((name) => found.get(name)).join('\n\n'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  });
+  return vm.runInNewContext(`${outputText}\n({ ${AIPANEL_FIX_DECLARATIONS.join(', ')} });`);
+}
+
 function loadPrompts() {
   const prompts = JSON.parse(fs.readFileSync(PROMPTS_PATH, 'utf8'));
   const seen = new Set();
@@ -140,6 +181,15 @@ function loadPrompts() {
     seen.add(prompt.id);
   }
   return prompts;
+}
+
+function selectPrompts() {
+  const prompts = loadPrompts();
+  const unknown = (IDS ?? []).filter((id) => !prompts.some((p) => p.id === id));
+  if (unknown.length) throw new Error(`Unknown --ids: ${unknown.join(', ')}`);
+  const selected = prompts.filter((p) => (!FILTER || FILTER.includes(p.language)) && (!IDS || IDS.includes(p.id)));
+  if (!selected.length) throw new Error('No prompts selected.');
+  return selected;
 }
 
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -270,10 +320,9 @@ function createLoopGuard() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1: generate
+// Model runtime + one Ask turn, shared by generation and --fix-only.
 
-async function generateAll(prompts, outDir) {
-  const systemPrompt = readAskSystemPrompt();
+async function loadRuntime() {
   const { modelFile, displayName } = JSON.parse(fs.readFileSync(MODEL_CONFIG_PATH, 'utf8'));
   const modelPath = path.join(ROOT, 'resources', 'models', modelFile);
   if (!fs.existsSync(modelPath)) throw new Error(`Model file not found at ${modelPath}`);
@@ -295,15 +344,76 @@ async function generateAll(prompts, outDir) {
   const loadMs = performance.now() - loadStart;
   // Resolved once, same as initLlama() in the worker.
   const chatWrapper = resolveChatWrapper(model);
+  return { llama, model, chatWrapper, LlamaChatSession, modelFile, displayName, gpuDevices, loadMs };
+}
+
+async function disposeRuntime(runtime) {
+  await runtime.model.dispose();
+  await runtime.llama.dispose();
+}
+
+// One ai:complete call: fresh context + session, prior turns loaded after the
+// system item exactly as llmWorker.ts does, same sampling, stop triggers and
+// loop guard. Throws on a real generation error.
+async function generateAnswer(runtime, systemPrompt, userMessage, history = []) {
+  const { model, chatWrapper, LlamaChatSession } = runtime;
+  const context = await model.createContext({ threads: MAX_INFERENCE_THREADS });
+  const guard = createLoopGuard();
+  const abort = new AbortController();
+  const start = performance.now();
+
+  try {
+    const session = new LlamaChatSession({ contextSequence: context.getSequence(), chatWrapper, systemPrompt });
+    if (history.length) {
+      session.setChatHistory([
+        ...session.getChatHistory(),
+        ...history.map((turn) =>
+          turn.role === 'user' ? { type: 'user', text: turn.content } : { type: 'model', response: [turn.content] },
+        ),
+      ]);
+    }
+
+    const result = await session.prompt(userMessage, {
+      ...SAMPLING,
+      customStopTriggers: STOP_TRIGGERS,
+      signal: abort.signal,
+      stopOnAbortSignal: true,
+      onTextChunk: (chunk) => {
+        if (guard.push(chunk)) abort.abort();
+      },
+    }).catch((err) => {
+      // Our own abort: the kept text is already in the guard (as ai:complete).
+      if (guard.tripped) return '';
+      throw err;
+    });
+
+    const generated = guard.fullText || result;
+    return {
+      answer: guard.tripped ? guard.stoppedAnswer() : generated,
+      genMs: Math.round(performance.now() - start),
+      tokens: model.tokenize(generated).length,
+      stoppedRepeating: guard.tripped,
+    };
+  } finally {
+    await context.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: generate
+
+async function generateAll(prompts, outDir) {
+  const systemPrompt = readAskSystemPrompt();
+  const runtime = await loadRuntime();
 
   const total = prompts.length * RUNS;
   const meta = {
     startedAt: new Date().toISOString(),
-    model: modelFile,
-    displayName,
-    gpuLayers: model.gpuLayers,
-    gpuDevices,
-    loadMs: Math.round(loadMs),
+    model: runtime.modelFile,
+    displayName: runtime.displayName,
+    gpuLayers: runtime.model.gpuLayers,
+    gpuDevices: runtime.gpuDevices,
+    loadMs: Math.round(runtime.loadMs),
     askPromptSha256: sha256(systemPrompt),
     askPromptLength: systemPrompt.length,
     runs: RUNS,
@@ -314,7 +424,7 @@ async function generateAll(prompts, outDir) {
   const metaPath = path.join(outDir, 'generations.json');
   writeJson(metaPath, meta);
 
-  console.log(`[eval] ${prompts.length} prompts x ${RUNS} runs = ${total} generations. Model load ${seconds(loadMs)}s.\n`);
+  console.log(`[eval] ${prompts.length} prompts x ${RUNS} runs = ${total} generations. Model load ${seconds(runtime.loadMs)}s.\n`);
 
   let done = 0;
   let genMsTotal = 0;
@@ -324,41 +434,17 @@ async function generateAll(prompts, outDir) {
       done += 1;
       const file = `raw/${prompt.id}-r${run}.md`;
       const record = { id: prompt.id, language: prompt.language, run, file };
-      const context = await model.createContext({ threads: MAX_INFERENCE_THREADS });
-      const guard = createLoopGuard();
-      const abort = new AbortController();
       const start = performance.now();
 
       try {
-        // Fresh context + session per generation; no history, as a new Ask chat.
-        const session = new LlamaChatSession({ contextSequence: context.getSequence(), chatWrapper, systemPrompt });
-
-        const result = await session.prompt(prompt.prompt, {
-          ...SAMPLING,
-          customStopTriggers: STOP_TRIGGERS,
-          signal: abort.signal,
-          stopOnAbortSignal: true,
-          onTextChunk: (chunk) => {
-            if (guard.push(chunk)) abort.abort();
-          },
-        }).catch((err) => {
-          // Our own abort: the kept text is already in the guard (as ai:complete).
-          if (guard.tripped) return '';
-          throw err;
-        });
-
-        const generated = guard.fullText || result;
-        const answer = guard.tripped ? guard.stoppedAnswer() : generated;
-        record.genMs = Math.round(performance.now() - start);
-        record.tokens = model.tokenize(generated).length;
-        record.stoppedRepeating = guard.tripped;
+        // No history: a new Ask chat.
+        const { answer, genMs, tokens, stoppedRepeating } = await generateAnswer(runtime, systemPrompt, prompt.prompt);
+        Object.assign(record, { genMs, tokens, stoppedRepeating });
         fs.writeFileSync(path.join(outDir, file), answer, 'utf8');
       } catch (err) {
         record.genMs = Math.round(performance.now() - start);
         record.error = String(err?.stack ?? err);
         fs.writeFileSync(path.join(outDir, file), '', 'utf8');
-      } finally {
-        await context.dispose();
       }
 
       genMsTotal += record.genMs;
@@ -375,8 +461,7 @@ async function generateAll(prompts, outDir) {
 
   meta.finishedAt = new Date().toISOString();
   writeJson(metaPath, meta);
-  await model.dispose();
-  await llama.dispose();
+  await disposeRuntime(runtime);
 }
 
 // ---------------------------------------------------------------------------
@@ -480,14 +565,14 @@ function createCheckers(tmpRoot) {
       }
       try {
         const results = await csharpLint(BIN.dotnet, code);
+        const errorResults = results.filter((r) => r.severity === 'error');
         // dotnet prints each diagnostic twice (progress + summary).
-        const errors = [
-          ...new Set(
-            results.filter((r) => r.severity === 'error').map((r) => `Line ${r.line}: ${r.code}: ${r.message}`),
-          ),
-        ];
+        const errors = [...new Set(errorResults.map((r) => `Line ${r.line}: ${r.code}: ${r.message}`))];
+        // Undeduplicated and shaped exactly as getCompileErrors() in AIPanel.tsx,
+        // for --fix-only's fix request.
+        const diagnostics = errorResults.map((r) => ({ line: r.line, message: `${r.code}: ${r.message}` }));
         const warnings = new Set(results.filter((r) => r.severity === 'warning').map((r) => `${r.line}${r.code}`)).size;
-        return errors.length ? compileFail(errors, { warnings }) : pass({ warnings });
+        return errors.length ? compileFail(errors, { warnings, diagnostics }) : pass({ warnings });
       } catch (err) {
         return checkError(err.message);
       }
@@ -556,13 +641,15 @@ function createCheckers(tmpRoot) {
         .split(/\r?\n/)
         .map((line) => line.split('|'))
         .filter((parts) => parts.length >= 8);
-      const errors = records
+      // Same "CODE: message" shape the C# fix request uses.
+      const diagnostics = records
         .filter(([severity]) => severity === 'ERROR')
-        .map(([, , errorCode, , line, , , ...message]) => `Line ${line}: ${errorCode}: ${message.join('|')}`);
+        .map(([, , errorCode, , line, , , ...message]) => ({ line: Number(line), message: `${errorCode}: ${message.join('|')}` }));
+      const errors = diagnostics.map((d) => `Line ${d.line}: ${d.message}`);
       const warnings = records.filter(([severity]) => severity === 'WARNING').length;
       const infos = records.filter(([severity]) => severity === 'INFO').length;
 
-      if (errors.length) return compileFail(errors, { warnings, infos });
+      if (errors.length) return compileFail(errors, { warnings, infos, diagnostics });
       if (result.exitCode !== 0 && records.length === 0) {
         return checkError(`dart analyze failed without diagnostics: ${snippet(result.stderr || result.stdout)}`);
       }
@@ -678,6 +765,175 @@ async function checkAll(outDir) {
 }
 
 // ---------------------------------------------------------------------------
+// --fix-only: replays verifyCSharpAnswer() from AIPanel.tsx on a finished run
+// (one hidden fix request, one recheck), and the same shape for Dart so a Dart
+// verify loop can be judged before building it. Only compile_fail answers are
+// touched; nothing that passed is regenerated.
+
+const FIX_LANGUAGES = {
+  csharp: { intro: 'The C# code in your last answer does not compile.', filename: 'Program.cs', languageId: 'csharp' },
+  flutter: { intro: 'The Dart code in your last answer does not compile.', filename: 'main.dart', languageId: 'dart' },
+};
+// No app equivalent yet: the Dart analogue of CSHARP_BLOCK.
+const DART_BLOCK = /```(?:dart|flutter)[ \t]*\r?\n([\s\S]*?)```/i;
+
+async function fixAll(outDir) {
+  const resultsPath = path.join(outDir, 'results.json');
+  if (!fs.existsSync(resultsPath)) throw new Error(`No results.json in ${outDir}; run the check phase first.`);
+  const { results, askPromptSha256: originalSha } = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+  const promptsById = new Map(loadPrompts().map((p) => [p.id, p]));
+  const candidates = results.filter((r) => r.status === 'compile_fail' && (!IDS || IDS.includes(r.id)));
+  const targets = candidates.filter((r) => FIX_LANGUAGES[r.language]);
+  const skippedLanguages = [...new Set(candidates.filter((r) => !FIX_LANGUAGES[r.language]).map((r) => r.language))];
+  if (!targets.length) {
+    console.log('[eval] No C# or Dart compile_fail entries to fix.');
+    return;
+  }
+
+  const helpers = loadAIPanelFixHelpers();
+  const systemPrompt = readAskSystemPrompt();
+  const extractCode = {
+    csharp: (text) => helpers.extractCSharpCode(text),
+    flutter: (text) => DART_BLOCK.exec(text)?.[1],
+  };
+
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fabrica-eval-'));
+  const checkers = createCheckers(tmpRoot);
+  const runtime = await loadRuntime();
+  const fixes = [];
+
+  console.log(`\n[eval] Fixing ${targets.length} compile_fail answers...`);
+  try {
+    for (const [index, r] of targets.entries()) {
+      const spec = FIX_LANGUAGES[r.language];
+      const userPrompt = promptsById.get(r.id)?.prompt;
+      const original = fs.readFileSync(path.join(outDir, r.file), 'utf8');
+      const originalCode = extractCode[r.language](original);
+      const fix = { id: r.id, run: r.run, language: r.language, beforeErrors: [], hintedCodes: [], afterErrors: [] };
+      fixes.push(fix);
+
+      if (!userPrompt || !originalCode) {
+        fix.outcome = 'skipped';
+        fix.note = userPrompt ? 'no tagged code block, so the app would not verify it' : 'prompt id no longer in eval-prompts.json';
+      } else {
+        // Recompiled rather than read from results.json, so the error list is
+        // the unformatted one the app itself would send.
+        const before = await checkers[r.language](originalCode);
+        if (before.status !== 'compile_fail') {
+          fix.outcome = 'skipped';
+          fix.note = `original now ${before.status}`;
+        } else {
+          fix.beforeErrors = before.errors;
+          fix.hintedCodes = [
+            ...new Set(before.diagnostics.filter((d) => helpers.getFixHint(d)).map((d) => d.message.split(':')[0])),
+          ];
+          const userMessage = helpers.formatErrorContext(
+            spec.intro,
+            spec.filename,
+            spec.languageId,
+            originalCode,
+            before.diagnostics,
+          );
+          const history = [
+            { role: 'user', content: userPrompt },
+            { role: 'assistant', content: original },
+          ];
+
+          try {
+            const generated = await generateAnswer(runtime, systemPrompt, userMessage, history);
+            fix.genMs = generated.genMs;
+            fix.tokens = generated.tokens;
+            fs.writeFileSync(path.join(outDir, `raw/${r.id}-r${r.run}-fix.md`), generated.answer, 'utf8');
+            // As the app: a loop-stopped or code-less fix keeps the original.
+            const fixedCode = generated.stoppedRepeating ? undefined : extractCode[r.language](generated.answer);
+            if (generated.stoppedRepeating) fix.outcome = 'loop_stopped';
+            else if (!fixedCode) fix.outcome = 'no_code';
+            else {
+              const after = await checkers[r.language](fixedCode);
+              fix.afterErrors = after.errors;
+              fix.outcome =
+                after.status === 'pass' ? 'fixed' : after.status === 'compile_fail' ? 'still_failing' : 'check_error';
+              fix.unchanged = fixedCode.trim() === originalCode.trim();
+            }
+          } catch (err) {
+            fix.outcome = 'gen_error';
+            fix.note = String(err?.message ?? err);
+          }
+        }
+      }
+      console.log(`[fix ${index + 1}/${targets.length}] ${r.id} r${r.run}  ${fix.outcome}`);
+    }
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    await disposeRuntime(runtime);
+  }
+
+  const fixSha = sha256(systemPrompt);
+  writeJson(path.join(outDir, 'fix-results.json'), { fixedAt: new Date().toISOString(), originalSha, fixSha, fixes });
+  const summary = buildFixSummary(outDir, runtime, originalSha, fixSha, results, fixes, skippedLanguages);
+  fs.writeFileSync(path.join(outDir, 'fix-results.md'), summary, 'utf8');
+  console.log(`\n${summary}`);
+  console.log(`[eval] Wrote ${path.relative(ROOT, outDir)}\\fix-results.md`);
+}
+
+const errorCodes = (errors) => {
+  const counts = new Map();
+  for (const error of errors) {
+    const code = /^Line \d+: ([^:\s]+):/.exec(error)?.[1] ?? '?';
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return [...counts].map(([code, n]) => (n > 1 ? `${code} x${n}` : code)).join(', ') || '-';
+};
+
+function buildFixSummary(outDir, runtime, originalSha, fixSha, results, fixes, skippedLanguages) {
+  const lines = [`# Fix pass: ${runtime.displayName ?? runtime.modelFile}`, ''];
+  lines.push(`Source run \`${path.basename(outDir)}\`. One fix request per compile_fail answer, then one recheck.`);
+  lines.push('C# replays verifyCSharpAnswer() in AIPanel.tsx. Dart uses the same shape; the app has no Dart verify yet.');
+  lines.push(
+    originalSha === fixSha
+      ? `ASK_SYSTEM_PROMPT sha256 \`${fixSha.slice(0, 12)}\` for both the original answers and the fix requests.`
+      : `Original answers used ASK_SYSTEM_PROMPT \`${originalSha.slice(0, 12)}\`; fix requests used the current \`${fixSha.slice(0, 12)}\`.`,
+  );
+  lines.push('');
+  lines.push('| language | scored | first try pass | fix attempts | fixed | after fix pass |');
+  lines.push('|---|---|---|---|---|---|');
+  for (const language of Object.keys(FIX_LANGUAGES)) {
+    const group = results.filter((r) => r.language === language && r.status !== 'check_error');
+    if (!group.length) continue;
+    const firstTry = group.filter((r) => r.status === 'pass').length;
+    const attempts = fixes.filter((f) => f.language === language && f.outcome !== 'skipped');
+    const fixed = attempts.filter((f) => f.outcome === 'fixed').length;
+    const pct = (n) => `${n}/${group.length} (${Math.round((n / group.length) * 100)}%)`;
+    lines.push(`| ${language} | ${group.length} | ${pct(firstTry)} | ${attempts.length} | ${fixed} | ${pct(firstTry + fixed)} |`);
+  }
+
+  lines.push('');
+  lines.push('| id | run | before | hinted | outcome | after |');
+  lines.push('|---|---|---|---|---|---|');
+  for (const f of fixes) {
+    const outcome = `${f.outcome}${f.unchanged ? ' (code unchanged)' : ''}`;
+    lines.push(
+      `| ${f.id} | r${f.run} | ${errorCodes(f.beforeErrors)} | ${f.hintedCodes.join(', ') || '-'} | ${outcome} | ${errorCodes(f.afterErrors)} |`,
+    );
+  }
+
+  lines.push('');
+  lines.push('## Details');
+  for (const f of fixes) {
+    lines.push('');
+    lines.push(`**${f.id} r${f.run}** (${f.language}): ${f.outcome}${f.note ? `: ${f.note}` : ''}`);
+    for (const error of f.beforeErrors.slice(0, 3)) lines.push(`- before: ${error.replace(/\r?\n/g, ' ')}`);
+    for (const error of f.afterErrors.slice(0, 3)) lines.push(`- after: ${error.replace(/\r?\n/g, ' ')}`);
+  }
+  if (skippedLanguages.length) {
+    lines.push('');
+    lines.push(`Not attempted (no fix path): compile_fail answers in ${skippedLanguages.join(', ')}.`);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Summary
 
 const STATUSES = ['pass', 'compile_fail', 'no_code', 'loop_stopped', 'gen_error', 'check_error'];
@@ -751,9 +1007,10 @@ function buildSummary(meta, results) {
 
 if (CHECK_ONLY_DIR) {
   await checkAll(path.resolve(CHECK_ONLY_DIR));
+} else if (FIX_ONLY_DIR) {
+  await fixAll(path.resolve(FIX_ONLY_DIR));
 } else {
-  const prompts = loadPrompts().filter((p) => !FILTER || FILTER.includes(p.language));
-  if (!prompts.length) throw new Error('No prompts selected.');
+  const prompts = selectPrompts();
   const outDir = path.join(OUT_ROOT, new Date().toISOString().replace(/[:.]/g, '-'));
   fs.mkdirSync(path.join(outDir, 'raw'), { recursive: true });
   console.log(`[eval] Output: ${path.relative(ROOT, outDir)}`);
