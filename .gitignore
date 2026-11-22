@@ -33,6 +33,7 @@ release/build
 .erb/webpack
 .erb/out
 asar-extracted/
+fabrica-log.txt
 
 # Environment files
 .env
