@@ -1,70 +1,79 @@
-Fabrica IDE
-===========
+# Fabrica IDE
 
-Offline-first desktop IDE built with Electron, React, and TypeScript. This README focuses on current progress, support notes, and how to run the app.
+Fabrica IDE is an offline-first desktop development environment built with Electron, React, and TypeScript.
 
-Status
-------
-Active development.
+## Features
 
-Progress Snapshot
------------------
-Completed
-- Editor shell with top bar and tab strip
-- Sidebar file explorer with folder open and file list
-- Inline new file creation in sidebar
-- Monaco editor integration
-- Live preview panel for HTML/CSS with auto-refresh
-- Basic file open/save via IPC
+- Monaco-based code editing with tabs and file navigation
+- Folder and file explorer with project file management
+- Integrated terminal
+- Live HTML/CSS preview
+- Flutter project controls and Android APK build support
+- AI assistant and code inference tools
+- C#, PHP, and deprecated API diagnostics
+- Source control panel
+- Statistics dashboard and configurable app themes
 
-In Progress
-- Editor navigation polish
-- Project creation flow wiring
-- Preview and editor synchronization improvements
+## Tech Stack
 
-Planned
-- Recent projects persistence
-- Project templates
-- Git integration
-- Pop assistant panel
+- Electron
+- React 19
+- TypeScript
+- Monaco Editor
+- Tailwind CSS
+- Webpack
+- Xterm
+- Node.js
 
-Support Notes
--------------
-- The app is a single-window Electron shell.
-- Frontend styling uses Tailwind; only exceptions go in component CSS files.
-- Main process IPC handles file system access.
+## Setup
 
-Run Locally
------------
-Prereqs: Node.js and npm.
+Prerequisites:
 
-Install
-```
+- Node.js
+- npm
+- A compatible local development environment for projects you want to run
+
+Install dependencies:
+
+```bash
 npm install
 ```
 
-Start
-```
+Start the application:
+
+```bash
 npm start
 ```
 
-Build
-```
+Build the application:
+
+```bash
 npm run build
 ```
 
-Project Structure
------------------
-- src/main: Electron main process
-- src/renderer: React UI
-- src/renderer/components: Reusable UI pieces
-- src/renderer/screens: Screen-level layouts
-- assets: App assets
+Package the desktop application:
 
-Contributing
-------------
-Open issues or submit pull requests. Keep changes focused and follow the styling conventions in AGENTS.md.
+```bash
+npm run package
+```
 
-License
--------
-See LICENSE.
+## Project Structure
+
+- `src/main` - Electron main process and native integrations
+- `src/renderer` - React application
+- `src/renderer/components` - Reusable UI components
+- `src/renderer/screens` - Application screens
+- `src/__tests__` - Jest tests
+- `assets` - Application assets
+
+## Screenshots
+
+Screenshots placeholder: add application screenshots here.
+
+## Contributing
+
+Open issues or submit pull requests. Keep changes focused and follow the conventions in `AGENTS.md`.
+
+## License
+
+See [LICENSE](LICENSE).
